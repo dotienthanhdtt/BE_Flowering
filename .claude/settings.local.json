@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(scout)",
+      "WebSearch",
+      "Bash(find:*)",
+      "Skill(docs-seeker)",
+      "Bash(node scripts/fetch-docs.js:*)",
+      "WebFetch(domain:js.langchain.com)",
+      "WebFetch(domain:langfuse.com)",
+      "WebFetch(domain:docs.langchain.com)",
+      "Skill(plan:hard)",
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:docs.revenuecat.com)",
+      "WebFetch(domain:firebase.google.com)",
+      "WebFetch(domain:docs.sentry.io)",
+      "WebFetch(domain:www.revenuecat.com)",
+      "Bash(node:*)",
+      "Skill(plan:validate)",
+      "Bash(test:*)",
+      "Bash(npm install)",
+      "Bash(npm install -D @eslint/js typescript-eslint)",
+      "Bash(npm run build:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(npm run lint)",
+      "Bash(ls:*)",
+      "Bash(npm run test:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
