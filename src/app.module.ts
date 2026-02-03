@@ -1,11 +1,17 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import appConfiguration from './config/app-configuration';
 import { environmentValidationSchema } from './config/environment-validation-schema';
 import { DatabaseModule } from './database/database.module';
 import { SupabaseStorageService } from './database/supabase-storage.service';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './modules/auth/auth.module';
+import { AiModule } from './modules/ai/ai.module';
+import { UserModule } from './modules/user/user.module';
+import { LanguageModule } from './modules/language/language.module';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -18,9 +24,20 @@ import { AppService } from './app.service';
       },
     }),
     DatabaseModule,
+    AuthModule,
+    AiModule,
+    UserModule,
+    LanguageModule,
   ],
   controllers: [AppController],
-  providers: [AppService, SupabaseStorageService],
+  providers: [
+    AppService,
+    SupabaseStorageService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
   exports: [SupabaseStorageService],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

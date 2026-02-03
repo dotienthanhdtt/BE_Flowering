@@ -1,37 +1,31 @@
-# Phase 04: Core Modules (User, Language, Lesson, Progress)
+# Phase 04: Core Modules (User, Language)
 
 ## Overview
 
 | Field | Value |
 |-------|-------|
 | Priority | P1 - Critical Path |
-| Status | pending |
-| Effort | 6h |
+| Status | completed |
+| Effort | 2h |
 | Dependencies | Phase 02, Phase 03 |
 
-Implement core business modules: User (CRUD, profile), Language (available languages, user learning languages), Lesson (lessons, exercises), and Progress (user progress tracking, exercise attempts).
+Implement core business modules: User (CRUD, profile), Language (available languages, user learning languages).
 
 ## Key Insights
 
 - Each module follows NestJS module pattern (controller, service, DTOs)
-- Pagination on all list endpoints using cursor-based or offset pagination
 - TypeORM repositories for database operations
 - Swagger decorators on all endpoints
 
 ## Requirements
 
 ### Functional
-- User profile CRUD (get, update, delete account)
+- User profile CRUD (get, update)
 - List available languages
 - Manage user's learning languages
-- List lessons by language with pagination
-- Get lesson details with exercises
-- Track user progress per lesson
-- Record exercise attempts with feedback
 
 ### Non-Functional
 - Response time <200ms for all endpoints
-- Pagination default: 20 items per page
 - Soft delete for user accounts
 
 ## Architecture
@@ -45,29 +39,14 @@ src/modules/
 │   └── dto/
 │       ├── user-profile.dto.ts
 │       └── update-user.dto.ts
-├── language/
-│   ├── language.module.ts
-│   ├── language.controller.ts
-│   ├── language.service.ts
-│   └── dto/
-│       ├── language.dto.ts
-│       └── user-language.dto.ts
-├── lesson/
-│   ├── lesson.module.ts
-│   ├── lesson.controller.ts
-│   ├── lesson.service.ts
-│   └── dto/
-│       ├── lesson.dto.ts
-│       ├── lesson-detail.dto.ts
-│       └── exercise.dto.ts
-└── progress/
-    ├── progress.module.ts
-    ├── progress.controller.ts
-    ├── progress.service.ts
+└── language/
+    ├── language.module.ts
+    ├── language.controller.ts
+    ├── language.service.ts
     └── dto/
-        ├── user-progress.dto.ts
-        ├── submit-exercise.dto.ts
-        └── exercise-result.dto.ts
+        ├── language.dto.ts
+        ├── user-language.dto.ts
+        └── add-user-language.dto.ts
 ```
 
 ## Related Code Files
@@ -86,22 +65,6 @@ src/modules/
 - `src/modules/language/dto/language.dto.ts`
 - `src/modules/language/dto/user-language.dto.ts`
 - `src/modules/language/dto/add-user-language.dto.ts`
-
-### Lesson Module
-- `src/modules/lesson/lesson.module.ts`
-- `src/modules/lesson/lesson.controller.ts`
-- `src/modules/lesson/lesson.service.ts`
-- `src/modules/lesson/dto/lesson.dto.ts`
-- `src/modules/lesson/dto/lesson-detail.dto.ts`
-- `src/modules/lesson/dto/exercise.dto.ts`
-
-### Progress Module
-- `src/modules/progress/progress.module.ts`
-- `src/modules/progress/progress.controller.ts`
-- `src/modules/progress/progress.service.ts`
-- `src/modules/progress/dto/user-progress.dto.ts`
-- `src/modules/progress/dto/submit-exercise.dto.ts`
-- `src/modules/progress/dto/exercise-result.dto.ts`
 
 ## Implementation Steps
 
@@ -126,12 +89,7 @@ export class UserController {
   ): Promise<UserProfileDto> {
     return this.userService.update(user.id, dto);
   }
-
-  @Delete('me')
-  @ApiOperation({ summary: 'Delete user account (soft delete)' })
-  async deleteAccount(@CurrentUser() user: User): Promise<void> {
-    return this.userService.softDelete(user.id);
-  }
+  
 }
 
 // src/modules/user/user.service.ts
@@ -163,9 +121,6 @@ export class UserService {
     return this.getProfile(userId);
   }
 
-  async softDelete(userId: string): Promise<void> {
-    await this.userRepo.softDelete(userId);
-  }
 }
 ```
 
@@ -243,222 +198,7 @@ export class LanguageService {
 }
 ```
 
-### Step 3: Lesson Module (90min)
-
-```typescript
-// src/modules/lesson/lesson.controller.ts
-@ApiTags('lessons')
-@Controller('lessons')
-export class LessonController {
-  @Get()
-  @ApiOperation({ summary: 'List lessons by language' })
-  @ApiQuery({ name: 'languageId', required: true })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  async getLessons(
-    @Query('languageId') languageId: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ): Promise<PaginatedResponse<LessonDto>> {
-    return this.lessonService.findByLanguage(languageId, { page, limit });
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Get lesson details with exercises' })
-  async getLessonDetail(@Param('id') id: string): Promise<LessonDetailDto> {
-    return this.lessonService.findOneWithExercises(id);
-  }
-
-  @Get(':id/exercises')
-  @ApiOperation({ summary: 'Get exercises for a lesson' })
-  async getExercises(@Param('id') lessonId: string): Promise<ExerciseDto[]> {
-    return this.lessonService.getExercises(lessonId);
-  }
-}
-
-// src/modules/lesson/lesson.service.ts
-@Injectable()
-export class LessonService {
-  async findByLanguage(
-    languageId: string,
-    options: PaginationOptions,
-  ): Promise<PaginatedResponse<LessonDto>> {
-    const [items, total] = await this.lessonRepo.findAndCount({
-      where: { languageId },
-      order: { orderIndex: 'ASC' },
-      skip: (options.page - 1) * options.limit,
-      take: options.limit,
-    });
-
-    return {
-      items,
-      total,
-      page: options.page,
-      limit: options.limit,
-      totalPages: Math.ceil(total / options.limit),
-    };
-  }
-
-  async findOneWithExercises(id: string): Promise<LessonDetailDto> {
-    const lesson = await this.lessonRepo.findOne({
-      where: { id },
-      relations: ['exercises'],
-    });
-
-    if (!lesson) throw new NotFoundException('Lesson not found');
-
-    return {
-      ...lesson,
-      exercises: lesson.exercises.sort((a, b) => a.orderIndex - b.orderIndex),
-    };
-  }
-}
-```
-
-### Step 4: Progress Module (90min)
-
-```typescript
-// src/modules/progress/progress.controller.ts
-@ApiTags('progress')
-@Controller('progress')
-export class ProgressController {
-  @Get()
-  @ApiOperation({ summary: 'Get user progress for all lessons' })
-  @ApiQuery({ name: 'languageId', required: false })
-  async getProgress(
-    @CurrentUser() user: User,
-    @Query('languageId') languageId?: string,
-  ): Promise<UserProgressDto[]> {
-    return this.progressService.getUserProgress(user.id, languageId);
-  }
-
-  @Get('lessons/:lessonId')
-  @ApiOperation({ summary: 'Get user progress for specific lesson' })
-  async getLessonProgress(
-    @CurrentUser() user: User,
-    @Param('lessonId') lessonId: string,
-  ): Promise<UserProgressDto> {
-    return this.progressService.getLessonProgress(user.id, lessonId);
-  }
-
-  @Post('lessons/:lessonId/start')
-  @ApiOperation({ summary: 'Start a lesson' })
-  async startLesson(
-    @CurrentUser() user: User,
-    @Param('lessonId') lessonId: string,
-  ): Promise<UserProgressDto> {
-    return this.progressService.startLesson(user.id, lessonId);
-  }
-
-  @Post('exercises/:exerciseId/submit')
-  @ApiOperation({ summary: 'Submit exercise answer' })
-  async submitExercise(
-    @CurrentUser() user: User,
-    @Param('exerciseId') exerciseId: string,
-    @Body() dto: SubmitExerciseDto,
-  ): Promise<ExerciseResultDto> {
-    return this.progressService.submitExercise(user.id, exerciseId, dto);
-  }
-
-  @Post('lessons/:lessonId/complete')
-  @ApiOperation({ summary: 'Mark lesson as completed' })
-  async completeLesson(
-    @CurrentUser() user: User,
-    @Param('lessonId') lessonId: string,
-  ): Promise<UserProgressDto> {
-    return this.progressService.completeLesson(user.id, lessonId);
-  }
-}
-
-// src/modules/progress/progress.service.ts
-@Injectable()
-export class ProgressService {
-  async submitExercise(
-    userId: string,
-    exerciseId: string,
-    dto: SubmitExerciseDto,
-  ): Promise<ExerciseResultDto> {
-    const exercise = await this.exerciseRepo.findOne({ where: { id: exerciseId } });
-    if (!exercise) throw new NotFoundException('Exercise not found');
-
-    const isCorrect = this.checkAnswer(exercise, dto.answer);
-    const feedback = this.generateFeedback(exercise, dto.answer, isCorrect);
-
-    const attempt = await this.attemptRepo.save({
-      userId,
-      exerciseId,
-      userAnswer: dto.answer,
-      isCorrect,
-      feedback,
-    });
-
-    return {
-      isCorrect,
-      feedback,
-      correctAnswer: isCorrect ? undefined : exercise.correctAnswer,
-    };
-  }
-
-  async completeLesson(userId: string, lessonId: string): Promise<UserProgressDto> {
-    const attempts = await this.attemptRepo.find({
-      where: { userId, exercise: { lessonId } },
-      relations: ['exercise'],
-    });
-
-    const correctCount = attempts.filter(a => a.isCorrect).length;
-    const totalExercises = await this.exerciseRepo.count({ where: { lessonId } });
-    const score = (correctCount / totalExercises) * 100;
-
-    await this.progressRepo.update(
-      { userId, lessonId },
-      { status: 'completed', score, completedAt: new Date() },
-    );
-
-    return this.getLessonProgress(userId, lessonId);
-  }
-}
-```
-
-### Step 5: Create Pagination Helper (30min)
-
-```typescript
-// src/common/dto/pagination.dto.ts
-export class PaginationQueryDto {
-  @ApiProperty({ required: false, default: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiProperty({ required: false, default: 20 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 20;
-}
-
-export class PaginatedResponseDto<T> {
-  @ApiProperty()
-  items: T[];
-
-  @ApiProperty()
-  total: number;
-
-  @ApiProperty()
-  page: number;
-
-  @ApiProperty()
-  limit: number;
-
-  @ApiProperty()
-  totalPages: number;
-}
-```
-
-### Step 6: Register Modules in AppModule (15min)
+### Step 3: Register Modules in AppModule (15min)
 
 ```typescript
 // src/app.module.ts
@@ -467,8 +207,6 @@ export class PaginatedResponseDto<T> {
     // ... existing imports
     UserModule,
     LanguageModule,
-    LessonModule,
-    ProgressModule,
   ],
 })
 export class AppModule {}
@@ -477,41 +215,22 @@ export class AppModule {}
 ## Todo List
 
 ### User Module
-- [ ] Create UserModule
-- [ ] Create UserController (GET/PATCH/DELETE /users/me)
-- [ ] Create UserService
-- [ ] Create UserProfileDto
-- [ ] Create UpdateUserDto
+- [x] Create UserModule
+- [x] Create UserController (GET/PATCH /users/me)
+- [x] Create UserService
+- [x] Create UserProfileDto
+- [x] Create UpdateUserDto
 
 ### Language Module
-- [ ] Create LanguageModule
-- [ ] Create LanguageController
-- [ ] Create LanguageService
-- [ ] Create LanguageDto
-- [ ] Create UserLanguageDto
-- [ ] Create AddUserLanguageDto
-
-### Lesson Module
-- [ ] Create LessonModule
-- [ ] Create LessonController with pagination
-- [ ] Create LessonService
-- [ ] Create LessonDto
-- [ ] Create LessonDetailDto
-- [ ] Create ExerciseDto
-
-### Progress Module
-- [ ] Create ProgressModule
-- [ ] Create ProgressController
-- [ ] Create ProgressService
-- [ ] Create UserProgressDto
-- [ ] Create SubmitExerciseDto
-- [ ] Create ExerciseResultDto
-- [ ] Implement answer checking logic
+- [x] Create LanguageModule
+- [x] Create LanguageController
+- [x] Create LanguageService
+- [x] Create LanguageDto
+- [x] Create UserLanguageDto
+- [x] Create AddUserLanguageDto
 
 ### Common
-- [ ] Create PaginationQueryDto
-- [ ] Create PaginatedResponseDto
-- [ ] Register all modules in AppModule
+- [x] Register all modules in AppModule
 - [ ] Write unit tests for services
 - [ ] Write e2e tests for controllers
 
@@ -522,24 +241,18 @@ export class AppModule {}
 - [x] GET /languages returns active languages
 - [x] GET /languages/user returns user's learning languages
 - [x] POST /languages/user adds language
-- [x] GET /lessons?languageId=X returns paginated lessons
-- [x] GET /lessons/:id returns lesson with exercises
-- [x] GET /progress returns user progress
-- [x] POST /progress/exercises/:id/submit records attempt
-- [x] POST /progress/lessons/:id/complete calculates score
+- [x] PATCH /languages/user/:id updates proficiency
+- [x] DELETE /languages/user/:id removes language
 - [x] All endpoints have Swagger documentation
 
-## Risk Assessment
+## Risk Assessment  
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Complex exercise types | Medium | Low | Start with simple types, extend later |
-| N+1 query issues | Medium | Medium | Use TypeORM relations, eager loading |
-| Score calculation edge cases | Low | Low | Handle zero exercises case |
+| Risk             | Likelihood | Impact | Mitigation                          |
+| ---------------- | ---------- | ------ | ----------------------------------- |
+| N+1 query issues | Medium     | Medium | Use TypeORM relations, eager loading |
 
 ## Security Considerations
 
-- Users can only access their own progress data
+- Users can only access their own data
 - RLS policies enforce data isolation
-- Exercise answers validated server-side
 - No direct DB access, only through services
