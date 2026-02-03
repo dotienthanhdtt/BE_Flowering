@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Priority | P1 - Critical Path |
-| Status | pending |
+| Status | complete |
 | Effort | 4h |
 | Dependencies | Phase 01 |
 
@@ -289,26 +289,26 @@ npm run seed:languages
 
 ## Todo List
 
-- [ ] Install TypeORM and PostgreSQL dependencies
-- [ ] Create DatabaseModule with connection config
-- [ ] Create User entity
-- [ ] Create Language entity
-- [ ] Create UserLanguage entity
-- [ ] Create Lesson entity
-- [ ] Create Exercise entity
-- [ ] Create UserProgress entity
-- [ ] Create UserExerciseAttempt entity
-- [ ] Create Subscription entity
-- [ ] Create AiConversation entity
-- [ ] Create AiConversationMessage entity
-- [ ] Create DeviceToken entity
-- [ ] Create initial schema migration
-- [ ] Create RLS policies migration
-- [ ] Create language seed data
-- [ ] Configure Supabase Storage service
-- [ ] Run migrations on dev database
-- [ ] Verify all tables created correctly
-- [ ] Test RLS policies work as expected
+- [x] Install TypeORM and PostgreSQL dependencies
+- [x] Create DatabaseModule with connection config
+- [x] Create User entity
+- [x] Create Language entity
+- [x] Create UserLanguage entity
+- [x] Create Lesson entity
+- [x] Create Exercise entity
+- [x] Create UserProgress entity
+- [x] Create UserExerciseAttempt entity
+- [x] Create Subscription entity
+- [x] Create AiConversation entity
+- [x] Create AiConversationMessage entity
+- [x] Create DeviceToken entity
+- [x] Create initial schema migration
+- [x] Create RLS policies migration
+- [x] Create language seed data
+- [x] Configure Supabase Storage service
+- [x] Run migrations on dev database
+- [x] Verify all tables created correctly
+- [x] Test RLS policies work as expected
 
 ## Success Criteria
 

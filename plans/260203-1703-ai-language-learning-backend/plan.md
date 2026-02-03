@@ -31,7 +31,7 @@ NestJS 11 backend for AI-powered language learning app supporting multiple langu
 | Phase | Description | Effort | Status |
 |-------|-------------|--------|--------|
 | [Phase 01](./phase-01-project-setup.md) | Project Setup & Configuration | 4h | completed |
-| [Phase 02](./phase-02-database-supabase.md) | Database & Supabase Setup | 4h | pending |
+| [Phase 02](./phase-02-database-supabase.md) | Database & Supabase Setup | 4h | completed |
 | [Phase 03](./phase-03-auth-module.md) | Auth Module (JWT + OAuth) | 5h | pending |
 | [Phase 04](./phase-04-core-modules.md) | Core Modules (User, Language, Lesson, Progress) | 6h | pending |
 | [Phase 05](./phase-05-ai-module.md) | AI Module with LangChain | 6h | pending |
