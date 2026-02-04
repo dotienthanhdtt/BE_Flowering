@@ -11,6 +11,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AiModule } from './modules/ai/ai.module';
 import { UserModule } from './modules/user/user.module';
 import { LanguageModule } from './modules/language/language.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
@@ -28,6 +30,8 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     AiModule,
     UserModule,
     LanguageModule,
+    SubscriptionModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

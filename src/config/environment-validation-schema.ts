@@ -21,6 +21,8 @@ export const environmentValidationSchema = Joi.object({
 
   // AI Services
   OPENAI_API_KEY: Joi.string().allow('').optional().description('OpenAI API key for AI features'),
+  ANTHROPIC_API_KEY: Joi.string().allow('').optional().description('Anthropic API key for Claude'),
+  GOOGLE_AI_API_KEY: Joi.string().allow('').optional().description('Google AI API key for Gemini'),
   LANGFUSE_PUBLIC_KEY: Joi.string()
     .allow('')
     .optional()
@@ -30,4 +32,22 @@ export const environmentValidationSchema = Joi.object({
 
   // Monitoring
   SENTRY_DSN: Joi.string().allow('').optional().description('Sentry DSN for error tracking'),
+
+  // RevenueCat
+  REVENUECAT_API_KEY: Joi.string().allow('').optional().description('RevenueCat API key'),
+  REVENUECAT_WEBHOOK_SECRET: Joi.string()
+    .allow('')
+    .optional()
+    .description('RevenueCat webhook secret'),
+
+  // Firebase
+  FIREBASE_PROJECT_ID: Joi.string().allow('').optional().description('Firebase project ID'),
+  FIREBASE_CLIENT_EMAIL: Joi.string()
+    .allow('')
+    .optional()
+    .description('Firebase service account email'),
+  FIREBASE_PRIVATE_KEY: Joi.string()
+    .allow('')
+    .optional()
+    .description('Firebase service account private key'),
 });

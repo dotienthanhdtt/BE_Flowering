@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Priority | P2 - Important |
-| Status | pending |
+| Status | completed |
 | Effort | 4h |
 | Dependencies | Phase 02, Phase 03 |
 
@@ -563,29 +563,29 @@ export class NotificationController {
 ## Todo List
 
 ### Subscription Module
-- [ ] Create RevenueCatWebhookDto
-- [ ] Create SubscriptionDto
-- [ ] Implement SubscriptionService
-- [ ] Implement handlePurchaseOrRenewal
-- [ ] Implement handleCancellation
-- [ ] Implement handleExpiration
-- [ ] Implement idempotency checking
-- [ ] Create RevenueCatWebhookController
-- [ ] Create SubscriptionController
-- [ ] Add environment variables for RevenueCat
+- [x] Create RevenueCatWebhookDto
+- [x] Create SubscriptionDto
+- [x] Implement SubscriptionService
+- [x] Implement handlePurchaseOrRenewal
+- [x] Implement handleCancellation
+- [x] Implement handleExpiration
+- [x] Implement idempotency checking
+- [x] Create RevenueCatWebhookController
+- [x] Create SubscriptionController
+- [x] Add environment variables for RevenueCat
 
 ### Notification Module
-- [ ] Create FirebaseService with admin SDK
-- [ ] Implement sendToDevice
-- [ ] Implement sendToDevices with token cleanup
-- [ ] Implement topic subscription
-- [ ] Create NotificationService
-- [ ] Implement registerDevice
-- [ ] Implement sendToUser
-- [ ] Create NotificationController
-- [ ] Add environment variables for Firebase
-- [ ] Write unit tests for subscription events
-- [ ] Test webhook with RevenueCat sandbox
+- [x] Create FirebaseService with admin SDK
+- [x] Implement sendToDevice
+- [x] Implement sendToDevices with token cleanup
+- [x] Implement topic subscription
+- [x] Create NotificationService
+- [x] Implement registerDevice
+- [x] Implement sendToUser
+- [x] Create NotificationController
+- [x] Add environment variables for Firebase
+- [x] Write unit tests for subscription events
+- [x] Test webhook with RevenueCat sandbox
 
 ## Success Criteria
 
