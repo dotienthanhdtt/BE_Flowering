@@ -9,7 +9,7 @@ import { User } from '../../database/entities/user.entity';
  * Controller for push notification device management
  */
 @ApiTags('notifications')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('notifications')
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}

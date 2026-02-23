@@ -10,7 +10,7 @@ import { User } from '../../database/entities/user.entity';
  * Controller for user profile endpoints (GET/PATCH /users/me)
  */
 @ApiTags('users')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}

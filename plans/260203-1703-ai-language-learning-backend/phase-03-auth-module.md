@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Priority | P1 - Critical Path |
-| Status | pending |
+| Status | completed |
 | Effort | 5h |
 | Dependencies | Phase 01, Phase 02 |
 
@@ -14,7 +14,7 @@ Implement authentication with JWT strategy, Google OAuth, Apple OAuth, auth cont
 ## Key Insights
 
 - Use `@nestjs/passport` with multiple strategies
-- JWT access token (15min) + refresh token (7d) pattern
+- JWT access token (30day) + refresh token (90days) pattern
 - Google OAuth first priority (most users), Apple required for iOS
 - Store refresh tokens hashed in database
 
@@ -29,8 +29,8 @@ Implement authentication with JWT strategy, Google OAuth, Apple OAuth, auth cont
 - Logout (invalidate refresh tokens)
 
 ### Non-Functional
-- Access token: 15 min expiry
-- Refresh token: 7 day expiry
+- Access token: 30 day expiry
+- Refresh token: 90 day expiry
 - Password: bcrypt with 12 rounds
 - Secure httpOnly cookies for refresh tokens (optional)
 
@@ -315,7 +315,7 @@ export class AuthService {
     const payload = { sub: user.id, email: user.email };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '15m',
+      expiresIn: '30d',
     });
 
     const refreshToken = crypto.randomBytes(32).toString('hex');
@@ -324,7 +324,7 @@ export class AuthService {
     await this.refreshTokenRepo.save({
       tokenHash,
       user,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
     });
 
     return {
@@ -440,23 +440,23 @@ export class AppModule {}
 
 ## Todo List
 
-- [ ] Install passport and jwt dependencies
-- [ ] Create RegisterDto, LoginDto, AuthResponseDto
-- [ ] Create RefreshToken entity and migration
-- [ ] Implement JwtStrategy
-- [ ] Implement JwtRefreshStrategy
-- [ ] Implement GoogleStrategy
-- [ ] Implement AppleStrategy
-- [ ] Create JwtAuthGuard with @Public() support
-- [ ] Create GoogleAuthGuard
-- [ ] Create AppleAuthGuard
-- [ ] Create @CurrentUser() decorator
-- [ ] Implement AuthService with all methods
-- [ ] Create AuthController with all endpoints
-- [ ] Configure global JwtAuthGuard
-- [ ] Add environment variables for OAuth
-- [ ] Write unit tests for AuthService
-- [ ] Test OAuth flows manually
+- [x] Install passport and jwt dependencies
+- [x] Create RegisterDto, LoginDto, AuthResponseDto
+- [x] Create RefreshToken entity and migration
+- [x] Implement JwtStrategy
+- [x] Implement JwtRefreshStrategy
+- [x] Implement GoogleStrategy
+- [x] Implement AppleStrategy
+- [x] Create JwtAuthGuard with @Public() support
+- [x] Create GoogleAuthGuard
+- [x] Create AppleAuthGuard
+- [x] Create @CurrentUser() decorator
+- [x] Implement AuthService with all methods
+- [x] Create AuthController with all endpoints
+- [x] Configure global JwtAuthGuard
+- [x] Add environment variables for OAuth
+- [x] Write unit tests for AuthService
+- [x] Test OAuth flows manually
 
 ## Success Criteria
 
@@ -481,7 +481,7 @@ export class AppModule {}
 
 - Passwords hashed with bcrypt (12 rounds)
 - Refresh tokens hashed before storage
-- Access tokens short-lived (15min)
+- Access tokens short-lived (30day)
 - Refresh tokens rotated on each use
 - Failed login attempts should be rate-limited (add later)
 - OAuth state parameter for CSRF protection

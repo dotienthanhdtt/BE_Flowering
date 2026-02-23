@@ -5,20 +5,28 @@
 | Field | Value |
 |-------|-------|
 | Priority | P1 - Critical Path |
-| Status | pending |
+| Status | complete |
 | Effort | 6h |
 | Dependencies | Phase 02, Phase 03 |
 
-Implement AI module with LangChain integration: LLM provider abstraction, tiered routing (simple/complex), prompt loader service, learning agent service, Langfuse tracing, and AI controller with rate limiting.
+Implement AI module with LangChain integration: LLM provider abstraction, unified LLM service with model routing, prompt loader service, learning agent service, Langfuse tracing, and AI controller with rate limiting.
 
 ## Key Insights
 
 From research:
-- Use `@langchain/openai` and `@langchain/anthropic` for LLM providers
-- Tiered routing: GPT-4o-mini for simple tasks, GPT-4o for complex
+- Use `@langchain/openai`, `@langchain/anthropic`, `@langchain/google-genai` for LLM providers
+- Unified LLM service routes to correct provider based on model name prefix
+- Model passed directly as parameter for flexibility (no tiered simple/complex)
 - Langfuse `CallbackHandler` integrates seamlessly with LangChain
 - Prompts stored as `.md` files with `{{variable}}` placeholders
 - SSE streaming for chat responses
+
+### Supported Models by Provider
+| Provider | Models |
+|----------|--------|
+| OpenAI | gpt-4o, gpt-4o-mini, o1-preview, o1-mini |
+| Anthropic | claude-3-5-sonnet, claude-3-haiku |
+| Gemini | gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash |
 
 ## Requirements
 
@@ -42,11 +50,13 @@ src/modules/ai/
 ├── ai.module.ts
 ├── ai.controller.ts
 ├── providers/
+│   ├── llm-models.enum.ts           # Model enum with all supported models
 │   ├── llm-provider.interface.ts
 │   ├── openai-llm.provider.ts
 │   ├── anthropic-llm.provider.ts
-│   └── tiered-llm.provider.ts
+│   └── gemini-llm.provider.ts
 ├── services/
+│   ├── llm.service.ts              # Unified LLM service with model routing
 │   ├── prompt-loader.service.ts
 │   ├── langfuse.service.ts
 │   ├── learning-agent.service.ts
@@ -71,10 +81,12 @@ src/modules/ai/
 ### Files to Create
 - `src/modules/ai/ai.module.ts`
 - `src/modules/ai/ai.controller.ts`
+- `src/modules/ai/providers/llm-models.enum.ts`
 - `src/modules/ai/providers/llm-provider.interface.ts`
 - `src/modules/ai/providers/openai-llm.provider.ts`
 - `src/modules/ai/providers/anthropic-llm.provider.ts`
-- `src/modules/ai/providers/tiered-llm.provider.ts`
+- `src/modules/ai/providers/gemini-llm.provider.ts`
+- `src/modules/ai/services/llm.service.ts`
 - `src/modules/ai/services/prompt-loader.service.ts`
 - `src/modules/ai/services/langfuse.service.ts`
 - `src/modules/ai/services/learning-agent.service.ts`
@@ -95,27 +107,63 @@ src/modules/ai/
 ### Step 1: Install AI Dependencies (10min)
 
 ```bash
-npm install @langchain/openai @langchain/anthropic @langchain/core langchain
+npm install @langchain/openai @langchain/anthropic @langchain/google-genai @langchain/core langchain
 npm install langfuse-langchain
 npm install @nestjs/throttler  # For rate limiting
 npm install openai  # For Whisper API
 ```
 
-### Step 2: Create LLM Provider Interface (20min)
+### Step 2: Create Model Enum and LLM Provider Interface (20min)
+
+```typescript
+// src/modules/ai/providers/llm-models.enum.ts
+export enum LLMModel {
+  // OpenAI Models
+  OPENAI_GPT4O = 'gpt-4o',
+  OPENAI_GPT4O_MINI = 'gpt-4o-mini',
+  OPENAI_O1_PREVIEW = 'o1-preview',
+  OPENAI_O1_MINI = 'o1-mini',
+
+  // Anthropic Models
+  ANTHROPIC_CLAUDE_3_5_SONNET = 'claude-3-5-sonnet-20241022',
+  ANTHROPIC_CLAUDE_3_HAIKU = 'claude-3-haiku-20240307',
+
+  // Gemini Models
+  GEMINI_2_5_FLASH = 'gemini-2.5-flash-preview-05-20',
+  GEMINI_2_0_FLASH = 'gemini-2.0-flash',
+  GEMINI_1_5_PRO = 'gemini-1.5-pro',
+  GEMINI_1_5_FLASH = 'gemini-1.5-flash',
+}
+
+// Helper to determine provider from model enum
+export function getProviderFromModel(model: LLMModel): 'openai' | 'anthropic' | 'gemini' {
+  const modelValue = model as string;
+  if (modelValue.startsWith('gpt-') || modelValue.startsWith('o1')) {
+    return 'openai';
+  } else if (modelValue.startsWith('claude-')) {
+    return 'anthropic';
+  } else if (modelValue.startsWith('gemini-')) {
+    return 'gemini';
+  }
+  throw new Error(`Unknown model provider for: ${model}`);
+}
+```
 
 ```typescript
 // src/modules/ai/providers/llm-provider.interface.ts
 import { BaseMessage } from '@langchain/core/messages';
-
-export interface LLMProvider {
-  chat(messages: BaseMessage[], options?: LLMOptions): Promise<string>;
-  stream(messages: BaseMessage[], options?: LLMOptions): AsyncIterable<string>;
-}
+import { LLMModel } from './llm-models.enum';
 
 export interface LLMOptions {
+  model: LLMModel;  // Required: model enum value
   temperature?: number;
   maxTokens?: number;
   metadata?: Record<string, unknown>;
+}
+
+export interface LLMProvider {
+  chat(messages: BaseMessage[], options: LLMOptions): Promise<string>;
+  stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string>;
 }
 ```
 
@@ -131,31 +179,32 @@ import { LLMProvider, LLMOptions } from './llm-provider.interface';
 
 @Injectable()
 export class OpenAILLMProvider implements LLMProvider {
-  private model: ChatOpenAI;
-
   constructor(
     private configService: ConfigService,
     private langfuseService: LangfuseService,
-    modelName: string,
-  ) {
-    this.model = new ChatOpenAI({
+  ) {}
+
+  private getModel(modelName: string): ChatOpenAI {
+    return new ChatOpenAI({
       modelName,
-      openAIApiKey: configService.get('OPENAI_API_KEY'),
+      openAIApiKey: this.configService.get('OPENAI_API_KEY'),
       streaming: true,
-      callbacks: [langfuseService.getHandler()],
+      callbacks: [this.langfuseService.getHandler()],
     });
   }
 
-  async chat(messages: BaseMessage[], options?: LLMOptions): Promise<string> {
-    const response = await this.model.invoke(messages, {
-      metadata: options?.metadata,
+  async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
+    const model = this.getModel(options.model);
+    const response = await model.invoke(messages, {
+      metadata: options.metadata,
     });
     return response.content as string;
   }
 
-  async *stream(messages: BaseMessage[], options?: LLMOptions): AsyncIterable<string> {
-    const stream = await this.model.stream(messages, {
-      metadata: options?.metadata,
+  async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
+    const model = this.getModel(options.model);
+    const stream = await model.stream(messages, {
+      metadata: options.metadata,
     });
 
     for await (const chunk of stream) {
@@ -165,55 +214,146 @@ export class OpenAILLMProvider implements LLMProvider {
 }
 ```
 
-### Step 4: Create Tiered LLM Provider (40min)
+### Step 4: Create Gemini LLM Provider (30min)
 
 ```typescript
-// src/modules/ai/providers/tiered-llm.provider.ts
-@Injectable()
-export class TieredLLMProvider {
-  public readonly simple: LLMProvider;
-  public readonly complex: LLMProvider;
+// src/modules/ai/providers/gemini-llm.provider.ts
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { BaseMessage } from '@langchain/core/messages';
+import { LLMProvider, LLMOptions } from './llm-provider.interface';
 
+@Injectable()
+export class GeminiLLMProvider implements LLMProvider {
   constructor(
     private configService: ConfigService,
     private langfuseService: LangfuseService,
-  ) {
-    const provider = configService.get('LLM_PROVIDER', 'openai');
+  ) {}
 
-    if (provider === 'openai') {
-      this.simple = new OpenAILLMProvider(
-        configService,
-        langfuseService,
-        configService.get('LLM_SIMPLE_MODEL', 'gpt-4o-mini'),
-      );
-      this.complex = new OpenAILLMProvider(
-        configService,
-        langfuseService,
-        configService.get('LLM_COMPLEX_MODEL', 'gpt-4o'),
-      );
-    } else if (provider === 'anthropic') {
-      this.simple = new AnthropicLLMProvider(
-        configService,
-        langfuseService,
-        'claude-3-haiku-20240307',
-      );
-      this.complex = new AnthropicLLMProvider(
-        configService,
-        langfuseService,
-        'claude-3-5-sonnet-20241022',
-      );
-    }
+  private getModel(modelName: string): ChatGoogleGenerativeAI {
+    return new ChatGoogleGenerativeAI({
+      modelName,
+      apiKey: this.configService.get('GOOGLE_AI_API_KEY'),
+      streaming: true,
+      callbacks: [this.langfuseService.getHandler()],
+    });
   }
 
-  // Determine complexity based on task type
-  getProviderForTask(taskType: 'chat' | 'grammar' | 'exercise' | 'pronunciation'): LLMProvider {
-    const complexTasks = ['chat', 'exercise'];
-    return complexTasks.includes(taskType) ? this.complex : this.simple;
+  async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
+    const model = this.getModel(options.model);
+    const response = await model.invoke(messages, {
+      metadata: options.metadata,
+    });
+    return response.content as string;
+  }
+
+  async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
+    const model = this.getModel(options.model);
+    const stream = await model.stream(messages, {
+      metadata: options.metadata,
+    });
+
+    for await (const chunk of stream) {
+      yield chunk.content as string;
+    }
   }
 }
 ```
 
-### Step 5: Create Langfuse Service (30min)
+### Step 5: Create Anthropic LLM Provider (30min)
+
+```typescript
+// src/modules/ai/providers/anthropic-llm.provider.ts
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { ChatAnthropic } from '@langchain/anthropic';
+import { BaseMessage } from '@langchain/core/messages';
+import { LLMProvider, LLMOptions } from './llm-provider.interface';
+
+@Injectable()
+export class AnthropicLLMProvider implements LLMProvider {
+  constructor(
+    private configService: ConfigService,
+    private langfuseService: LangfuseService,
+  ) {}
+
+  private getModel(modelName: string): ChatAnthropic {
+    return new ChatAnthropic({
+      modelName,
+      anthropicApiKey: this.configService.get('ANTHROPIC_API_KEY'),
+      streaming: true,
+      callbacks: [this.langfuseService.getHandler()],
+    });
+  }
+
+  async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
+    const model = this.getModel(options.model);
+    const response = await model.invoke(messages, {
+      metadata: options.metadata,
+    });
+    return response.content as string;
+  }
+
+  async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
+    const model = this.getModel(options.model);
+    const stream = await model.stream(messages, {
+      metadata: options.metadata,
+    });
+
+    for await (const chunk of stream) {
+      yield chunk.content as string;
+    }
+  }
+}
+```
+
+### Step 6: Create Unified LLM Service (40min)
+
+```typescript
+// src/modules/ai/services/llm.service.ts
+import { Injectable } from '@nestjs/common';
+import { BaseMessage } from '@langchain/core/messages';
+import { OpenAILLMProvider } from '../providers/openai-llm.provider';
+import { AnthropicLLMProvider } from '../providers/anthropic-llm.provider';
+import { GeminiLLMProvider } from '../providers/gemini-llm.provider';
+import { LLMOptions } from '../providers/llm-provider.interface';
+import { LLMModel, getProviderFromModel } from '../providers/llm-models.enum';
+
+@Injectable()
+export class LLMService {
+  constructor(
+    private openaiProvider: OpenAILLMProvider,
+    private anthropicProvider: AnthropicLLMProvider,
+    private geminiProvider: GeminiLLMProvider,
+  ) {}
+
+  // Route to correct provider based on model enum
+  private getProvider(model: LLMModel) {
+    const provider = getProviderFromModel(model);
+    switch (provider) {
+      case 'openai':
+        return this.openaiProvider;
+      case 'anthropic':
+        return this.anthropicProvider;
+      case 'gemini':
+        return this.geminiProvider;
+    }
+  }
+
+  async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
+    const provider = this.getProvider(options.model);
+    return provider.chat(messages, options);
+  }
+
+  async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
+    const provider = this.getProvider(options.model);
+    yield* provider.stream(messages, options);
+  }
+}
+```
+
+### Step 7: Create Langfuse Service (30min)
 
 ```typescript
 // src/modules/ai/services/langfuse.service.ts
@@ -296,33 +436,44 @@ export class PromptLoaderService {
 }
 ```
 
-### Step 7: Create Learning Agent Service (90min)
+### Step 9: Create Learning Agent Service (90min)
 
 ```typescript
 // src/modules/ai/services/learning-agent.service.ts
 import { Injectable } from '@nestjs/common';
-import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
-import { TieredLLMProvider } from '../providers/tiered-llm.provider';
+import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
+import { LLMService } from './llm.service';
 import { PromptLoaderService } from './prompt-loader.service';
-import { LangfuseService } from './langfuse.service';
+import { LLMModel } from '../providers/llm-models.enum';
+import { AiConversation, AiConversationMessage } from '../../../database/entities';
 
 @Injectable()
 export class LearningAgentService {
+  // Default model from config
+  private defaultModel: LLMModel;
+
   constructor(
-    private llmProvider: TieredLLMProvider,
+    private llmService: LLMService,
     private promptLoader: PromptLoaderService,
-    private langfuseService: LangfuseService,
+    private configService: ConfigService,
     @InjectRepository(AiConversation)
     private conversationRepo: Repository<AiConversation>,
     @InjectRepository(AiConversationMessage)
     private messageRepo: Repository<AiConversationMessage>,
-  ) {}
+  ) {
+    // Default model configurable via env, defaults to Gemini 2.5 Flash
+    this.defaultModel = LLMModel.GEMINI_2_5_FLASH;
+  }
 
-  // Main tutoring chat
+  // Main tutoring chat - model passed as enum
   async chat(
     userId: string,
     message: string,
     context: ConversationContext,
+    model?: LLMModel,  // Optional: override default model
   ): Promise<ChatResponseDto> {
     const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt', {
       targetLanguage: context.targetLanguage,
@@ -331,7 +482,6 @@ export class LearningAgentService {
       lessonTopic: context.lessonTopic || 'General conversation',
     });
 
-    // Get conversation history
     const history = await this.getConversationHistory(context.conversationId);
 
     const messages = [
@@ -340,22 +490,24 @@ export class LearningAgentService {
       new HumanMessage(message),
     ];
 
-    const response = await this.llmProvider.complex.chat(messages, {
+    // Model passed as enum - type-safe!
+    const response = await this.llmService.chat(messages, {
+      model: model || this.defaultModel,
       metadata: { userId, feature: 'chat', conversationId: context.conversationId },
     });
 
-    // Save messages to database
     await this.saveMessage(context.conversationId, 'user', message);
     await this.saveMessage(context.conversationId, 'assistant', response);
 
     return { message: response, conversationId: context.conversationId };
   }
 
-  // Streaming chat
+  // Streaming chat with model enum
   async *streamChat(
     userId: string,
     message: string,
     context: ConversationContext,
+    model?: LLMModel,
   ): AsyncIterable<string> {
     const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt', {
       targetLanguage: context.targetLanguage,
@@ -372,7 +524,10 @@ export class LearningAgentService {
     ];
 
     let fullResponse = '';
-    for await (const chunk of this.llmProvider.complex.stream(messages)) {
+    for await (const chunk of this.llmService.stream(messages, {
+      model: model || this.defaultModel,
+      metadata: { userId, feature: 'chat', conversationId: context.conversationId },
+    })) {
       fullResponse += chunk;
       yield chunk;
     }
@@ -381,22 +536,30 @@ export class LearningAgentService {
     await this.saveMessage(context.conversationId, 'assistant', fullResponse);
   }
 
-  // Grammar checking (simple model)
-  async checkGrammar(text: string, targetLanguage: string): Promise<GrammarResultDto> {
+  // Grammar checking with model enum
+  async checkGrammar(
+    text: string,
+    targetLanguage: string,
+    model?: LLMModel,
+  ): Promise<GrammarResultDto> {
     const prompt = this.promptLoader.loadPrompt('grammar-check-prompt', {
       text,
       targetLanguage,
     });
 
-    const response = await this.llmProvider.simple.chat([new HumanMessage(prompt)], {
+    const response = await this.llmService.chat([new HumanMessage(prompt)], {
+      model: model || LLMModel.GEMINI_1_5_FLASH, // Default to faster model
       metadata: { feature: 'grammar-check' },
     });
 
     return this.parseGrammarResponse(response);
   }
 
-  // Exercise generation (complex model)
-  async generateExercise(params: GenerateExerciseDto): Promise<ExerciseDto> {
+  // Exercise generation with model enum
+  async generateExercise(
+    params: GenerateExerciseDto,
+    model?: LLMModel,
+  ): Promise<ExerciseDto> {
     const prompt = this.promptLoader.loadPrompt('exercise-generator-prompt', {
       exerciseType: params.type,
       targetLanguage: params.targetLanguage,
@@ -404,18 +567,20 @@ export class LearningAgentService {
       topic: params.topic,
     });
 
-    const response = await this.llmProvider.complex.chat([new HumanMessage(prompt)], {
+    const response = await this.llmService.chat([new HumanMessage(prompt)], {
+      model: model || this.defaultModel,
       metadata: { feature: 'exercise-generation' },
     });
 
     return this.parseExerciseResponse(response);
   }
 
-  // Pronunciation assessment (simple model)
+  // Pronunciation assessment with model enum
   async assessPronunciation(
     transcribedText: string,
     expectedText: string,
     targetLanguage: string,
+    model?: LLMModel,
   ): Promise<PronunciationResultDto> {
     const prompt = this.promptLoader.loadPrompt('pronunciation-assessment-prompt', {
       transcribedText,
@@ -423,7 +588,8 @@ export class LearningAgentService {
       targetLanguage,
     });
 
-    const response = await this.llmProvider.simple.chat([new HumanMessage(prompt)], {
+    const response = await this.llmService.chat([new HumanMessage(prompt)], {
+      model: model || LLMModel.GEMINI_1_5_FLASH, // Default to faster model
       metadata: { feature: 'pronunciation-assessment' },
     });
 
@@ -434,14 +600,52 @@ export class LearningAgentService {
     const messages = await this.messageRepo.find({
       where: { conversationId },
       order: { createdAt: 'ASC' },
-      take: 20, // Last 20 messages for context
+      take: 20,
     });
 
     return messages.map(m =>
       m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content),
     );
   }
+
+  private async saveMessage(conversationId: string, role: string, content: string): Promise<void> {
+    await this.messageRepo.save({ conversationId, role, content });
+  }
+
+  private parseGrammarResponse(response: string): GrammarResultDto {
+    return JSON.parse(response);
+  }
+
+  private parseExerciseResponse(response: string): ExerciseDto {
+    return JSON.parse(response);
+  }
+
+  private parsePronunciationResponse(response: string): PronunciationResultDto {
+    return JSON.parse(response);
+  }
 }
+```
+
+### Usage Example
+
+```typescript
+// In controller or service
+import { LLMModel } from '../providers/llm-models.enum';
+
+// Chat with default model (Gemini 2.5 Flash)
+const response = await learningAgent.chat(userId, message, context);
+
+// Chat with specific model using enum
+const response = await learningAgent.chat(userId, message, context, LLMModel.OPENAI_GPT4O);
+
+// Grammar check with Claude
+const result = await learningAgent.checkGrammar(text, 'Japanese', LLMModel.ANTHROPIC_CLAUDE_3_HAIKU);
+
+// Direct LLM service call
+const response = await llmService.chat(messages, {
+  model: LLMModel.GEMINI_2_5_FLASH,
+  metadata: { userId: 'user-123', feature: 'custom' },
+});
 ```
 
 ### Step 8: Create Whisper Transcription Service (30min)
@@ -632,27 +836,29 @@ Respond in JSON format:
 
 ## Todo List
 
-- [ ] Install LangChain and related dependencies
-- [ ] Create LLMProvider interface
-- [ ] Implement OpenAILLMProvider
-- [ ] Implement AnthropicLLMProvider
-- [ ] Create TieredLLMProvider with model routing
-- [ ] Create LangfuseService for tracing
-- [ ] Create PromptLoaderService
-- [ ] Create tutor-system-prompt.md
-- [ ] Create grammar-check-prompt.md
-- [ ] Create exercise-generator-prompt.md
-- [ ] Create pronunciation-assessment-prompt.md
-- [ ] Implement LearningAgentService chat method
-- [ ] Implement LearningAgentService streamChat method
-- [ ] Implement LearningAgentService checkGrammar method
-- [ ] Implement LearningAgentService generateExercise method
-- [ ] Implement LearningAgentService assessPronunciation method
-- [ ] Create WhisperTranscriptionService
-- [ ] Create AiRateLimitGuard
-- [ ] Create AiController with all endpoints
-- [ ] Create all DTOs
-- [ ] Configure ThrottlerModule
+- [x] Install LangChain and related dependencies (including @langchain/google-genai)
+- [x] Create LLMModel enum with all supported models
+- [x] Create LLMProvider interface with model enum
+- [x] Implement OpenAILLMProvider with dynamic model
+- [x] Implement AnthropicLLMProvider with dynamic model
+- [x] Implement GeminiLLMProvider with dynamic model
+- [x] Create unified LLMService with model routing
+- [x] Create LangfuseService for tracing
+- [x] Create PromptLoaderService
+- [x] Create tutor-system-prompt.md
+- [x] Create grammar-check-prompt.md
+- [x] Create exercise-generator-prompt.md
+- [x] Create pronunciation-assessment-prompt.md
+- [x] Implement LearningAgentService chat method (with LLMModel enum)
+- [x] Implement LearningAgentService streamChat method (with LLMModel enum)
+- [x] Implement LearningAgentService checkGrammar method (with LLMModel enum)
+- [x] Implement LearningAgentService generateExercise method (with LLMModel enum)
+- [x] Implement LearningAgentService assessPronunciation method (with LLMModel enum)
+- [x] Create WhisperTranscriptionService
+- [x] Create AiRateLimitGuard
+- [x] Create AiController with all endpoints
+- [x] Create all DTOs (with LLMModel enum in requests)
+- [x] Configure ThrottlerModule
 - [ ] Write unit tests for LearningAgentService
 - [ ] Test Langfuse traces appear correctly
 

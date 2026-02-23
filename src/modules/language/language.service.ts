@@ -2,10 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Language } from '../../database/entities/language.entity';
-import {
-  UserLanguage,
-  ProficiencyLevel,
-} from '../../database/entities/user-language.entity';
+import { UserLanguage, ProficiencyLevel } from '../../database/entities/user-language.entity';
 import { LanguageDto } from './dto/language.dto';
 import { UserLanguageDto } from './dto/user-language.dto';
 import { AddUserLanguageDto } from './dto/add-user-language.dto';
@@ -37,6 +34,7 @@ export class LanguageService {
       code: lang.code,
       name: lang.name,
       nativeName: lang.nativeName,
+      flagUrl: lang.flagUrl,
     }));
   }
 
@@ -56,10 +54,7 @@ export class LanguageService {
   /**
    * Add language to user's learning list
    */
-  async addUserLanguage(
-    userId: string,
-    dto: AddUserLanguageDto,
-  ): Promise<UserLanguageDto> {
+  async addUserLanguage(userId: string, dto: AddUserLanguageDto): Promise<UserLanguageDto> {
     // Check if language exists
     const language = await this.languageRepo.findOne({
       where: { id: dto.languageId, isActive: true },
@@ -150,6 +145,7 @@ export class LanguageService {
         code: ul.language.code,
         name: ul.language.name,
         nativeName: ul.language.nativeName,
+        flagUrl: ul.language.flagUrl,
       },
     };
   }

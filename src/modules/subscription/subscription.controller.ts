@@ -9,7 +9,7 @@ import { User } from '../../database/entities/user.entity';
  * Controller for subscription endpoints
  */
 @ApiTags('subscriptions')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('subscriptions')
 export class SubscriptionController {
   constructor(private readonly subscriptionService: SubscriptionService) {}

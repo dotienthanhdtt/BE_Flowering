@@ -15,4 +15,7 @@ export class LanguageDto {
 
   @ApiProperty({ description: 'Language name in native script', required: false })
   nativeName?: string;
+
+  @ApiProperty({ description: 'URL to language flag image', required: false })
+  flagUrl?: string;
 }

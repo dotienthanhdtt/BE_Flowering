@@ -13,4 +13,4 @@ II. Here is some requirement for this app
 * token JWT authentication
 * Sentry to monitor, log, tracing, metrics
 
-III. Your task is brainstoming base on my above requirement to create backend quality codebase backend. this is 1 step of building product, this product not build anything at all
+III. Your task is brainstoming base on my above requirement to createck backend quality codebase backend. this is 1 step of building product, this product not build anything at all

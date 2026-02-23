@@ -16,4 +16,7 @@ export class Language {
 
   @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive!: boolean;
+
+  @Column({ type: 'text', name: 'flag_url', nullable: true })
+  flagUrl?: string;
 }

@@ -29,7 +29,41 @@
       "Bash(ls:*)",
       "Bash(npm run test:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: initialize nestjs 11 project with typescript strict mode\n\n- Configure TypeScript strict mode with path aliases\n- Setup ESLint 9 flat config + Prettier\n- Add environment configuration with Joi validation\n- Implement standard response format { code, message, data }\n- Add ResponseTransformInterceptor for consistent responses\n- Add AllExceptionsFilter for error handling\n- Configure Swagger/OpenAPI at /api/docs\n- Add CORS with configurable origins\nEOF\n\\)\")",
+      "Bash(npm install @nestjs/typeorm typeorm pg @supabase/supabase-js)",
+      "Bash(npm install dotenv --save)",
+      "Bash(npm run migration:run:*)",
+      "Bash(PGPASSWORD=\"dotienthanh1998\" psql:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(database\\): implement Phase 02 database and Supabase integration\n\n- Add TypeORM with PostgreSQL driver and Supabase JS SDK\n- Create 11 entity files: Language, User, UserLanguage, Lesson, Exercise,\n  UserProgress, UserExerciseAttempt, Subscription, AiConversation,\n  AiConversationMessage, DeviceToken\n- Configure DatabaseModule with connection pooling and SSL\n- Add TypeORM data source for migrations CLI\n- Create initial schema migration with enums and indexes\n- Create RLS policies migration for row-level security\n- Add language seed data \\(10 languages\\)\n- Implement SupabaseStorageService for audio file storage\n- Add migration npm scripts\n- Create SQL file for manual Supabase SQL Editor execution\nEOF\n\\)\")",
+      "Bash(npm install:*)",
+      "Bash(npm install -D @types/passport-jwt @types/passport-google-oauth20 @types/bcrypt)",
+      "Bash(npm run test:cov:*)",
+      "Bash(tee:*)",
+      "Bash(npm view:*)",
+      "Bash(npm test:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(core\\): implement Phase 04 core modules with User and Language APIs\n\n- Add UserModule with CRUD operations and language association\n- Create UserController with endpoints: GET /users/me, PATCH /users/me, POST /users/languages, DELETE /users/languages/:id\n- Implement UserService with profile management and language association logic\n- Add 5 DTOs for user operations: UpdateProfileDto, GetProfileResponseDto, AddLanguageDto, UserLanguageDto, RemoveLanguageResponseDto\n- Add LanguageModule with language listing functionality\n- Create LanguageController with endpoint: GET /languages\n- Implement LanguageService with language retrieval and validation\n- Add 2 DTOs for language operations: LanguageDto, GetLanguagesResponseDto\n- Register UserModule and LanguageModule in AppModule\n- Update phase-04-core-modules.md status to DONE\nEOF\n\\)\")",
+      "Bash(wc:*)",
+      "Bash(npm run test:coverage:*)",
+      "Bash(npm run)",
+      "Bash(xargs ls:*)",
+      "Bash(repomix:*)",
+      "Bash(git commit:*)",
+      "Bash(~/.claude/skills/.venv/bin/python3:*)",
+      "Bash(command:*)",
+      "Bash(ck init:*)",
+      "Bash(for file in /Users/tienthanh/Documents/new_flowering/be_flowering/docs/*.md)",
+      "Bash(done)",
+      "Bash(source:*)",
+      "Bash(npm update -g @anthropic-ai/claude-code)",
+      "Bash(claude:*)",
+      "Bash(psql:*)",
+      "Bash(npx ts-node -r tsconfig-paths/register -e \"\nimport { AppDataSource } from ''./src/database/typeorm-data-source'';\n\nasync function run\\(\\) {\n  await AppDataSource.initialize\\(\\);\n  await AppDataSource.query\\(\\\\`\n    INSERT INTO migrations \\(timestamp, name\\) VALUES \n    \\(1706976000000, ''InitialSchema1706976000000''\\),\n    \\(1706976100000, ''RlsPolicies1706976100000''\\),\n    \\(1738678400000, ''AddFlagUrlToLanguages1738678400000''\\)\n    ON CONFLICT DO NOTHING\n  \\\\`\\);\n  console.log\\(''Migration records inserted''\\);\n  await AppDataSource.destroy\\(\\);\n}\nrun\\(\\).catch\\(console.error\\);\n\")"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
