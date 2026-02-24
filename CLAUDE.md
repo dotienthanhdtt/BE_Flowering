@@ -35,12 +35,13 @@ npm run migration:generate # Generate migration from entities
 ### Module Structure
 All feature modules follow NestJS modular architecture in `src/modules/`:
 
-- **auth/** - JWT authentication, Google/Apple OAuth strategies, guards
+- **auth/** - JWT authentication, Google idToken POST + Apple OAuth, composite refresh tokens, account auto-linking
 - **ai/** - LangChain-based AI features (chat, exercises, grammar, pronunciation)
 - **user/** - User profile management
 - **language/** - User language preferences and progress
 - **subscription/** - RevenueCat subscription handling with webhooks
 - **notification/** - Firebase push notifications
+- **onboarding/** - Anonymous onboarding chat with session-based AI conversations (no auth required)
 
 ### Core Components
 
@@ -115,7 +116,11 @@ All docs in `docs/` directory:
 - **Response Wrapper**: All responses wrapped in `{code: 1, message, data}` via interceptor
 - **Error Handling**: `AllExceptionsFilter` catches all errors, never exposes raw exceptions
 - **Rate Limiting**: AI endpoints: 20 req/min, 100 req/hour per user
-- **RLS Policies**: Database-level row security for user data isolation
+  - **RLS Policies**: Database-level row security for user data isolation
+- **Composite Refresh Tokens**: Stored hashed in DB with device fingerprint; 90-day expiry
+- **Google Auth**: POST `/auth/google` accepts `idToken` directly (no OAuth redirect flow)
+- **Account Auto-linking**: Google/Apple login auto-links to existing email account
+- **Anonymous Onboarding**: Session-based chat at `/onboarding/*`; no JWT needed; state stored in-memory per `sessionId`
 
 ## Rules
 
@@ -140,11 +145,11 @@ All docs in `docs/` directory:
 
 ### Database Changes (Migrations)
 Always show complete implementation including:
-1. Migration file with proper up/down methods
+1. Migration file for Supbase DB with proper up/down methods
 2. Entity/type updates
 3. DTO modifications
 4. API endpoint changes
-5. Example API request/response
+5. Example API request/responsafe
 
 ### Documentation Tasks
 - Output complete file content using Write tool
