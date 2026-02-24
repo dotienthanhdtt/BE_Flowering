@@ -10,6 +10,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { AppleStrategy } from './strategies/apple.strategy';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
+import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { AppConfiguration } from '../../config/app-configuration';
 
 // Conditionally provide GoogleStrategy only when credentials are configured
@@ -30,7 +31,7 @@ const googleStrategyProvider: Provider = {
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, RefreshToken]),
+    TypeOrmModule.forFeature([User, RefreshToken, AiConversation]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

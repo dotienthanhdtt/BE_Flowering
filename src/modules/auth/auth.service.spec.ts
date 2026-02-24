@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
+import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { RegisterDto, LoginDto } from './dto';
 import { AppleStrategy } from './strategies/apple.strategy';
 import { GoogleUser } from './strategies/google.strategy';
@@ -18,6 +19,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let userRepository: jest.Mocked<Repository<User>>;
   let refreshTokenRepository: jest.Mocked<Repository<RefreshToken>>;
+  let conversationRepository: jest.Mocked<{ update: jest.Mock }>;
   let jwtService: jest.Mocked<JwtService>;
   let appleStrategy: jest.Mocked<AppleStrategy>;
 
@@ -67,12 +69,19 @@ describe('AuthService', () => {
             update: jest.fn(),
           },
         },
+        {
+          provide: getRepositoryToken(AiConversation),
+          useValue: {
+            update: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     userRepository = module.get(getRepositoryToken(User));
     refreshTokenRepository = module.get(getRepositoryToken(RefreshToken));
+    conversationRepository = module.get(getRepositoryToken(AiConversation));
     jwtService = module.get(JwtService);
     appleStrategy = module.get(AppleStrategy);
   });
@@ -385,6 +394,95 @@ describe('AuthService', () => {
       expect(refreshTokenRepository.update).toHaveBeenCalledWith(
         { userId, revoked: false },
         { revoked: true },
+      );
+    });
+  });
+
+  describe('register with sessionToken (onboarding linking)', () => {
+    it('calls linkOnboardingSession after user creation when sessionToken provided', async () => {
+      const registerDto: RegisterDto = {
+        email: 'new@example.com',
+        password: 'SecurePass123!',
+        displayName: 'New User',
+        sessionToken: 'session-tok-123',
+      };
+
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      await service.register(registerDto);
+
+      expect(conversationRepository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionToken: 'session-tok-123' }),
+        expect.objectContaining({ userId: mockUser.id, sessionToken: null }),
+      );
+    });
+
+    it('does not call linkOnboardingSession when no sessionToken provided', async () => {
+      const registerDto: RegisterDto = {
+        email: 'new@example.com',
+        password: 'SecurePass123!',
+        displayName: 'New User',
+      };
+
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+
+      await service.register(registerDto);
+
+      expect(conversationRepository.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('linkOnboardingSession (via register)', () => {
+    beforeEach(() => {
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+    });
+
+    it('logs warning when no matching anonymous session found (affected=0)', async () => {
+      conversationRepository.update.mockResolvedValue({ affected: 0 } as any);
+      const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
+
+      await service.register({
+        email: 'a@b.com',
+        password: 'Pass123!',
+        sessionToken: 'unknown-token',
+      });
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('No anonymous onboarding session found'),
+      );
+    });
+
+    it('logs warning on error and does not throw', async () => {
+      conversationRepository.update.mockRejectedValue(new Error('DB error'));
+      const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
+
+      await expect(
+        service.register({
+          email: 'a@b.com',
+          password: 'Pass123!',
+          sessionToken: 'tok',
+        }),
+      ).resolves.not.toThrow();
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        'Failed to link onboarding session',
+        expect.objectContaining({ sessionToken: 'tok' }),
       );
     });
   });
