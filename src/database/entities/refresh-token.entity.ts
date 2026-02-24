@@ -1,21 +1,20 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
-  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 
 @Entity('refresh_tokens')
 export class RefreshToken {
-  @PrimaryGeneratedColumn('uuid')
+  // UUID set explicitly by service (composite token format: {id}:{secret})
+  @PrimaryColumn({ type: 'uuid' })
   id!: string;
 
   @Column({ type: 'varchar', length: 255, name: 'token_hash' })
-  @Index()
   tokenHash!: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })

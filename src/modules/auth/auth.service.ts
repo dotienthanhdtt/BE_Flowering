@@ -8,14 +8,21 @@ import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation, AiConversationType } from '../../database/entities/ai-conversation.entity';
 import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto } from './dto';
-import { GoogleUser } from './strategies/google.strategy';
-import { AppleUser, AppleStrategy } from './strategies/apple.strategy';
+import { AppleStrategy } from './strategies/apple.strategy';
+import { GoogleIdTokenStrategy } from './strategies/google-id-token-validator.strategy';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_EXPIRY = '30d';
 const REFRESH_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
-export type OAuthUser = GoogleUser | AppleUser;
+type OAuthProvider = 'google' | 'apple';
+
+interface OAuthProviderUser {
+  email: string;
+  providerId: string;
+  displayName?: string;
+  avatarUrl?: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -24,6 +31,7 @@ export class AuthService {
   constructor(
     private jwtService: JwtService,
     private appleStrategy: AppleStrategy,
+    private googleIdTokenStrategy: GoogleIdTokenStrategy,
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(RefreshToken)
@@ -81,73 +89,69 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  async oauthLogin(oauthUser: OAuthUser, provider: string, sessionToken?: string): Promise<AuthResponseDto> {
-    let user = await this.userRepository.findOne({
-      where: {
-        authProvider: provider,
-        providerId: oauthUser.providerId,
-      },
-    });
-
-    if (!user) {
-      // Check if email already exists with different provider
-      const existingEmailUser = await this.userRepository.findOne({
-        where: { email: oauthUser.email },
-      });
-
-      if (existingEmailUser) {
-        throw new ConflictException(
-          `Email already registered with ${existingEmailUser.authProvider}`,
-        );
-      }
-
-      user = this.userRepository.create({
-        email: oauthUser.email,
-        displayName: 'displayName' in oauthUser ? oauthUser.displayName : undefined,
-        avatarUrl: 'avatarUrl' in oauthUser ? oauthUser.avatarUrl : undefined,
-        authProvider: provider,
-        providerId: oauthUser.providerId,
-      });
-
-      await this.userRepository.save(user);
-    }
-
-    if (sessionToken) {
-      await this.linkOnboardingSession(user.id, sessionToken);
-    }
-
-    return this.generateTokens(user);
+  async googleLogin(idToken: string, displayName?: string, sessionToken?: string): Promise<AuthResponseDto> {
+    const googleUser = await this.googleIdTokenStrategy.validate(idToken);
+    const providerUser: OAuthProviderUser = {
+      email: googleUser.email,
+      providerId: googleUser.providerId,
+      displayName: displayName ?? googleUser.displayName,
+      avatarUrl: googleUser.avatarUrl,
+    };
+    return this.oauthLogin('google', providerUser, sessionToken);
   }
 
   async appleLogin(idToken: string, displayName?: string, sessionToken?: string): Promise<AuthResponseDto> {
     const appleUser = await this.appleStrategy.validate(idToken);
+    const providerUser: OAuthProviderUser = {
+      email: appleUser.email,
+      providerId: appleUser.providerId,
+      displayName,
+    };
+    return this.oauthLogin('apple', providerUser, sessionToken);
+  }
 
+  /**
+   * Unified OAuth login: find by provider-specific column, auto-link on email match, or create new user.
+   * Google and Apple both verify emails, so auto-linking is safe.
+   */
+  private async oauthLogin(
+    provider: OAuthProvider,
+    providerUser: OAuthProviderUser,
+    sessionToken?: string,
+  ): Promise<AuthResponseDto> {
+    const providerColumn = provider === 'google' ? 'googleProviderId' : 'appleProviderId';
+
+    // 1. Find by provider-specific indexed column (O(1))
     let user = await this.userRepository.findOne({
-      where: {
-        authProvider: 'apple',
-        providerId: appleUser.providerId,
-      },
+      where: { [providerColumn]: providerUser.providerId },
     });
 
     if (!user) {
+      // 2. Find by email — auto-link if matched, create if not
       const existingEmailUser = await this.userRepository.findOne({
-        where: { email: appleUser.email },
+        where: { email: providerUser.email },
       });
 
       if (existingEmailUser) {
-        throw new ConflictException(
-          `Email already registered with ${existingEmailUser.authProvider}`,
-        );
+        // Auto-link: attach this provider to the existing account using typed update
+        const update =
+          provider === 'google'
+            ? { googleProviderId: providerUser.providerId }
+            : { appleProviderId: providerUser.providerId };
+        await this.userRepository.update({ id: existingEmailUser.id }, update);
+        user = { ...existingEmailUser, ...update };
+      } else {
+        // New user
+        user = this.userRepository.create({
+          email: providerUser.email,
+          displayName: providerUser.displayName,
+          avatarUrl: providerUser.avatarUrl,
+          authProvider: provider,
+          providerId: providerUser.providerId,
+          [providerColumn]: providerUser.providerId,
+        });
+        await this.userRepository.save(user);
       }
-
-      user = this.userRepository.create({
-        email: appleUser.email,
-        displayName,
-        authProvider: 'apple',
-        providerId: appleUser.providerId,
-      });
-
-      await this.userRepository.save(user);
     }
 
     if (sessionToken) {
@@ -158,30 +162,40 @@ export class AuthService {
   }
 
   async refreshTokens(refreshToken: string): Promise<AuthResponseDto> {
-    const storedTokens = await this.refreshTokenRepository.find({
-      where: { revoked: false },
+    // Composite format: {tokenId}:{secret} — tokenId is the entity UUID PK (O(1) lookup)
+    const separatorIndex = refreshToken.indexOf(':');
+    if (separatorIndex === -1) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const tokenId = refreshToken.substring(0, separatorIndex);
+    const secret = refreshToken.substring(separatorIndex + 1);
+
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!tokenId || !secret || !uuidPattern.test(tokenId)) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Single indexed lookup by PK — O(1) instead of O(n) scan
+    const storedToken = await this.refreshTokenRepository.findOne({
+      where: { id: tokenId, revoked: false },
       relations: ['user'],
     });
 
-    let matchedToken: RefreshToken | null = null;
-
-    for (const stored of storedTokens) {
-      const isMatch = await bcrypt.compare(refreshToken, stored.tokenHash);
-      if (isMatch) {
-        matchedToken = stored;
-        break;
-      }
+    if (!storedToken || storedToken.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    if (!matchedToken || matchedToken.expiresAt < new Date()) {
+    const isValid = await bcrypt.compare(secret, storedToken.tokenHash);
+    if (!isValid) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
     // Revoke old token
-    matchedToken.revoked = true;
-    await this.refreshTokenRepository.save(matchedToken);
+    storedToken.revoked = true;
+    await this.refreshTokenRepository.save(storedToken);
 
-    return this.generateTokens(matchedToken.user);
+    return this.generateTokens(storedToken.user);
   }
 
   async logout(userId: string): Promise<void> {
@@ -213,10 +227,15 @@ export class AuthService {
       expiresIn: ACCESS_TOKEN_EXPIRY,
     });
 
-    const refreshToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = await bcrypt.hash(refreshToken, 10);
+    // Composite token: {tokenId}:{secret} — store hash of secret only
+    // tokenId is used as entity PK for O(1) lookup during refresh
+    const tokenId = crypto.randomUUID();
+    const secret = crypto.randomBytes(32).toString('hex');
+    const rawRefreshToken = `${tokenId}:${secret}`;
+    const tokenHash = await bcrypt.hash(secret, 10);
 
     const refreshTokenEntity = this.refreshTokenRepository.create({
+      id: tokenId,
       tokenHash,
       userId: user.id,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
@@ -226,7 +245,7 @@ export class AuthService {
 
     return {
       accessToken,
-      refreshToken,
+      refreshToken: rawRefreshToken,
       user: this.mapToUserDto(user),
     };
   }

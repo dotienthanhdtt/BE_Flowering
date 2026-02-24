@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-24
 
 ## Architecture Overview
 
@@ -304,27 +304,51 @@ AI client factory dynamically selects provider based on configuration.
 9. Controller Access via @CurrentUser() Decorator
 ```
 
-### OAuth Flow (Google/Apple)
+### Google OAuth Flow (ID Token)
 
 ```
-1. Client Initiates OAuth (Mobile/Web)
+1. Client Obtains Google ID Token (from mobile/web SDK)
    ↓
-2. User Authenticates with Provider
+2. Client Sends POST /auth/google with idToken
    ↓
-3. Provider Returns Authorization Code
+3. Backend Verifies ID Token with google-auth-library
    ↓
-4. Client Sends Code to Backend
+4. Extract User Email & Profile from Token Payload
    ↓
-5. Backend Validates with Provider API
+5. Check if User Exists (by email)
    ↓
-6. Extract User Profile Data
+6. If Exists: Auto-link account (store googleProviderId)
    ↓
-7. Create/Update User in Database
+7. If Not Exists: Create new user
    ↓
 8. Generate JWT Token
    ↓
-9. Return Token to Client
+9. Return Access Token to Client
 ```
+
+### Apple OAuth Flow
+
+```
+1. Client Obtains Apple Identity Token (from mobile SDK)
+   ↓
+2. Client Sends POST /auth/apple with identityToken
+   ↓
+3. Backend Verifies with apple-signin-auth library
+   ↓
+4. Extract User Email & Profile from Token Payload
+   ↓
+5. Check if User Exists (by email)
+   ↓
+6. If Exists: Auto-link account (store appleProviderId)
+   ↓
+7. If Not Exists: Create new user
+   ↓
+8. Generate JWT Token
+   ↓
+9. Return Access Token to Client
+```
+
+**Key Improvement:** Auto-linking prevents duplicate accounts when user authenticates via different OAuth provider with same email.
 
 ### Webhook Security (RevenueCat)
 

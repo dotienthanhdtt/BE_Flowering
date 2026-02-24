@@ -1,13 +1,10 @@
-import { Controller, Post, Get, Body, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { Request } from 'express';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, AuthResponseDto, RefreshTokenDto, AppleAuthDto } from './dto';
-import { GoogleAuthGuard } from './guards';
+import { RegisterDto, LoginDto, AuthResponseDto, RefreshTokenDto, AppleAuthDto, GoogleAuthDto } from './dto';
 import { CurrentUser } from './decorators';
 import { User } from '../../database/entities/user.entity';
-import { GoogleUser } from './strategies/google.strategy';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -34,20 +31,13 @@ export class AuthController {
   }
 
   @Public()
-  @Get('google')
-  @UseGuards(GoogleAuthGuard)
-  @ApiOperation({ summary: 'Initiate Google OAuth flow' })
-  googleAuth(): void {
-    // Guard redirects to Google
-  }
-
-  @Public()
-  @Get('google/callback')
-  @UseGuards(GoogleAuthGuard)
-  @ApiOperation({ summary: 'Google OAuth callback' })
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sign in with Google ID token (mobile-compatible)' })
   @ApiResponse({ status: 200, type: AuthResponseDto })
-  async googleCallback(@Req() req: Request): Promise<AuthResponseDto> {
-    return this.authService.oauthLogin(req.user as GoogleUser, 'google');
+  @ApiResponse({ status: 401, description: 'Invalid Google ID token' })
+  async googleAuth(@Body() dto: GoogleAuthDto): Promise<AuthResponseDto> {
+    return this.authService.googleLogin(dto.idToken, dto.displayName, dto.sessionToken);
   }
 
   @Public()

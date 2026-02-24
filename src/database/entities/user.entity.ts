@@ -26,6 +26,13 @@ export class User {
   @Column({ type: 'varchar', length: 255, name: 'provider_id', nullable: true })
   providerId?: string;
 
+  // Uniqueness enforced via partial indexes in migration (WHERE col IS NOT NULL)
+  @Column({ type: 'varchar', length: 255, name: 'google_provider_id', nullable: true })
+  googleProviderId?: string;
+
+  @Column({ type: 'varchar', length: 255, name: 'apple_provider_id', nullable: true })
+  appleProviderId?: string;
+
   @Column({ type: 'varchar', length: 100, name: 'display_name', nullable: true })
   displayName?: string;
 

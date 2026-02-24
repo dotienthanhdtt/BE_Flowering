@@ -1,6 +1,6 @@
 # API Documentation
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-24
 **Base URL:** `http://localhost:3000` (development)
 **API Version:** 1.0
 
@@ -111,16 +111,23 @@ Login with email and password.
 ---
 
 #### POST /auth/google
-Google OAuth authentication.
+Google Sign-In authentication via ID token.
 
 **Authentication:** Not required
 
 **Request Body:**
 ```json
 {
-  "token": "google_oauth_token"
+  "idToken": "google_id_token_from_client",
+  "displayName": "John Doe",
+  "sessionToken": "optional_session_identifier"
 }
 ```
+
+**Validation:**
+- `idToken`: Valid Google ID token (required)
+- `displayName`: User's full name (optional, used on account creation)
+- `sessionToken`: Session identifier for linking (optional)
 
 **Success Response (200):**
 ```json
@@ -135,8 +142,15 @@ Google OAuth authentication.
 }
 ```
 
+**Behavior:**
+- Verifies ID token using Google Auth Library
+- Auto-links to existing account if email matches
+- Creates new account if email not found
+- Provider ID stored in `googleProviderId` column
+
 **Error Responses:**
-- `401 Unauthorized` - Invalid Google token
+- `401 Unauthorized` - Invalid or expired Google ID token
+- `400 Bad Request` - Missing required idToken
 
 ---
 

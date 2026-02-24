@@ -9,9 +9,8 @@ import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { RegisterDto, LoginDto } from './dto';
-import { AppleStrategy } from './strategies/apple.strategy';
-import { GoogleUser } from './strategies/google.strategy';
-import { AppleUser } from './strategies/apple.strategy';
+import { AppleStrategy, AppleUser } from './strategies/apple.strategy';
+import { GoogleIdTokenStrategy, GoogleUser } from './strategies/google-id-token-validator.strategy';
 
 jest.mock('bcrypt');
 
@@ -22,6 +21,7 @@ describe('AuthService', () => {
   let conversationRepository: jest.Mocked<{ update: jest.Mock }>;
   let jwtService: jest.Mocked<JwtService>;
   let appleStrategy: jest.Mocked<AppleStrategy>;
+  let googleIdTokenStrategy: jest.Mocked<GoogleIdTokenStrategy>;
 
   const mockUser: User = {
     id: 'user-123',
@@ -31,6 +31,8 @@ describe('AuthService', () => {
     avatarUrl: undefined,
     authProvider: 'email',
     providerId: undefined,
+    googleProviderId: undefined,
+    appleProviderId: undefined,
     nativeLanguageId: undefined,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -53,11 +55,18 @@ describe('AuthService', () => {
           },
         },
         {
+          provide: GoogleIdTokenStrategy,
+          useValue: {
+            validate: jest.fn(),
+          },
+        },
+        {
           provide: getRepositoryToken(User),
           useValue: {
             findOne: jest.fn(),
             create: jest.fn(),
             save: jest.fn(),
+            update: jest.fn(),
           },
         },
         {
@@ -65,7 +74,7 @@ describe('AuthService', () => {
           useValue: {
             create: jest.fn(),
             save: jest.fn(),
-            find: jest.fn(),
+            findOne: jest.fn(),
             update: jest.fn(),
           },
         },
@@ -84,6 +93,7 @@ describe('AuthService', () => {
     conversationRepository = module.get(getRepositoryToken(AiConversation));
     jwtService = module.get(JwtService);
     appleStrategy = module.get(AppleStrategy);
+    googleIdTokenStrategy = module.get(GoogleIdTokenStrategy);
   });
 
   afterEach(() => {
@@ -140,14 +150,11 @@ describe('AuthService', () => {
         password: 'SecurePass123!',
       };
 
-      const hashedPassword = 'hashed-password';
-      const userWithHash = { ...mockUser, passwordHash: hashedPassword };
-
+      const userWithHash = { ...mockUser, passwordHash: 'hashed-password' };
       userRepository.findOne.mockResolvedValue(userWithHash);
       jwtService.sign.mockReturnValue('access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
-
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       const result = await service.login(loginDto);
@@ -196,15 +203,16 @@ describe('AuthService', () => {
     });
   });
 
-  describe('oauthLogin', () => {
-    it('should create new user for first-time Google login', async () => {
-      const googleUser: GoogleUser = {
-        providerId: 'google-123',
-        email: 'google@example.com',
-        displayName: 'Google User',
-        avatarUrl: 'https://avatar.url',
-      };
+  describe('googleLogin', () => {
+    const googleUser: GoogleUser = {
+      providerId: 'google-sub-123',
+      email: 'google@example.com',
+      displayName: 'Google User',
+      avatarUrl: 'https://avatar.url',
+    };
 
+    it('should create new user on first-time Google login', async () => {
+      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
       userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       userRepository.create.mockReturnValue(mockUser);
       userRepository.save.mockResolvedValue(mockUser);
@@ -212,50 +220,68 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.oauthLogin(googleUser, 'google');
+      const result = await service.googleLogin('google-id-token', 'Google User');
 
+      expect(googleIdTokenStrategy.validate).toHaveBeenCalledWith('google-id-token');
       expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { authProvider: 'google', providerId: googleUser.providerId },
+        where: { googleProviderId: googleUser.providerId },
       });
       expect(userRepository.create).toHaveBeenCalled();
-      expect(userRepository.save).toHaveBeenCalled();
       expect(result).toHaveProperty('accessToken');
     });
 
-    it('should login existing OAuth user', async () => {
-      const googleUser: GoogleUser = {
-        providerId: 'google-123',
-        email: 'google@example.com',
-        displayName: 'Google User',
-        avatarUrl: 'https://avatar.url',
-      };
-
-      const existingOAuthUser = { ...mockUser, authProvider: 'google', providerId: 'google-123' };
-      userRepository.findOne.mockResolvedValue(existingOAuthUser);
+    it('should login existing Google user by provider ID', async () => {
+      const existingGoogleUser = { ...mockUser, googleProviderId: 'google-sub-123' };
+      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+      userRepository.findOne.mockResolvedValue(existingGoogleUser);
       jwtService.sign.mockReturnValue('access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.oauthLogin(googleUser, 'google');
+      const result = await service.googleLogin('google-id-token');
 
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { authProvider: 'google', providerId: googleUser.providerId },
-      });
       expect(userRepository.create).not.toHaveBeenCalled();
-      expect(result.user.email).toBe(existingOAuthUser.email);
+      expect(result.user.email).toBe(existingGoogleUser.email);
     });
 
-    it('should throw ConflictException if email exists with different provider', async () => {
-      const googleUser: GoogleUser = {
-        providerId: 'google-123',
-        email: 'test@example.com',
-        displayName: 'Google User',
-      };
-
+    it('should auto-link Google account to existing email user', async () => {
       const existingEmailUser = { ...mockUser, authProvider: 'email' };
-      userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(existingEmailUser);
+      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+      // Not found by provider ID, found by email
+      userRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingEmailUser);
+      userRepository.update.mockResolvedValue({ affected: 1 } as any);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      await expect(service.oauthLogin(googleUser, 'google')).rejects.toThrow(ConflictException);
+      const result = await service.googleLogin('google-id-token');
+
+      expect(userRepository.update).toHaveBeenCalledWith(
+        { id: existingEmailUser.id },
+        { googleProviderId: googleUser.providerId },
+      );
+      expect(userRepository.create).not.toHaveBeenCalled();
+      expect(result).toHaveProperty('accessToken');
+    });
+
+    it('should pass sessionToken to onboarding linking', async () => {
+      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+      userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      await service.googleLogin('google-id-token', undefined, 'session-tok');
+
+      expect(conversationRepository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionToken: 'session-tok' }),
+        expect.objectContaining({ userId: mockUser.id }),
+      );
     });
   });
 
@@ -281,13 +307,13 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('accessToken');
     });
 
-    it('should login existing Apple user', async () => {
+    it('should login existing Apple user by provider ID', async () => {
       const appleUser: AppleUser = {
         providerId: 'apple-123',
         email: 'apple@example.com',
       };
 
-      const existingAppleUser = { ...mockUser, authProvider: 'apple', providerId: 'apple-123' };
+      const existingAppleUser = { ...mockUser, authProvider: 'apple', appleProviderId: 'apple-123' };
       appleStrategy.validate.mockResolvedValue(appleUser);
       userRepository.findOne.mockResolvedValue(existingAppleUser);
       jwtService.sign.mockReturnValue('access-token');
@@ -300,28 +326,43 @@ describe('AuthService', () => {
       expect(result.user.email).toBe(existingAppleUser.email);
     });
 
-    it('should throw ConflictException if email exists with different provider', async () => {
+    it('should auto-link Apple account to existing email user (no ConflictException)', async () => {
       const appleUser: AppleUser = {
         providerId: 'apple-123',
         email: 'test@example.com',
       };
 
-      const existingEmailUser = { ...mockUser, authProvider: 'google' };
+      const existingEmailUser = { ...mockUser, authProvider: 'email' };
       appleStrategy.validate.mockResolvedValue(appleUser);
-      userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(existingEmailUser);
+      // Not found by provider ID, found by email
+      userRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingEmailUser);
+      userRepository.update.mockResolvedValue({ affected: 1 } as any);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      await expect(service.appleLogin('apple-id-token')).rejects.toThrow(ConflictException);
+      const result = await service.appleLogin('apple-id-token');
+
+      // Should NOT throw, should auto-link via update()
+      expect(userRepository.update).toHaveBeenCalledWith(
+        { id: existingEmailUser.id },
+        { appleProviderId: appleUser.providerId },
+      );
+      expect(result).toHaveProperty('accessToken');
     });
   });
 
   describe('refreshTokens', () => {
-    it('should successfully refresh tokens with valid refresh token', async () => {
-      const refreshToken = 'valid-refresh-token';
-      const hashedToken = 'hashed-token';
+    const tokenId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+    const secret = 'deadbeef'.repeat(8);
+    const compositeToken = `${tokenId}:${secret}`;
 
+    it('should successfully refresh with valid composite token', async () => {
       const storedToken: RefreshToken = {
-        id: 'token-123',
-        tokenHash: hashedToken,
+        id: tokenId,
+        tokenHash: 'hashed-secret',
         userId: mockUser.id,
         user: mockUser,
         expiresAt: new Date(Date.now() + 1000000),
@@ -329,38 +370,47 @@ describe('AuthService', () => {
         createdAt: new Date(),
       };
 
-      refreshTokenRepository.find.mockResolvedValue([storedToken]);
+      refreshTokenRepository.findOne.mockResolvedValue(storedToken);
       refreshTokenRepository.save.mockResolvedValue(storedToken);
       jwtService.sign.mockReturnValue('new-access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
-
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-      const result = await service.refreshTokens(refreshToken);
+      const result = await service.refreshTokens(compositeToken);
 
-      expect(refreshTokenRepository.find).toHaveBeenCalledWith({
-        where: { revoked: false },
+      expect(refreshTokenRepository.findOne).toHaveBeenCalledWith({
+        where: { id: tokenId, revoked: false },
         relations: ['user'],
       });
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
     });
 
-    it('should throw UnauthorizedException if token not found', async () => {
-      const refreshToken = 'invalid-token';
-
-      refreshTokenRepository.find.mockResolvedValue([]);
-
-      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
+    it('should throw UnauthorizedException for malformed token (no colon)', async () => {
+      await expect(service.refreshTokens('no-colon-here')).rejects.toThrow(UnauthorizedException);
+      expect(refreshTokenRepository.findOne).not.toHaveBeenCalled();
     });
 
-    it('should throw UnauthorizedException if token expired', async () => {
-      const refreshToken = 'expired-token';
-      const hashedToken = 'hashed-token';
+    it('should throw UnauthorizedException for token with empty tokenId', async () => {
+      await expect(service.refreshTokens(':somesecret')).rejects.toThrow(UnauthorizedException);
+      expect(refreshTokenRepository.findOne).not.toHaveBeenCalled();
+    });
 
+    it('should throw UnauthorizedException for token with empty secret', async () => {
+      await expect(service.refreshTokens(`${tokenId}:`)).rejects.toThrow(UnauthorizedException);
+      expect(refreshTokenRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException if tokenId not found in DB', async () => {
+      refreshTokenRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.refreshTokens(compositeToken)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if token is expired', async () => {
       const expiredToken: RefreshToken = {
-        id: 'token-123',
-        tokenHash: hashedToken,
+        id: tokenId,
+        tokenHash: 'hashed-secret',
         userId: mockUser.id,
         user: mockUser,
         expiresAt: new Date(Date.now() - 1000),
@@ -368,18 +418,50 @@ describe('AuthService', () => {
         createdAt: new Date(),
       };
 
-      refreshTokenRepository.find.mockResolvedValue([expiredToken]);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      refreshTokenRepository.findOne.mockResolvedValue(expiredToken);
 
-      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshTokens(compositeToken)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should throw UnauthorizedException if token revoked', async () => {
-      const refreshToken = 'revoked-token';
+    it('should throw UnauthorizedException if secret does not match hash', async () => {
+      const storedToken: RefreshToken = {
+        id: tokenId,
+        tokenHash: 'hashed-secret',
+        userId: mockUser.id,
+        user: mockUser,
+        expiresAt: new Date(Date.now() + 1000000),
+        revoked: false,
+        createdAt: new Date(),
+      };
 
-      refreshTokenRepository.find.mockResolvedValue([]);
+      refreshTokenRepository.findOne.mockResolvedValue(storedToken);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshTokens(compositeToken)).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('generateTokens', () => {
+    it('should return composite refresh token in uuid:hex format', async () => {
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-secret');
+
+      // Trigger via register (public method)
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+
+      const result = await service.register({
+        email: 'new@example.com',
+        password: 'Pass123!',
+      });
+
+      // Composite format: uuid (8-4-4-4-12 chars) + ':' + 64-char hex
+      expect(result.refreshToken).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{64}$/,
+      );
     });
   });
 

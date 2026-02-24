@@ -1,6 +1,6 @@
 # Codebase Summary
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-24
 **Generated from:** repomix-output.xml
 
 ## Overview
@@ -97,32 +97,36 @@ src/
 
 ### 1. Auth Module (`src/modules/auth/`)
 
-**Purpose:** User authentication via email/password, Google OAuth, Apple Sign-In
+**Purpose:** User authentication via email/password, Google ID token, Apple Sign-In with auto-linking
 
 **Key Components:**
-- `auth.service.ts` - Registration, login, token refresh, OAuth validation
+- `auth.service.ts` - Registration, login, token refresh, OAuth validation, auto-account-linking
 - `jwt.strategy.ts` - Passport JWT strategy (validates tokens)
-- `google.strategy.ts` - Google OAuth 2.0 strategy
+- `google-id-token-validator.strategy.ts` - Google ID token validation using google-auth-library
 - `apple.strategy.ts` - Apple Sign-In strategy
 - `jwt-auth.guard.ts` - Global guard (applied via APP_GUARD)
-- `google-auth.guard.ts` - Google OAuth flow guard
 
-**DTOs:** `register.dto.ts`, `login.dto.ts`, `refresh-token.dto.ts`, `apple-auth.dto.ts`
+**DTOs:** `register.dto.ts`, `login.dto.ts`, `refresh-token.dto.ts`, `apple-auth.dto.ts`, `google-auth.dto.ts`
 
 **Endpoints:**
 - `POST /auth/register` - Email/password signup
 - `POST /auth/login` - Email/password login
-- `GET /auth/google` - Initiate Google OAuth
-- `GET /auth/google/callback` - Google OAuth callback
+- `POST /auth/google` - Google ID token authentication (idToken, displayName, sessionToken)
 - `POST /auth/apple` - Apple Sign-In callback
-- `POST /auth/refresh` - Refresh access token
+- `POST /auth/refresh` - Refresh access token (composite format: uuid:hex)
 - `POST /auth/logout` - Logout (invalidate refresh token)
+
+**Key Features:**
+- **Composite Refresh Tokens:** Format `{uuid}:{hex}` enables O(1) PK lookup vs O(n) bcrypt scan
+- **Auto-linking:** OAuth accounts auto-link to existing email matches instead of conflict error
+- **Provider-specific IDs:** `googleProviderId` + `appleProviderId` columns prevent duplicate OAuth accounts
 
 **Security:**
 - bcrypt password hashing (6.0.0)
 - JWT tokens (HS256, 7d expiry)
-- Refresh token rotation with device tracking
-- OAuth token validation via provider APIs
+- Composite refresh token format for efficient validation
+- Provider ID tracking for account deduplication
+- Google ID token verified via google-auth-library (not deprecated strategy)
 
 ### 2. User Module (`src/modules/user/`)
 
@@ -294,13 +298,15 @@ AiConversation (1) ──< (N) AiConversationMessage
 **users**
 - PK: `id` (UUID)
 - Unique: `email`
-- Fields: `password_hash`, `name`, `profile_picture`, `email_verified`, `created_at`, `updated_at`
+- Fields: `password_hash`, `name`, `profile_picture`, `email_verified`, `google_provider_id`, `apple_provider_id`, `created_at`, `updated_at`
+- Note: `google_provider_id` and `apple_provider_id` track OAuth account links to prevent duplicates
 
 **refresh_tokens**
 - PK: `id` (UUID)
 - FK: `user_id` → users(id) CASCADE
 - Unique: `token`
 - Fields: `device_info`, `expires_at`, `created_at`
+- Note: Token format is composite `{uuid}:{hex}` for O(1) PK lookup performance
 
 **languages**
 - PK: `id` (UUID)
@@ -578,7 +584,8 @@ npm run build             # TypeScript build check
 - `@supabase/supabase-js` - Supabase client
 
 **Authentication:**
-- `passport`, `passport-jwt`, `passport-google-oauth20` - Auth strategies
+- `passport`, `passport-jwt` - Auth strategies
+- `google-auth-library` - Google ID token verification
 - `bcrypt` - Password hashing
 - `apple-signin-auth` - Apple OAuth
 
