@@ -34,7 +34,7 @@ Allow anonymous mobile users to chat with AI pre-login. Collects name, age, regi
 | 3 | Service & Controller | complete | 2h | [phase-03](./phase-03-onboarding-service-and-controller.md) |
 | 4 | AI Prompt | complete | 0.5h | [phase-04](./phase-04-onboarding-prompt.md) |
 | 5 | Auth Linking | complete | 1h | [phase-05](./phase-05-auth-linking.md) |
-| 6 | Testing | pending | 1h | [phase-06](./phase-06-testing.md) |
+| 6 | Testing | complete | 1h | [phase-06](./phase-06-testing.md) |
 
 ## Dependencies
 
