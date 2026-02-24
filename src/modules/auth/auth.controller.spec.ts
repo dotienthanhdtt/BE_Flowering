@@ -178,6 +178,7 @@ describe('AuthController', () => {
       expect(authService.appleLogin).toHaveBeenCalledWith(
         appleAuthDto.idToken,
         appleAuthDto.displayName,
+        appleAuthDto.sessionToken,
       );
       expect(result).toEqual(mockAuthResponse);
     });
@@ -191,7 +192,7 @@ describe('AuthController', () => {
 
       const result = await controller.appleAuth(appleAuthDto);
 
-      expect(authService.appleLogin).toHaveBeenCalledWith(appleAuthDto.idToken, undefined);
+      expect(authService.appleLogin).toHaveBeenCalledWith(appleAuthDto.idToken, undefined, undefined);
       expect(result).toEqual(mockAuthResponse);
     });
 

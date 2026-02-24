@@ -57,7 +57,7 @@ export class AuthController {
   @ApiResponse({ status: 200, type: AuthResponseDto })
   @ApiResponse({ status: 401, description: 'Invalid Apple ID token' })
   async appleAuth(@Body() dto: AppleAuthDto): Promise<AuthResponseDto> {
-    return this.authService.appleLogin(dto.idToken, dto.displayName);
+    return this.authService.appleLogin(dto.idToken, dto.displayName, dto.sessionToken);
   }
 
   @Public()

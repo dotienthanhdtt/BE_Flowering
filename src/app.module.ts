@@ -13,6 +13,7 @@ import { UserModule } from './modules/user/user.module';
 import { LanguageModule } from './modules/language/language.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
@@ -32,6 +33,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     LanguageModule,
     SubscriptionModule,
     NotificationModule,
+    OnboardingModule,
   ],
   controllers: [AppController],
   providers: [

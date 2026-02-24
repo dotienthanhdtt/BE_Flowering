@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
+import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { RegisterDto, LoginDto } from './dto';
 import { AppleStrategy } from './strategies/apple.strategy';
 import { GoogleUser } from './strategies/google.strategy';
@@ -64,6 +65,12 @@ describe('AuthService', () => {
             create: jest.fn(),
             save: jest.fn(),
             find: jest.fn(),
+            update: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(AiConversation),
+          useValue: {
             update: jest.fn(),
           },
         },

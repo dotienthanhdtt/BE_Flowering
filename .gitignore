@@ -6,24 +6,57 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.development
+.env.staging
+.env.production
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # Logs
 logs/
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Coverage
+# Coverage & Testing
 coverage/
+.nyc_output/
+test-results/
+junit.xml
 
 # Build
 *.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Credentials & Secrets
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+firebase-service-account*.json
+service-account*.json
+*-credentials.json
+*-secret*.json
+
+# Temp files
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
+import { AiConversation, AiConversationType } from '../../database/entities/ai-conversation.entity';
 import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto } from './dto';
 import { GoogleUser } from './strategies/google.strategy';
 import { AppleUser, AppleStrategy } from './strategies/apple.strategy';
@@ -18,6 +19,8 @@ export type OAuthUser = GoogleUser | AppleUser;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private jwtService: JwtService,
     private appleStrategy: AppleStrategy,
@@ -25,6 +28,8 @@ export class AuthService {
     private userRepository: Repository<User>,
     @InjectRepository(RefreshToken)
     private refreshTokenRepository: Repository<RefreshToken>,
+    @InjectRepository(AiConversation)
+    private conversationRepository: Repository<AiConversation>,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -47,6 +52,10 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
+    if (dto.sessionToken) {
+      await this.linkOnboardingSession(user.id, dto.sessionToken);
+    }
+
     return this.generateTokens(user);
   }
 
@@ -65,10 +74,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (dto.sessionToken) {
+      await this.linkOnboardingSession(user.id, dto.sessionToken);
+    }
+
     return this.generateTokens(user);
   }
 
-  async oauthLogin(oauthUser: OAuthUser, provider: string): Promise<AuthResponseDto> {
+  async oauthLogin(oauthUser: OAuthUser, provider: string, sessionToken?: string): Promise<AuthResponseDto> {
     let user = await this.userRepository.findOne({
       where: {
         authProvider: provider,
@@ -99,10 +112,14 @@ export class AuthService {
       await this.userRepository.save(user);
     }
 
+    if (sessionToken) {
+      await this.linkOnboardingSession(user.id, sessionToken);
+    }
+
     return this.generateTokens(user);
   }
 
-  async appleLogin(idToken: string, displayName?: string): Promise<AuthResponseDto> {
+  async appleLogin(idToken: string, displayName?: string, sessionToken?: string): Promise<AuthResponseDto> {
     const appleUser = await this.appleStrategy.validate(idToken);
 
     let user = await this.userRepository.findOne({
@@ -131,6 +148,10 @@ export class AuthService {
       });
 
       await this.userRepository.save(user);
+    }
+
+    if (sessionToken) {
+      await this.linkOnboardingSession(user.id, sessionToken);
     }
 
     return this.generateTokens(user);
@@ -165,6 +186,24 @@ export class AuthService {
 
   async logout(userId: string): Promise<void> {
     await this.refreshTokenRepository.update({ userId, revoked: false }, { revoked: true });
+  }
+
+  /**
+   * Link anonymous onboarding conversation to a user account.
+   * Best-effort: logs warning on failure, never throws.
+   */
+  private async linkOnboardingSession(userId: string, sessionToken: string): Promise<void> {
+    try {
+      const result = await this.conversationRepository.update(
+        { sessionToken, type: AiConversationType.ANONYMOUS },
+        { userId, sessionToken: null, type: AiConversationType.AUTHENTICATED },
+      );
+      if (result.affected === 0) {
+        this.logger.warn(`No anonymous onboarding session found for token: ${sessionToken}`);
+      }
+    } catch (error) {
+      this.logger.warn('Failed to link onboarding session', { sessionToken, error });
+    }
   }
 
   private async generateTokens(user: User): Promise<AuthResponseDto> {
