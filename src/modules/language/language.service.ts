@@ -194,6 +194,8 @@ export class LanguageService {
         name: ul.language.name,
         nativeName: ul.language.nativeName,
         flagUrl: ul.language.flagUrl,
+        isNativeAvailable: ul.language.isNativeAvailable,
+        isLearningAvailable: ul.language.isLearningAvailable,
       },
     };
   }
