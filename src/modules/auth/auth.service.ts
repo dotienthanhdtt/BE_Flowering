@@ -1,15 +1,26 @@
-import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation, AiConversationType } from '../../database/entities/ai-conversation.entity';
+import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto } from './dto';
 import { AppleStrategy } from './strategies/apple.strategy';
 import { GoogleIdTokenStrategy } from './strategies/google-id-token-validator.strategy';
+import { EmailService } from '../email/email.service';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_EXPIRY = '30d';
@@ -32,12 +43,15 @@ export class AuthService {
     private jwtService: JwtService,
     private appleStrategy: AppleStrategy,
     private googleIdTokenStrategy: GoogleIdTokenStrategy,
+    private emailService: EmailService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(RefreshToken)
     private refreshTokenRepository: Repository<RefreshToken>,
     @InjectRepository(AiConversation)
     private conversationRepository: Repository<AiConversation>,
+    @InjectRepository(PasswordReset)
+    private passwordResetRepository: Repository<PasswordReset>,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -200,6 +214,98 @@ export class AuthService {
 
   async logout(userId: string): Promise<void> {
     await this.refreshTokenRepository.update({ userId, revoked: false }, { revoked: true });
+  }
+
+  async forgotPassword(email: string): Promise<{ email: string }> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) throw new NotFoundException('Email not found');
+
+    // Rate limit: max 3 requests per hour per email
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentCount = await this.passwordResetRepository.count({
+      where: { email, createdAt: MoreThan(oneHourAgo) },
+    });
+    if (recentCount >= 3) {
+      throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const otpHash = this.sha256(otp);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // +10min
+
+    await this.passwordResetRepository.save(
+      this.passwordResetRepository.create({ email, otpHash, expiresAt }),
+    );
+
+    // Fire-and-forget: never expose SMTP errors to client
+    try {
+      await this.emailService.sendOtp(email, otp);
+    } catch (error) {
+      this.logger.warn('Failed to send OTP email', { email: this.maskEmail(email), error });
+    }
+
+    return { email: this.maskEmail(email) };
+  }
+
+  async verifyOtp(email: string, otp: string): Promise<{ resetToken: string }> {
+    const record = await this.passwordResetRepository.findOne({
+      where: { email, used: false, expiresAt: MoreThan(new Date()) },
+      order: { createdAt: 'DESC' },
+    });
+    if (!record) throw new BadRequestException('Invalid or expired OTP');
+
+    record.attempts += 1;
+    if (record.attempts > 5) {
+      await this.passwordResetRepository.save(record);
+      throw new BadRequestException('Too many attempts');
+    }
+
+    if (record.otpHash !== this.sha256(otp)) {
+      await this.passwordResetRepository.save(record);
+      throw new BadRequestException('Invalid or expired OTP');
+    }
+
+    const resetToken = crypto.randomUUID();
+    record.resetTokenHash = this.sha256(resetToken);
+    record.resetTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // +15min
+    await this.passwordResetRepository.save(record);
+
+    return { resetToken };
+  }
+
+  async resetPassword(resetToken: string, newPassword: string): Promise<void> {
+    const tokenHash = this.sha256(resetToken);
+    // Query by hash only; check used/expiry separately for proper error differentiation
+    const record = await this.passwordResetRepository.findOne({
+      where: { resetTokenHash: tokenHash },
+    });
+
+    if (!record) throw new BadRequestException('Invalid or expired reset token');
+    if (record.used) throw new UnauthorizedException('Token already used');
+    if (!record.resetTokenExpiresAt || record.resetTokenExpiresAt < new Date()) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    const user = await this.userRepository.findOne({ where: { email: record.email } });
+    if (!user) throw new NotFoundException('User not found');
+
+    user.passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await this.userRepository.save(user);
+
+    record.used = true;
+    await this.passwordResetRepository.save(record);
+
+    // Revoke all refresh tokens — force re-login on all devices
+    await this.refreshTokenRepository.update({ userId: user.id, revoked: false }, { revoked: true });
+  }
+
+  private sha256(value: string): string {
+    return crypto.createHash('sha256').update(value).digest('hex');
+  }
+
+  private maskEmail(email: string): string {
+    const [local, domain] = email.split('@');
+    return `${local[0]}***@${domain}`;
   }
 
   /**

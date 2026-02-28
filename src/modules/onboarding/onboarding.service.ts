@@ -4,6 +4,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { OnboardingScenarioDto, SCENARIO_ACCENT_COLORS } from './dto/onboarding-scenario.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
@@ -133,7 +134,64 @@ export class OnboardingService {
       },
     );
 
-    return this.parseExtraction(response);
+    const profile = this.parseExtraction(response);
+    const scenarios = await this.generateScenarios(profile, conversation.id);
+
+    return { ...profile, scenarios };
+  }
+
+  private async generateScenarios(
+    profile: Record<string, unknown>,
+    conversationId: string,
+  ): Promise<OnboardingScenarioDto[]> {
+    try {
+      const scenariosPrompt = this.promptLoader.loadPrompt('onboarding-scenarios-prompt', {
+        nativeLanguage: String(profile.nativeLanguage ?? ''),
+        targetLanguage: String(profile.targetLanguage ?? ''),
+        currentLevel: String(profile.currentLevel ?? ''),
+        learningGoals: Array.isArray(profile.learningGoals)
+          ? profile.learningGoals.join(', ')
+          : String(profile.learningGoals ?? ''),
+        preferredTopics: Array.isArray(profile.preferredTopics)
+          ? profile.preferredTopics.join(', ')
+          : String(profile.preferredTopics ?? ''),
+      });
+
+      const response = await this.llmService.chat(
+        [new HumanMessage(scenariosPrompt)],
+        {
+          model: onboardingConfig.llmModel,
+          temperature: 0.7,
+          maxTokens: 1024,
+          metadata: { feature: 'onboarding-scenarios', conversationId },
+        },
+      );
+
+      return this.parseScenarios(response);
+    } catch (error) {
+      this.logger.warn('Failed to generate scenarios, returning empty array', { error });
+      return [];
+    }
+  }
+
+  private parseScenarios(response: string): OnboardingScenarioDto[] {
+    const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const jsonStr = jsonMatch ? jsonMatch[1].trim() : response.trim();
+    const parsed = JSON.parse(jsonStr);
+
+    if (!Array.isArray(parsed) || parsed.length !== 5) {
+      throw new Error(`Expected 5 scenarios, got ${Array.isArray(parsed) ? parsed.length : 'non-array'}`);
+    }
+
+    return parsed.map((s) => ({
+      id: randomUUID(),
+      title: String(s.title ?? ''),
+      description: String(s.description ?? ''),
+      icon: String(s.icon ?? 'star'),
+      accentColor: (SCENARIO_ACCENT_COLORS.includes(s.accentColor)
+        ? s.accentColor
+        : 'primary') as OnboardingScenarioDto['accentColor'],
+    }));
   }
 
   private async findValidSession(sessionToken: string): Promise<AiConversation> {

@@ -2,15 +2,17 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException, BadRequestException, NotFoundException, HttpException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
+import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { RegisterDto, LoginDto } from './dto';
 import { AppleStrategy, AppleUser } from './strategies/apple.strategy';
 import { GoogleIdTokenStrategy, GoogleUser } from './strategies/google-id-token-validator.strategy';
+import { EmailService } from '../email/email.service';
 
 jest.mock('bcrypt');
 
@@ -22,6 +24,8 @@ describe('AuthService', () => {
   let jwtService: jest.Mocked<JwtService>;
   let appleStrategy: jest.Mocked<AppleStrategy>;
   let googleIdTokenStrategy: jest.Mocked<GoogleIdTokenStrategy>;
+  let passwordResetRepository: jest.Mocked<{ count: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock }>;
+  let emailService: jest.Mocked<{ sendOtp: jest.Mock }>;
 
   const mockUser: User = {
     id: 'user-123',
@@ -84,6 +88,21 @@ describe('AuthService', () => {
             update: jest.fn(),
           },
         },
+        {
+          provide: getRepositoryToken(PasswordReset),
+          useValue: {
+            count: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn().mockImplementation((dto) => dto),
+            save: jest.fn(),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendOtp: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -94,6 +113,8 @@ describe('AuthService', () => {
     jwtService = module.get(JwtService);
     appleStrategy = module.get(AppleStrategy);
     googleIdTokenStrategy = module.get(GoogleIdTokenStrategy);
+    passwordResetRepository = module.get(getRepositoryToken(PasswordReset));
+    emailService = module.get(EmailService);
   });
 
   afterEach(() => {
@@ -522,6 +543,181 @@ describe('AuthService', () => {
       await service.register(registerDto);
 
       expect(conversationRepository.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forgotPassword', () => {
+    const makePasswordReset = (overrides = {}): PasswordReset => ({
+      id: 'pr-1',
+      email: 'test@example.com',
+      otpHash: 'hash',
+      resetTokenHash: null,
+      attempts: 0,
+      expiresAt: new Date(Date.now() + 600000),
+      resetTokenExpiresAt: null,
+      used: false,
+      createdAt: new Date(),
+      ...overrides,
+    } as PasswordReset);
+
+    it('returns masked email when user found and OTP sent', async () => {
+      userRepository.findOne.mockResolvedValue(mockUser);
+      passwordResetRepository.count.mockResolvedValue(0);
+      passwordResetRepository.create.mockImplementation((dto) => ({ ...dto }));
+      passwordResetRepository.save.mockResolvedValue(makePasswordReset());
+      emailService.sendOtp.mockResolvedValue(undefined);
+
+      const result = await service.forgotPassword('test@example.com');
+
+      expect(result.email).toMatch(/^t\*\*\*@/);
+      expect(emailService.sendOtp).toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when email not registered', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.forgotPassword('unknown@example.com')).rejects.toThrow(NotFoundException);
+      expect(passwordResetRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('throws 429 HttpException when >= 3 requests in last hour', async () => {
+      userRepository.findOne.mockResolvedValue(mockUser);
+      passwordResetRepository.count.mockResolvedValue(3);
+
+      await expect(service.forgotPassword('test@example.com')).rejects.toThrow(HttpException);
+    });
+
+    it('still returns 200 when SMTP send fails (fire-and-forget)', async () => {
+      userRepository.findOne.mockResolvedValue(mockUser);
+      passwordResetRepository.count.mockResolvedValue(0);
+      passwordResetRepository.create.mockImplementation((dto) => ({ ...dto }));
+      passwordResetRepository.save.mockResolvedValue(makePasswordReset());
+      emailService.sendOtp.mockRejectedValue(new Error('SMTP connection refused'));
+
+      const result = await service.forgotPassword('test@example.com');
+
+      expect(result.email).toMatch(/^t\*\*\*@/);
+    });
+  });
+
+  describe('verifyOtp', () => {
+    const makePasswordReset = (overrides = {}): PasswordReset => ({
+      id: 'pr-1',
+      email: 'test@example.com',
+      otpHash: '',
+      resetTokenHash: null,
+      attempts: 0,
+      expiresAt: new Date(Date.now() + 600000),
+      resetTokenExpiresAt: null,
+      used: false,
+      createdAt: new Date(),
+      ...overrides,
+    } as PasswordReset);
+
+    it('returns resetToken on valid OTP', async () => {
+      const crypto = require('crypto');
+      const otp = '123456';
+      const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+      const record = makePasswordReset({ otpHash });
+
+      passwordResetRepository.findOne.mockResolvedValue(record);
+      passwordResetRepository.save.mockResolvedValue({ ...record, resetTokenHash: 'hash' });
+
+      const result = await service.verifyOtp('test@example.com', otp);
+
+      expect(result).toHaveProperty('resetToken');
+      expect(typeof result.resetToken).toBe('string');
+    });
+
+    it('throws BadRequestException when no valid record found', async () => {
+      passwordResetRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.verifyOtp('test@example.com', '123456')).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when OTP is wrong', async () => {
+      const record = makePasswordReset({ otpHash: 'wrong-hash', attempts: 0 });
+      passwordResetRepository.findOne.mockResolvedValue(record);
+      passwordResetRepository.save.mockResolvedValue(record);
+
+      await expect(service.verifyOtp('test@example.com', '999999')).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when attempts > 5', async () => {
+      const record = makePasswordReset({ otpHash: 'any-hash', attempts: 5 });
+      passwordResetRepository.findOne.mockResolvedValue(record);
+      passwordResetRepository.save.mockResolvedValue(record);
+
+      await expect(service.verifyOtp('test@example.com', '123456')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('resetPassword', () => {
+    const makePasswordReset = (overrides = {}): PasswordReset => ({
+      id: 'pr-1',
+      email: 'test@example.com',
+      otpHash: 'hash',
+      resetTokenHash: null,
+      attempts: 0,
+      expiresAt: new Date(Date.now() + 600000),
+      resetTokenExpiresAt: new Date(Date.now() + 900000),
+      used: false,
+      createdAt: new Date(),
+      ...overrides,
+    } as PasswordReset);
+
+    it('resets password, marks record used, revokes refresh tokens', async () => {
+      const crypto = require('crypto');
+      const resetToken = crypto.randomUUID();
+      const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+      const record = makePasswordReset({ resetTokenHash: tokenHash });
+
+      passwordResetRepository.findOne.mockResolvedValue(record);
+      userRepository.findOne.mockResolvedValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      passwordResetRepository.save.mockResolvedValue({ ...record, used: true });
+      refreshTokenRepository.update.mockResolvedValue({ affected: 1 } as any);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+
+      await service.resetPassword(resetToken, 'NewPassword123!');
+
+      expect(userRepository.save).toHaveBeenCalled();
+      expect(passwordResetRepository.save).toHaveBeenCalledWith(expect.objectContaining({ used: true }));
+      expect(refreshTokenRepository.update).toHaveBeenCalledWith(
+        { userId: mockUser.id, revoked: false },
+        { revoked: true },
+      );
+    });
+
+    it('throws BadRequestException when reset token not found', async () => {
+      passwordResetRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.resetPassword('bad-uuid-token-1234-1234-1234', 'NewPass123!')).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws UnauthorizedException when reset token already used', async () => {
+      const crypto = require('crypto');
+      const resetToken = crypto.randomUUID();
+      const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+      const record = makePasswordReset({ resetTokenHash: tokenHash, used: true });
+
+      passwordResetRepository.findOne.mockResolvedValue(record);
+
+      await expect(service.resetPassword(resetToken, 'NewPass123!')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws BadRequestException when reset token expired', async () => {
+      const crypto = require('crypto');
+      const resetToken = crypto.randomUUID();
+      const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+      const record = makePasswordReset({
+        resetTokenHash: tokenHash,
+        resetTokenExpiresAt: new Date(Date.now() - 1000), // expired
+      });
+
+      passwordResetRepository.findOne.mockResolvedValue(record);
+
+      await expect(service.resetPassword(resetToken, 'NewPass123!')).rejects.toThrow(BadRequestException);
     });
   });
 

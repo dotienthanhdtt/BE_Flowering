@@ -167,8 +167,17 @@ describe('OnboardingService', () => {
     });
   });
 
+  const makeValidScenariosJson = () =>
+    JSON.stringify([
+      { title: 'Scenario 1', description: 'Desc 1', icon: 'briefcase', accentColor: 'primary' },
+      { title: 'Scenario 2', description: 'Desc 2', icon: 'coffee', accentColor: 'blue' },
+      { title: 'Scenario 3', description: 'Desc 3', icon: 'globe', accentColor: 'green' },
+      { title: 'Scenario 4', description: 'Desc 4', icon: 'book', accentColor: 'lavender' },
+      { title: 'Scenario 5', description: 'Desc 5', icon: 'mic', accentColor: 'rose' },
+    ]);
+
   describe('complete', () => {
-    it('extracts JSON from conversation transcript in code block', async () => {
+    it('extracts JSON from transcript and returns profile + 5 scenarios', async () => {
       const conversation = makeConversation();
       conversationRepo.findOne.mockResolvedValue(conversation);
       messageRepo.find.mockResolvedValue([
@@ -176,23 +185,92 @@ describe('OnboardingService', () => {
         { role: 'assistant', content: 'Great!', createdAt: new Date() },
       ]);
 
-      const jsonPayload = { nativeLanguage: 'English', targetLanguage: 'Spanish', level: 'beginner' };
-      llmService.chat.mockResolvedValue(`\`\`\`json\n${JSON.stringify(jsonPayload)}\n\`\`\``);
+      const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish', currentLevel: 'A1' };
+      // chat called twice: 1st for extraction, 2nd for scenarios
+      llmService.chat
+        .mockResolvedValueOnce(`\`\`\`json\n${JSON.stringify(profile)}\n\`\`\``)
+        .mockResolvedValueOnce(makeValidScenariosJson());
 
       const result = await service.complete({ sessionToken: 'token-abc' });
 
-      expect(result).toEqual(jsonPayload);
+      expect(result).toMatchObject(profile);
+      expect(result.scenarios).toHaveLength(5);
     });
 
-    it('returns raw response object when JSON parsing fails', async () => {
+    it('returns profile with empty scenarios [] when scenario LLM call fails', async () => {
       const conversation = makeConversation();
       conversationRepo.findOne.mockResolvedValue(conversation);
       messageRepo.find.mockResolvedValue([]);
-      llmService.chat.mockResolvedValue('not valid json at all');
+
+      const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
+      llmService.chat
+        .mockResolvedValueOnce(JSON.stringify(profile))
+        .mockRejectedValueOnce(new Error('LLM timeout'));
 
       const result = await service.complete({ sessionToken: 'token-abc' });
 
-      expect(result).toEqual({ raw: 'not valid json at all' });
+      expect(result).toMatchObject(profile);
+      expect(result.scenarios).toEqual([]);
+    });
+
+    it('returns empty scenarios [] when LLM returns wrong count', async () => {
+      const conversation = makeConversation();
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      messageRepo.find.mockResolvedValue([]);
+
+      const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
+      const badScenarios = JSON.stringify([
+        { title: 'S1', description: 'D1', icon: 'star', accentColor: 'primary' },
+        { title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
+      ]);
+      llmService.chat
+        .mockResolvedValueOnce(JSON.stringify(profile))
+        .mockResolvedValueOnce(badScenarios);
+
+      const result = await service.complete({ sessionToken: 'token-abc' });
+
+      expect(result.scenarios).toEqual([]);
+    });
+
+    it('assigns server-generated UUIDs to scenarios', async () => {
+      const conversation = makeConversation();
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      messageRepo.find.mockResolvedValue([]);
+
+      const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
+      llmService.chat
+        .mockResolvedValueOnce(JSON.stringify(profile))
+        .mockResolvedValueOnce(makeValidScenariosJson());
+
+      const result = await service.complete({ sessionToken: 'token-abc' });
+
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      result.scenarios.forEach((s: { id: string }) => {
+        expect(s.id).toMatch(uuidPattern);
+      });
+    });
+
+    it('falls back accentColor to "primary" when LLM returns invalid value', async () => {
+      const conversation = makeConversation();
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      messageRepo.find.mockResolvedValue([]);
+
+      const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
+      const scenariosWithBadColor = JSON.stringify([
+        { title: 'S1', description: 'D1', icon: 'star', accentColor: 'invalid-color' },
+        { title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
+        { title: 'S3', description: 'D3', icon: 'star', accentColor: 'green' },
+        { title: 'S4', description: 'D4', icon: 'star', accentColor: 'lavender' },
+        { title: 'S5', description: 'D5', icon: 'star', accentColor: 'rose' },
+      ]);
+      llmService.chat
+        .mockResolvedValueOnce(JSON.stringify(profile))
+        .mockResolvedValueOnce(scenariosWithBadColor);
+
+      const result = await service.complete({ sessionToken: 'token-abc' });
+
+      expect(result.scenarios[0].accentColor).toBe('primary');
+      expect(result.scenarios[1].accentColor).toBe('blue');
     });
   });
 });

@@ -15,6 +15,13 @@ export const environmentValidationSchema = Joi.object({
   SUPABASE_ANON_KEY: Joi.string().required().description('Supabase anonymous key'),
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().required().description('Supabase service role key'),
 
+  // SMTP (Email)
+  SMTP_HOST: Joi.string().allow('').optional().description('SMTP server hostname'),
+  SMTP_PORT: Joi.number().default(587).description('SMTP port (587 for TLS, 465 for SSL)'),
+  SMTP_USER: Joi.string().allow('').optional().description('SMTP username/email'),
+  SMTP_PASS: Joi.string().allow('').optional().description('SMTP password'),
+  SMTP_FROM: Joi.string().allow('').optional().description('From email address'),
+
   // Authentication
   JWT_SECRET: Joi.string().required().min(32).description('JWT signing secret'),
   JWT_EXPIRES_IN: Joi.string().default('7d').description('JWT expiration time'),

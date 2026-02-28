@@ -11,11 +11,14 @@ import { GoogleIdTokenStrategy } from './strategies/google-id-token-validator.st
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
+import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { AppConfiguration } from '../../config/app-configuration';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, RefreshToken, AiConversation]),
+    TypeOrmModule.forFeature([User, RefreshToken, AiConversation, PasswordReset]),
+    EmailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
