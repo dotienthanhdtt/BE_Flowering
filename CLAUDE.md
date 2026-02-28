@@ -171,3 +171,18 @@ Before ending any session, confirm:
 2. Code compiles without errors (`npm run build`)
 3. Tests pass (`npm test`)
 4. Summary of what was done vs what remains (if any)
+
+## Railway Deployment Rules
+
+**CRITICAL: Prevent Railway build failures**
+
+### Dependency Management
+- **Always install new packages with `npm install <package>`** before using them in code — never `import` a package that isn't in `package.json`.
+- **`@types/*` packages go in `devDependencies`** (auto-placed by `npm install --save-dev`). The runtime package itself must be in `dependencies`.
+- **Before committing any new `import` statement**, verify the package exists in the `dependencies` section of `package.json`:
+  ```bash
+  grep '"<package-name>"' package.json
+  ```
+- **After adding a new module/service that uses external npm packages**, run `npm run build` locally to confirm no `TS2307: Cannot find module` errors before pushing.
+
+> **Root cause of 2026-02-28 Railway failure:** `nodemailer` was used in `email.service.ts` but never added to `package.json`. Railway's `npm ci` + `nest build` failed with `TS2307: Cannot find module 'nodemailer'`. Fix: `npm install nodemailer`.
