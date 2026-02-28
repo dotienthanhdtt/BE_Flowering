@@ -1,12 +1,15 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Language } from '../../database/entities/language.entity';
 import { UserLanguage, ProficiencyLevel } from '../../database/entities/user-language.entity';
+import { User } from '../../database/entities/user.entity';
 import { LanguageDto } from './dto/language.dto';
 import { UserLanguageDto } from './dto/user-language.dto';
 import { AddUserLanguageDto } from './dto/add-user-language.dto';
 import { UpdateUserLanguageDto } from './dto/update-user-language.dto';
+import { SetNativeLanguageDto } from './dto/set-native-language.dto';
+import { LanguageType } from './dto/language-query.dto';
 
 /**
  * Service handling language operations and user learning languages
@@ -18,14 +21,24 @@ export class LanguageService {
     private readonly languageRepo: Repository<Language>,
     @InjectRepository(UserLanguage)
     private readonly userLanguageRepo: Repository<UserLanguage>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
 
   /**
-   * Get all active languages
+   * Get active languages, optionally filtered by native/learning availability
    */
-  async findAll(): Promise<LanguageDto[]> {
+  async findAll(type?: LanguageType): Promise<LanguageDto[]> {
+    const where: Record<string, unknown> = { isActive: true };
+
+    if (type === LanguageType.NATIVE) {
+      where.isNativeAvailable = true;
+    } else if (type === LanguageType.LEARNING) {
+      where.isLearningAvailable = true;
+    }
+
     const languages = await this.languageRepo.find({
-      where: { isActive: true },
+      where,
       order: { name: 'ASC' },
     });
 
@@ -35,7 +48,38 @@ export class LanguageService {
       name: lang.name,
       nativeName: lang.nativeName,
       flagUrl: lang.flagUrl,
+      isNativeAvailable: lang.isNativeAvailable,
+      isLearningAvailable: lang.isLearningAvailable,
     }));
+  }
+
+  /**
+   * Set user's native language
+   */
+  async setNativeLanguage(userId: string, dto: SetNativeLanguageDto): Promise<LanguageDto> {
+    const language = await this.languageRepo.findOne({
+      where: { id: dto.languageId, isActive: true },
+    });
+
+    if (!language) {
+      throw new NotFoundException('Language not found');
+    }
+
+    if (!language.isNativeAvailable) {
+      throw new BadRequestException('Language is not available as a native language');
+    }
+
+    await this.userRepo.update(userId, { nativeLanguageId: dto.languageId });
+
+    return {
+      id: language.id,
+      code: language.code,
+      name: language.name,
+      nativeName: language.nativeName,
+      flagUrl: language.flagUrl,
+      isNativeAvailable: language.isNativeAvailable,
+      isLearningAvailable: language.isLearningAvailable,
+    };
   }
 
   /**
@@ -62,6 +106,10 @@ export class LanguageService {
 
     if (!language) {
       throw new NotFoundException('Language not found');
+    }
+
+    if (!language.isLearningAvailable) {
+      throw new BadRequestException('Language is not available for learning');
     }
 
     // Check if user already has this language

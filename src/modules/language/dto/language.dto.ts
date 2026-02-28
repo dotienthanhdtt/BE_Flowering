@@ -18,4 +18,10 @@ export class LanguageDto {
 
   @ApiProperty({ description: 'URL to language flag image', required: false })
   flagUrl?: string;
+
+  @ApiProperty({ description: 'Available as native language option' })
+  isNativeAvailable!: boolean;
+
+  @ApiProperty({ description: 'Available as learning language option' })
+  isLearningAvailable!: boolean;
 }

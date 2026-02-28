@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseUUIDPipe } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { LanguageService } from './language.service';
 import { LanguageDto } from './dto/language.dto';
 import { UserLanguageDto } from './dto/user-language.dto';
 import { AddUserLanguageDto } from './dto/add-user-language.dto';
 import { UpdateUserLanguageDto } from './dto/update-user-language.dto';
+import { SetNativeLanguageDto } from './dto/set-native-language.dto';
+import { LanguageQueryDto, LanguageType } from './dto/language-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { User } from '../../database/entities/user.entity';
@@ -19,9 +21,10 @@ export class LanguageController {
 
   @Public()
   @Get()
-  @ApiOperation({ summary: 'List all available languages' })
-  async getLanguages(): Promise<LanguageDto[]> {
-    return this.languageService.findAll();
+  @ApiOperation({ summary: 'List available languages (optionally filter by type)' })
+  @ApiQuery({ name: 'type', enum: LanguageType, required: false })
+  async getLanguages(@Query() query: LanguageQueryDto): Promise<LanguageDto[]> {
+    return this.languageService.findAll(query.type);
   }
 
   @ApiBearerAuth('JWT-auth')
@@ -39,6 +42,16 @@ export class LanguageController {
     @Body() dto: AddUserLanguageDto,
   ): Promise<UserLanguageDto> {
     return this.languageService.addUserLanguage(user.id, dto);
+  }
+
+  @ApiBearerAuth('JWT-auth')
+  @Patch('user/native')
+  @ApiOperation({ summary: 'Set user native language' })
+  async setNativeLanguage(
+    @CurrentUser() user: User,
+    @Body() dto: SetNativeLanguageDto,
+  ): Promise<LanguageDto> {
+    return this.languageService.setNativeLanguage(user.id, dto);
   }
 
   @ApiBearerAuth('JWT-auth')
