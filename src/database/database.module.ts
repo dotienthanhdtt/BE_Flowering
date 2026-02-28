@@ -13,6 +13,7 @@ import { AiConversation } from './entities/ai-conversation.entity';
 import { AiConversationMessage } from './entities/ai-conversation-message.entity';
 import { DeviceToken } from './entities/device-token.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { PasswordReset } from './entities/password-reset.entity';
 
 const entities = [
   Language,
@@ -27,6 +28,7 @@ const entities = [
   AiConversationMessage,
   DeviceToken,
   RefreshToken,
+  PasswordReset,
 ];
 
 @Module({

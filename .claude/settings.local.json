@@ -99,7 +99,12 @@
       "Bash(railway logs --deployment 951566ac-f18b-450d-9bb4-d89c5cba4be1 2>&1 | grep -E \"running|started|ERROR|listen|0.0.0.0\" | tail -10)",
       "Bash(railway logs --deployment 951566ac-f18b-450d-9bb4-d89c5cba4be1 2>&1 | tail -15)",
       "Bash(grep -n \"ai_conversations\" /Users/tienthanh/Documents/new_flowering/be_flowering/src/database/migrations/*.ts)",
-      "Bash(git checkout -b feat/anonymous-onboarding-chat dev)"
+      "Bash(git checkout -b feat/anonymous-onboarding-chat dev)",
+      "Bash(git stash pop 2>&1)",
+      "Bash(git stash apply stash@{0} 2>&1)",
+      "Bash(git stash show -p stash@{0} 2>&1 | git apply --ignore-whitespace 2>&1)",
+      "Bash(git stash show -p stash@{0} -- src/config/app-configuration.ts src/config/environment-validation-schema.ts src/database/database.module.ts src/database/entities/index.ts src/modules/auth/auth.controller.ts src/modules/auth/auth.module.ts src/modules/auth/auth.service.ts src/modules/auth/auth.service.spec.ts src/modules/auth/dto/index.ts src/modules/onboarding/dto/index.ts src/modules/onboarding/onboarding.service.spec.ts src/modules/onboarding/onboarding.service.ts .env.example 2>&1 | git apply --ignore-whitespace 2>&1)",
+      "Bash(git stash drop stash@{0} 2>&1)"
     ]
   },
   "enableAllProjectMcpServers": true,

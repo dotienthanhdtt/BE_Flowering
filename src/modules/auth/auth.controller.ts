@@ -2,7 +2,17 @@ import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, AuthResponseDto, RefreshTokenDto, AppleAuthDto, GoogleAuthDto } from './dto';
+import {
+  RegisterDto,
+  LoginDto,
+  AuthResponseDto,
+  RefreshTokenDto,
+  AppleAuthDto,
+  GoogleAuthDto,
+  ForgotPasswordDto,
+  VerifyOtpDto,
+  ResetPasswordDto,
+} from './dto';
 import { CurrentUser } from './decorators';
 import { User } from '../../database/entities/user.entity';
 
@@ -58,6 +68,39 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
   async refresh(@Body() dto: RefreshTokenDto): Promise<AuthResponseDto> {
     return this.authService.refreshTokens(dto.refreshToken);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send OTP to email for password reset' })
+  @ApiResponse({ status: 200, description: 'OTP sent to email (masked)' })
+  @ApiResponse({ status: 404, description: 'Email not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests (3/hour limit)' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Public()
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP and get password reset token (15min)' })
+  @ApiResponse({ status: 200, description: 'OTP verified, reset token returned' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired OTP; too many attempts' })
+  async verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto.email, dto.otp);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password using reset token from verify-otp' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired reset token' })
+  @ApiResponse({ status: 401, description: 'Token already used' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    await this.authService.resetPassword(dto.resetToken, dto.newPassword);
+    return null;
   }
 
   @Post('logout')
