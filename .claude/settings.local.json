@@ -124,7 +124,13 @@
       "Bash(npm ls @sentry/node 2>&1 | head -3)",
       "Bash(gtimeout 15 npm run start:dev 2>&1; true)",
       "Bash(npm ls @nestjs/cli 2>&1 | head -3)",
-      "Bash(npm cache clean --force 2>&1 && rm package-lock.json && npm install 2>&1 | tail -10)"
+      "Bash(npm cache clean --force 2>&1 && rm package-lock.json && npm install 2>&1 | tail -10)",
+      "Bash(git push -u origin feat/auth-improvements-onboarding-linking 2>&1)",
+      "Bash(gh auth status 2>&1 | head -5)",
+      "Bash(ssh -T git@github.com 2>&1 | head -3)",
+      "Bash(git remote set-url origin git@github.com:dotienthanhdtt/BE_Flowering.git && git push)",
+      "Bash(npx eslint src/common/middleware/http-logger.middleware.ts src/app.module.ts src/database/database.module.ts 2>&1 | tail -10)",
+      "Bash(cat logs/*.log 2>/dev/null || echo \"No log files found\")"
     ]
   },
   "enableAllProjectMcpServers": true,

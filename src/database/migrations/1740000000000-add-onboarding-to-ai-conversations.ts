@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddOnboardingToAiConversations1740000000000
-  implements MigrationInterface
-{
+export class AddOnboardingToAiConversations1740000000000 implements MigrationInterface {
   name = 'AddOnboardingToAiConversations1740000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -48,12 +46,8 @@ export class AddOnboardingToAiConversations1740000000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_conversations_type"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_ai_conversations_session_token"`,
-    );
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_ai_conversations_type"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_ai_conversations_session_token"`);
     await queryRunner.query(`
       ALTER TABLE "ai_conversations"
       DROP COLUMN IF EXISTS "expires_at",

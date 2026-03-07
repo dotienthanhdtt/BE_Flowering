@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AuthImprovementsProviderColumns1740100000000
-  implements MigrationInterface
-{
+export class AuthImprovementsProviderColumns1740100000000 implements MigrationInterface {
   name = 'AuthImprovementsProviderColumns1740100000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -48,12 +46,8 @@ export class AuthImprovementsProviderColumns1740100000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_users_google_provider_id"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_users_apple_provider_id"`,
-    );
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_users_google_provider_id"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_users_apple_provider_id"`);
     await queryRunner.query(`
       ALTER TABLE "users"
       DROP COLUMN IF EXISTS "google_provider_id",

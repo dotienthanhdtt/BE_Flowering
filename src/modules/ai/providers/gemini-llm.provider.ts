@@ -44,7 +44,7 @@ export class GeminiLLMProvider implements LLMProvider {
         ? response.content
         : JSON.stringify(response.content);
     } catch (error) {
-      this.logger.error('Gemini chat failed', error);
+      this.logger.error('Gemini chat failed', (error as Error)?.message);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
     }
   }

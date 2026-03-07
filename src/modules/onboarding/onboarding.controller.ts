@@ -2,11 +2,7 @@ import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { OnboardingService } from './onboarding.service';
-import {
-  StartOnboardingDto,
-  OnboardingChatDto,
-  OnboardingCompleteDto,
-} from './dto';
+import { StartOnboardingDto, OnboardingChatDto, OnboardingCompleteDto } from './dto';
 
 @ApiTags('onboarding')
 @Controller('onboarding')

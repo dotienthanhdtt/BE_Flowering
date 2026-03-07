@@ -1,33 +1,15 @@
-import {
-  Injectable,
-  Logger,
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { OnboardingScenarioDto, SCENARIO_ACCENT_COLORS } from './dto/onboarding-scenario.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
-import {
-  HumanMessage,
-  SystemMessage,
-  AIMessage,
-  BaseMessage,
-} from '@langchain/core/messages';
-import {
-  AiConversation,
-  AiConversationMessage,
-  MessageRole,
-} from '../../database/entities';
+import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
+import { AiConversation, AiConversationMessage, MessageRole } from '../../database/entities';
 import { AiConversationType } from '../../database/entities/ai-conversation.entity';
 import { UnifiedLLMService } from '../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../ai/services/prompt-loader.service';
 import { onboardingConfig } from './onboarding.config';
-import {
-  StartOnboardingDto,
-  OnboardingChatDto,
-  OnboardingCompleteDto,
-} from './dto';
+import { StartOnboardingDto, OnboardingChatDto, OnboardingCompleteDto } from './dto';
 
 @Injectable()
 export class OnboardingService {
@@ -67,9 +49,7 @@ export class OnboardingService {
     const currentTurn = Math.floor(conversation.messageCount / 2) + 1;
 
     if (currentTurn > onboardingConfig.maxTurns) {
-      throw new BadRequestException(
-        'Maximum turns reached. Call /onboarding/complete.',
-      );
+      throw new BadRequestException('Maximum turns reached. Call /onboarding/complete.');
     }
 
     const { nativeLanguage, targetLanguage } = conversation.metadata as Record<string, string>;
@@ -115,24 +95,18 @@ export class OnboardingService {
       order: { createdAt: 'ASC' },
     });
 
-    const transcript = messages
-      .map((m) => `${m.role}: ${m.content}`)
-      .join('\n');
+    const transcript = messages.map((m) => `${m.role}: ${m.content}`).join('\n');
 
-    const extractionPrompt = this.promptLoader.loadPrompt(
-      'onboarding-extraction-prompt',
-      { transcript },
-    );
+    const extractionPrompt = this.promptLoader.loadPrompt('onboarding-extraction-prompt', {
+      transcript,
+    });
 
-    const response = await this.llmService.chat(
-      [new HumanMessage(extractionPrompt)],
-      {
-        model: onboardingConfig.llmModel,
-        temperature: 0.1,
-        maxTokens: 512,
-        metadata: { feature: 'onboarding-extraction', conversationId: conversation.id },
-      },
-    );
+    const response = await this.llmService.chat([new HumanMessage(extractionPrompt)], {
+      model: onboardingConfig.llmModel,
+      temperature: 0.1,
+      maxTokens: 512,
+      metadata: { feature: 'onboarding-extraction', conversationId: conversation.id },
+    });
 
     const profile = this.parseExtraction(response);
     const scenarios = await this.generateScenarios(profile, conversation.id);
@@ -157,15 +131,12 @@ export class OnboardingService {
           : String(profile.preferredTopics ?? ''),
       });
 
-      const response = await this.llmService.chat(
-        [new HumanMessage(scenariosPrompt)],
-        {
-          model: onboardingConfig.llmModel,
-          temperature: 0.7,
-          maxTokens: 1024,
-          metadata: { feature: 'onboarding-scenarios', conversationId },
-        },
-      );
+      const response = await this.llmService.chat([new HumanMessage(scenariosPrompt)], {
+        model: onboardingConfig.llmModel,
+        temperature: 0.7,
+        maxTokens: 1024,
+        metadata: { feature: 'onboarding-scenarios', conversationId },
+      });
 
       return this.parseScenarios(response);
     } catch (error) {
@@ -180,7 +151,9 @@ export class OnboardingService {
     const parsed = JSON.parse(jsonStr);
 
     if (!Array.isArray(parsed) || parsed.length !== 5) {
-      throw new Error(`Expected 5 scenarios, got ${Array.isArray(parsed) ? parsed.length : 'non-array'}`);
+      throw new Error(
+        `Expected 5 scenarios, got ${Array.isArray(parsed) ? parsed.length : 'non-array'}`,
+      );
     }
 
     return parsed.map((s) => ({
@@ -214,9 +187,7 @@ export class OnboardingService {
       take: 20,
     });
     return messages.map((m) =>
-      m.role === MessageRole.USER
-        ? new HumanMessage(m.content)
-        : new AIMessage(m.content),
+      m.role === MessageRole.USER ? new HumanMessage(m.content) : new AIMessage(m.content),
     );
   }
 

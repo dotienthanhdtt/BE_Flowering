@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddNativeLearningFlagsToLanguages1740200000000
-  implements MigrationInterface
-{
+export class AddNativeLearningFlagsToLanguages1740200000000 implements MigrationInterface {
   name = 'AddNativeLearningFlagsToLanguages1740200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

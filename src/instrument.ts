@@ -9,5 +9,4 @@ Sentry.init({
   // Only enable if DSN is configured
   enabled: !!process.env.SENTRY_DSN,
   sendDefaultPii: true,
-
 });

@@ -4,7 +4,7 @@ import { LLMModel } from '../ai/providers/llm-models.enum';
 export const onboardingConfig = {
   maxTurns: 10,
   sessionTtlDays: 7,
-  llmModel: LLMModel.GEMINI_2_0_FLASH,
+  llmModel: LLMModel.OPENAI_GPT4O_MINI,
   maxTokens: 1024,
   temperature: 0.7,
 };
