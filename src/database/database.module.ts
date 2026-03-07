@@ -49,7 +49,7 @@ const entities = [
         },
         entities,
         synchronize: false,
-        logging: configService.get<string>('nodeEnv') === 'development',
+        logging: false,
       }),
     }),
   ],

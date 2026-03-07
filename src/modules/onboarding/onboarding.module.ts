@@ -6,10 +6,7 @@ import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([AiConversation, AiConversationMessage]),
-    AiModule,
-  ],
+  imports: [TypeOrmModule.forFeature([AiConversation, AiConversationMessage]), AiModule],
   controllers: [OnboardingController],
   providers: [OnboardingService],
   exports: [OnboardingService],

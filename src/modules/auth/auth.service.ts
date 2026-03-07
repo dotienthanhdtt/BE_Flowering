@@ -103,7 +103,11 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  async googleLogin(idToken: string, displayName?: string, sessionToken?: string): Promise<AuthResponseDto> {
+  async googleLogin(
+    idToken: string,
+    displayName?: string,
+    sessionToken?: string,
+  ): Promise<AuthResponseDto> {
     const googleUser = await this.googleIdTokenStrategy.validate(idToken);
     const providerUser: OAuthProviderUser = {
       email: googleUser.email,
@@ -114,7 +118,11 @@ export class AuthService {
     return this.oauthLogin('google', providerUser, sessionToken);
   }
 
-  async appleLogin(idToken: string, displayName?: string, sessionToken?: string): Promise<AuthResponseDto> {
+  async appleLogin(
+    idToken: string,
+    displayName?: string,
+    sessionToken?: string,
+  ): Promise<AuthResponseDto> {
     const appleUser = await this.appleStrategy.validate(idToken);
     const providerUser: OAuthProviderUser = {
       email: appleUser.email,
@@ -296,7 +304,10 @@ export class AuthService {
     await this.passwordResetRepository.save(record);
 
     // Revoke all refresh tokens — force re-login on all devices
-    await this.refreshTokenRepository.update({ userId: user.id, revoked: false }, { revoked: true });
+    await this.refreshTokenRepository.update(
+      { userId: user.id, revoked: false },
+      { revoked: true },
+    );
   }
 
   private sha256(value: string): string {
