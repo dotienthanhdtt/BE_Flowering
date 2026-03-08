@@ -391,6 +391,32 @@ Check grammar and get feedback.
 
 ---
 
+#### POST /ai/chat/correct
+Check grammar/vocabulary of user's chat reply in context of previous AI message.
+
+**Auth:** Optional (JWT or anonymous) | **Request:**
+```json
+{
+  "previousAiMessage": "How was your weekend?",
+  "userMessage": "I go to park yesterday",
+  "targetLanguage": "en"
+}
+```
+
+| Field | Type | Required | Max | Description |
+|-------|------|----------|-----|-------------|
+| previousAiMessage | string | Yes | 4000 | AI tutor's previous message (context) |
+| userMessage | string | Yes | 4000 | User's reply to check |
+| targetLanguage | string | Yes | 10 | Target language code (e.g. "en", "ja", "vi") |
+
+**Response (200) — errors found:** `{code: 1, message: "Success", data: {correctedText: "I went to the park yesterday."}}`
+
+**Response (200) — no errors:** `{code: 1, message: "Success", data: {correctedText: null}}`
+
+**Errors:** 400 (missing/empty fields), 429 (rate limit)
+
+---
+
 #### POST /ai/exercises/generate
 Generate language exercises.
 
