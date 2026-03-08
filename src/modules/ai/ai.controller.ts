@@ -24,6 +24,7 @@ import {
 import { Observable, Subject } from 'rxjs';
 import { LearningAgentService } from './services/learning-agent.service';
 import { WhisperTranscriptionService } from './services/whisper-transcription.service';
+import { TranslationService } from './services/translation.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../../database/entities';
 import {
@@ -36,6 +37,8 @@ import {
   ExerciseResult,
   PronunciationAssessmentRequestDto,
   PronunciationResult,
+  TranslateRequestDto,
+  TranslateType,
 } from './dto';
 
 // Max audio file size: 10MB
@@ -54,6 +57,7 @@ export class AiController {
   constructor(
     private learningAgent: LearningAgentService,
     private whisperService: WhisperTranscriptionService,
+    private translationService: TranslationService,
   ) {}
 
   @Post('chat')
@@ -148,6 +152,26 @@ export class AiController {
 
     // Include transcribed text in response
     return { ...result, transcribedText };
+  }
+
+  @Post('translate')
+  @ApiOperation({ summary: 'Translate a word or sentence' })
+  @ApiResponse({ status: 200, description: 'Translation result' })
+  async translate(@CurrentUser() user: User, @Body() dto: TranslateRequestDto) {
+    if (dto.type === TranslateType.WORD) {
+      return this.translationService.translateWord(
+        user.id,
+        dto.text!,
+        dto.sourceLang,
+        dto.targetLang,
+      );
+    }
+    return this.translationService.translateSentence(
+      user.id,
+      dto.messageId!,
+      dto.sourceLang,
+      dto.targetLang,
+    );
   }
 
   @Post('conversations')

@@ -38,6 +38,12 @@ export class AiConversationMessage {
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, unknown>;
 
+  @Column({ type: 'text', name: 'translated_content', nullable: true })
+  translatedContent?: string;
+
+  @Column({ type: 'varchar', length: 10, name: 'translated_lang', nullable: true })
+  translatedLang?: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }

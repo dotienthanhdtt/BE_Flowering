@@ -8,6 +8,7 @@ export enum LLMModel {
   OPENAI_GPT4O_MINI = 'gpt-4o-mini',
   OPENAI_O1_PREVIEW = 'o1-preview',
   OPENAI_O1_MINI = 'o1-mini',
+  OPENAI_GPT4_1_NANO = 'gpt-4.1-nano',
 
   // Anthropic Models
   ANTHROPIC_CLAUDE_3_5_SONNET = 'claude-3-5-sonnet-20241022',

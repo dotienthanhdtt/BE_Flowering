@@ -186,3 +186,11 @@ Before ending any session, confirm:
 - **After adding a new module/service that uses external npm packages**, run `npm run build` locally to confirm no `TS2307: Cannot find module` errors before pushing.
 
 > **Root cause of 2026-02-28 Railway failure:** `nodemailer` was used in `email.service.ts` but never added to `package.json`. Railway's `npm ci` + `nest build` failed with `TS2307: Cannot find module 'nodemailer'`. Fix: `npm install nodemailer`.
+
+### Entity Registration
+- **When creating a new TypeORM entity**, you MUST register it in **both** places:
+  1. `src/database/database.module.ts` — add to the global `entities` array (required for `DataSource` metadata, `createQueryBuilder`, raw queries)
+  2. `src/modules/<feature>/<feature>.module.ts` — add to `TypeOrmModule.forFeature([...])` (required for `@InjectRepository()` in that module)
+- **Missing either registration causes runtime errors** (`EntityMetadataNotFoundError` or `No repository was found`). These won't surface at build time — only at runtime when the entity is first used.
+
+> **Root cause of 2026-03-08 runtime 500:** `Vocabulary` entity was added to `AiModule`'s `TypeOrmModule.forFeature()` but not to `database.module.ts` global entities array. `createQueryBuilder().insert().into(Vocabulary)` hit the DataSource directly and threw `EntityMetadataNotFoundError`. Fix: add entity to both locations.
