@@ -4,6 +4,7 @@ import {
   Get,
   Body,
   Param,
+  Req,
   Sse,
   UseInterceptors,
   UseGuards,
@@ -11,6 +12,7 @@ import {
   ParseUUIDPipe,
   BadRequestException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import {
@@ -26,6 +28,7 @@ import { LearningAgentService } from './services/learning-agent.service';
 import { WhisperTranscriptionService } from './services/whisper-transcription.service';
 import { TranslationService } from './services/translation.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
 import { User } from '../../database/entities';
 import {
   ChatRequestDto,
@@ -155,22 +158,28 @@ export class AiController {
   }
 
   @Post('translate')
-  @ApiOperation({ summary: 'Translate a word or sentence' })
+  @OptionalAuth()
+  @ApiOperation({ summary: 'Translate a word or sentence (JWT or sessionToken)' })
   @ApiResponse({ status: 200, description: 'Translation result' })
-  async translate(@CurrentUser() user: User, @Body() dto: TranslateRequestDto) {
+  async translate(@Req() req: Request, @Body() dto: TranslateRequestDto) {
+    const user = req.user as User | null;
+    const userId = user?.id ?? null;
+
     if (dto.type === TranslateType.WORD) {
       return this.translationService.translateWord(
-        user.id,
         dto.text!,
         dto.sourceLang,
         dto.targetLang,
+        userId,
+        dto.sessionToken,
       );
     }
     return this.translationService.translateSentence(
-      user.id,
       dto.messageId!,
       dto.sourceLang,
       dto.targetLang,
+      userId,
+      dto.sessionToken,
     );
   }
 

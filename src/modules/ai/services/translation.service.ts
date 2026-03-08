@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage } from '@langchain/core/messages';
 import { Vocabulary } from '../../../database/entities/vocabulary.entity';
 import { AiConversationMessage } from '../../../database/entities/ai-conversation-message.entity';
+import { AiConversation, AiConversationType } from '../../../database/entities/ai-conversation.entity';
 import { UnifiedLLMService } from './unified-llm.service';
 import { PromptLoaderService } from './prompt-loader.service';
 import { LLMModel } from '../providers/llm-models.enum';
@@ -13,7 +14,9 @@ export interface WordTranslationResult {
   translation: string;
   partOfSpeech?: string;
   pronunciation?: string;
-  vocabularyId: string;
+  definition?: string;
+  examples?: string[];
+  vocabularyId?: string;
 }
 
 export interface SentenceTranslationResult {
@@ -36,64 +39,67 @@ export class TranslationService {
   ) {}
 
   async translateWord(
-    userId: string,
     text: string,
     sourceLang: string,
     targetLang: string,
+    userId: string | null,
+    sessionToken?: string,
   ): Promise<WordTranslationResult> {
+    if (!userId && !sessionToken) {
+      throw new BadRequestException('Authentication or sessionToken required');
+    }
+
     const prompt = this.promptLoader.loadPrompt('translate-word', {
-      word: text,
-      sourceLang,
-      targetLang,
+      word: text, sourceLang, targetLang,
     });
 
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
       model: LLMModel.OPENAI_GPT4_1_NANO,
       temperature: 0.1,
+      metadata: { feature: 'translate-word', userId: userId ?? sessionToken, sourceLang, targetLang },
     });
 
     const parsed = this.parseWordResponse(response);
 
-    // Atomic upsert using ON CONFLICT to avoid race conditions
+    // Anonymous users: return translation only, no vocabulary save
+    if (!userId) {
+      return { original: text, ...parsed };
+    }
+
+    // Authenticated users: upsert to vocabulary
     const result = await this.vocabularyRepo
       .createQueryBuilder()
       .insert()
       .into(Vocabulary)
       .values({
-        userId,
-        word: text,
-        translation: parsed.translation,
-        sourceLang,
-        targetLang,
-        partOfSpeech: parsed.partOfSpeech,
-        pronunciation: parsed.pronunciation,
+        userId, word: text, translation: parsed.translation,
+        sourceLang, targetLang, partOfSpeech: parsed.partOfSpeech,
+        pronunciation: parsed.pronunciation, definition: parsed.definition,
+        examples: parsed.examples,
       })
-      .orUpdate(['translation', 'part_of_speech', 'pronunciation'], [
-        'user_id',
-        'word',
-        'source_lang',
-        'target_lang',
+      .orUpdate(['translation', 'part_of_speech', 'pronunciation', 'definition', 'examples'], [
+        'user_id', 'word', 'source_lang', 'target_lang',
       ])
       .returning('id')
       .execute();
 
-    const vocabularyId = result.generatedMaps[0]?.id ?? result.raw[0]?.id;
-
     return {
-      original: text,
-      translation: parsed.translation,
-      partOfSpeech: parsed.partOfSpeech,
-      pronunciation: parsed.pronunciation,
-      vocabularyId,
+      original: text, ...parsed,
+      vocabularyId: result.generatedMaps[0]?.id ?? result.raw[0]?.id,
     };
   }
 
   async translateSentence(
-    userId: string,
     messageId: string,
     sourceLang: string,
     targetLang: string,
+    userId: string | null,
+    sessionToken?: string,
   ): Promise<SentenceTranslationResult> {
+    if (!userId && !sessionToken) {
+      throw new BadRequestException('Authentication or sessionToken required');
+    }
+
     const message = await this.messageRepo.findOne({
       where: { id: messageId },
       relations: ['conversation'],
@@ -103,10 +109,7 @@ export class TranslationService {
       throw new NotFoundException('Message not found');
     }
 
-    // Verify ownership
-    if (message.conversation.userId !== userId) {
-      throw new ForbiddenException('You do not own this conversation');
-    }
+    this.verifyMessageOwnership(message, userId, sessionToken);
 
     // Return cached translation if available
     if (message.translatedContent && message.translatedLang === targetLang) {
@@ -118,14 +121,13 @@ export class TranslationService {
     }
 
     const prompt = this.promptLoader.loadPrompt('translate-sentence', {
-      sentence: message.content,
-      sourceLang,
-      targetLang,
+      sentence: message.content, sourceLang, targetLang,
     });
 
     const translation = await this.llmService.chat([new HumanMessage(prompt)], {
       model: LLMModel.OPENAI_GPT4_1_NANO,
       temperature: 0.1,
+      metadata: { feature: 'translate-sentence', userId: userId ?? sessionToken, messageId, sourceLang, targetLang },
     });
 
     // Cache translation on message
@@ -140,36 +142,46 @@ export class TranslationService {
     };
   }
 
-  private parseWordResponse(response: string): {
-    translation: string;
-    partOfSpeech?: string;
-    pronunciation?: string;
-  } {
+  /** Verify the caller owns the message's conversation via userId or sessionToken */
+  private verifyMessageOwnership(
+    message: AiConversationMessage & { conversation: AiConversation },
+    userId: string | null,
+    sessionToken?: string,
+  ): void {
+    if (userId && message.conversation.userId === userId) return;
+    if (
+      sessionToken &&
+      message.conversation.sessionToken === sessionToken &&
+      message.conversation.type === AiConversationType.ANONYMOUS
+    ) return;
+    throw new ForbiddenException('You do not own this conversation');
+  }
+
+  private parseWordResponse(response: string): ReturnType<typeof this.extractWordFields> {
     try {
-      // Try direct JSON parse first
-      const parsed = JSON.parse(response.trim());
-      return {
-        translation: parsed.translation,
-        partOfSpeech: parsed.partOfSpeech,
-        pronunciation: parsed.pronunciation,
-      };
+      return this.extractWordFields(JSON.parse(response.trim()));
     } catch {
-      // Fallback: extract JSON from response using regex
-      const jsonMatch = response.match(/\{[\s\S]*?\}/);
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
-          const parsed = JSON.parse(jsonMatch[0]);
-          return {
-            translation: parsed.translation,
-            partOfSpeech: parsed.partOfSpeech,
-            pronunciation: parsed.pronunciation,
-          };
+          return this.extractWordFields(JSON.parse(jsonMatch[0]));
         } catch {
           this.logger.warn(`Failed to parse word translation JSON: ${response}`);
         }
       }
-      // Last resort: return raw response as translation
-      return { translation: response.trim() };
+      return this.extractWordFields({ translation: response.trim() });
     }
+  }
+
+  private extractWordFields(parsed: Record<string, unknown>) {
+    return {
+      translation: parsed.translation as string,
+      partOfSpeech: parsed.partOfSpeech as string | undefined,
+      pronunciation: parsed.pronunciation as string | undefined,
+      definition: parsed.definition as string | undefined,
+      examples: Array.isArray(parsed.examples)
+        ? (parsed.examples as string[]).slice(0, 2)
+        : undefined,
+    };
   }
 }
