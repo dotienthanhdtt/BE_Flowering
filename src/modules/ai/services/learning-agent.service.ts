@@ -159,6 +159,32 @@ export class LearningAgentService {
   }
 
   /**
+   * Check grammar/vocabulary of user's chat reply in context of previous AI message.
+   * Returns corrected text if errors found, null if correct.
+   */
+  async checkCorrection(
+    previousAiMessage: string,
+    userMessage: string,
+    targetLanguage: string,
+  ): Promise<{ correctedText: string | null }> {
+    const prompt = this.promptLoader.loadPrompt('correction-check-prompt', {
+      previousAiMessage,
+      userMessage,
+      targetLanguage,
+    });
+
+    const response = await this.llmService.chat([new HumanMessage(prompt)], {
+      model: LLMModel.OPENAI_GPT4_1_NANO,
+      temperature: 0.3,
+      metadata: { feature: 'correction-check' },
+    });
+
+    const trimmed = response.trim().replace(/^["']|["']$/g, '');
+    const correctedText = !trimmed || trimmed.toLowerCase() === 'null' ? null : trimmed;
+    return { correctedText };
+  }
+
+  /**
    * Generate language learning exercise.
    */
   async generateExercise(

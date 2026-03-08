@@ -36,6 +36,8 @@ import {
   CreateConversationDto,
   GrammarCheckRequestDto,
   GrammarCheckResult,
+  CorrectionCheckRequestDto,
+  CorrectionCheckResponseDto,
   GenerateExerciseRequestDto,
   ExerciseResult,
   PronunciationAssessmentRequestDto,
@@ -97,6 +99,20 @@ export class AiController {
   @ApiResponse({ status: 200, type: GrammarCheckResult })
   async checkGrammar(@Body() dto: GrammarCheckRequestDto): Promise<GrammarCheckResult> {
     return this.learningAgent.checkGrammar(dto.text, dto.targetLanguage, dto.model);
+  }
+
+  @Post('chat/correct')
+  @OptionalAuth()
+  @ApiOperation({ summary: 'Check grammar/vocabulary of user chat reply' })
+  @ApiResponse({ status: 200, type: CorrectionCheckResponseDto })
+  async checkCorrection(
+    @Body() dto: CorrectionCheckRequestDto,
+  ): Promise<CorrectionCheckResponseDto> {
+    return this.learningAgent.checkCorrection(
+      dto.previousAiMessage,
+      dto.userMessage,
+      dto.targetLanguage,
+    );
   }
 
   @Post('exercises/generate')
