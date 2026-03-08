@@ -130,7 +130,10 @@
       "Bash(ssh -T git@github.com 2>&1 | head -3)",
       "Bash(git remote set-url origin git@github.com:dotienthanhdtt/BE_Flowering.git && git push)",
       "Bash(npx eslint src/common/middleware/http-logger.middleware.ts src/app.module.ts src/database/database.module.ts 2>&1 | tail -10)",
-      "Bash(cat logs/*.log 2>/dev/null || echo \"No log files found\")"
+      "Bash(cat logs/*.log 2>/dev/null || echo \"No log files found\")",
+      "Bash(git -C /Users/tienthanh/Documents/new_flowering/be_flowering log --oneline --all --grep=\"feat\\\\|fix\" --since=\"2026-02-04\" | head -15)",
+      "Bash(git -C /Users/tienthanh/Documents/new_flowering/be_flowering log --oneline -5 --since=\"2026-02-04\" -- docs/)",
+      "Bash(head -5 docs/*.md | grep -E \"Last Updated|# \" | paste - - | column -t)"
     ]
   },
   "enableAllProjectMcpServers": true,
