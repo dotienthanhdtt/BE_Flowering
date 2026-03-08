@@ -28,7 +28,7 @@ describe('LearningAgentService - checkCorrection', () => {
   it('should return null correctedText when LLM returns "null"', async () => {
     llmService.chat.mockResolvedValue('null');
 
-    const result = await service.checkCorrection('Hi!', 'Hi!', 'English');
+    const result = await service.checkCorrection('Hi!', 'Hi!', 'en');
 
     expect(result.correctedText).toBeNull();
   });
@@ -37,7 +37,7 @@ describe('LearningAgentService - checkCorrection', () => {
     llmService.chat.mockResolvedValue('I am fine, thank you.');
 
     const result = await service.checkCorrection(
-      'How are you?', 'I fine thank you', 'English',
+      'How are you?', 'I fine thank you', 'en',
     );
 
     expect(result.correctedText).toBe('I am fine, thank you.');
@@ -46,7 +46,7 @@ describe('LearningAgentService - checkCorrection', () => {
   it('should handle "null" with surrounding whitespace', async () => {
     llmService.chat.mockResolvedValue('  null  ');
 
-    const result = await service.checkCorrection('Hi', 'Hi', 'English');
+    const result = await service.checkCorrection('Hi', 'Hi', 'en');
 
     expect(result.correctedText).toBeNull();
   });
@@ -54,7 +54,7 @@ describe('LearningAgentService - checkCorrection', () => {
   it('should handle "null" with surrounding quotes', async () => {
     llmService.chat.mockResolvedValue('"null"');
 
-    const result = await service.checkCorrection('Hi', 'Hi', 'English');
+    const result = await service.checkCorrection('Hi', 'Hi', 'en');
 
     expect(result.correctedText).toBeNull();
   });
@@ -62,7 +62,7 @@ describe('LearningAgentService - checkCorrection', () => {
   it('should strip surrounding quotes from corrected text', async () => {
     llmService.chat.mockResolvedValue('"I am fine."');
 
-    const result = await service.checkCorrection('How?', 'I fine', 'English');
+    const result = await service.checkCorrection('How?', 'I fine', 'en');
 
     expect(result.correctedText).toBe('I am fine.');
   });
@@ -70,18 +70,18 @@ describe('LearningAgentService - checkCorrection', () => {
   it('should pass correct prompt template variables', async () => {
     llmService.chat.mockResolvedValue('null');
 
-    await service.checkCorrection('AI msg', 'User msg', 'Japanese');
+    await service.checkCorrection('AI msg', 'User msg', 'ja');
 
     expect(promptLoader.loadPrompt).toHaveBeenCalledWith(
       'correction-check-prompt',
-      { previousAiMessage: 'AI msg', userMessage: 'User msg', targetLanguage: 'Japanese' },
+      { previousAiMessage: 'AI msg', userMessage: 'User msg', targetLanguage: 'ja' },
     );
   });
 
   it('should use GPT-4.1 Nano model with temperature 0.3', async () => {
     llmService.chat.mockResolvedValue('null');
 
-    await service.checkCorrection('Hi', 'Hi', 'English');
+    await service.checkCorrection('Hi', 'Hi', 'en');
 
     expect(llmService.chat).toHaveBeenCalledWith(
       expect.any(Array),
@@ -96,7 +96,7 @@ describe('LearningAgentService - checkCorrection', () => {
   it('should return null for empty string response', async () => {
     llmService.chat.mockResolvedValue('');
 
-    const result = await service.checkCorrection('Hi', 'Hi', 'English');
+    const result = await service.checkCorrection('Hi', 'Hi', 'en');
 
     expect(result.correctedText).toBeNull();
   });
@@ -104,7 +104,7 @@ describe('LearningAgentService - checkCorrection', () => {
   it('should handle case-insensitive "NULL" response', async () => {
     llmService.chat.mockResolvedValue('NULL');
 
-    const result = await service.checkCorrection('Hi', 'Hi', 'English');
+    const result = await service.checkCorrection('Hi', 'Hi', 'en');
 
     expect(result.correctedText).toBeNull();
   });

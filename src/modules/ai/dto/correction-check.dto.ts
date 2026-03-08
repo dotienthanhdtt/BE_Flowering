@@ -17,10 +17,10 @@ export class CorrectionCheckRequestDto {
   @MaxLength(4000)
   userMessage!: string;
 
-  @ApiProperty({ description: 'Target language of the text', example: 'Japanese' })
+  @ApiProperty({ description: 'Target language code', example: 'ja', maxLength: 10 })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(50)
+  @MaxLength(10)
   targetLanguage!: string;
 }
 
