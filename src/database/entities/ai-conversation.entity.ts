@@ -10,24 +10,42 @@ import {
 import { User } from './user.entity';
 import { Language } from './language.entity';
 
+export enum AiConversationType {
+  ANONYMOUS = 'anonymous',
+  AUTHENTICATED = 'authenticated',
+}
+
 @Entity('ai_conversations')
 export class AiConversation {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'user_id' })
-  user!: User;
+  user?: User | null;
 
-  @Column({ type: 'uuid', name: 'user_id' })
-  userId!: string;
+  @Column({ type: 'uuid', name: 'user_id', nullable: true })
+  userId?: string | null;
 
-  @ManyToOne(() => Language)
+  @ManyToOne(() => Language, { nullable: true })
   @JoinColumn({ name: 'language_id' })
-  language!: Language;
+  language?: Language | null;
 
-  @Column({ type: 'uuid', name: 'language_id' })
-  languageId!: string;
+  @Column({ type: 'uuid', name: 'language_id', nullable: true })
+  languageId?: string | null;
+
+  @Column({ type: 'varchar', length: 255, name: 'session_token', nullable: true, unique: true })
+  sessionToken?: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: AiConversationType,
+    default: AiConversationType.AUTHENTICATED,
+  })
+  type!: AiConversationType;
+
+  @Column({ type: 'timestamptz', name: 'expires_at', nullable: true })
+  expiresAt?: Date | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   title?: string;

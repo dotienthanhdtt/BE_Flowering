@@ -19,8 +19,12 @@ export class AppleStrategy {
         ignoreExpiration: false,
       });
 
+      if (!payload.email) {
+        throw new UnauthorizedException('Apple account must have a verified email');
+      }
+
       return {
-        email: payload.email ?? '',
+        email: payload.email,
         providerId: payload.sub,
       };
     } catch {

@@ -2,9 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, RefreshTokenDto, AppleAuthDto, AuthResponseDto } from './dto';
+import { RegisterDto, LoginDto, RefreshTokenDto, AppleAuthDto, GoogleAuthDto, AuthResponseDto } from './dto';
 import { User } from '../../database/entities/user.entity';
-import { GoogleUser } from './strategies/google.strategy';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -28,6 +27,8 @@ describe('AuthController', () => {
     passwordHash: 'hashed',
     authProvider: 'email',
     providerId: undefined,
+    googleProviderId: undefined,
+    appleProviderId: undefined,
     avatarUrl: undefined,
     nativeLanguageId: undefined,
     createdAt: new Date(),
@@ -43,7 +44,7 @@ describe('AuthController', () => {
           useValue: {
             register: jest.fn(),
             login: jest.fn(),
-            oauthLogin: jest.fn(),
+            googleLogin: jest.fn(),
             appleLogin: jest.fn(),
             refreshTokens: jest.fn(),
             logout: jest.fn(),
@@ -120,47 +121,52 @@ describe('AuthController', () => {
     });
   });
 
-  describe('googleAuth', () => {
-    it('should initiate Google OAuth flow', () => {
-      const result = controller.googleAuth();
-
-      expect(result).toBeUndefined();
-    });
-  });
-
-  describe('googleCallback', () => {
-    it('should handle Google OAuth callback successfully', async () => {
-      const googleUser: GoogleUser = {
-        providerId: 'google-123',
-        email: 'google@example.com',
+  describe('googleAuth (POST /auth/google)', () => {
+    it('should sign in with Google ID token successfully', async () => {
+      const googleAuthDto: GoogleAuthDto = {
+        idToken: 'google-id-token',
         displayName: 'Google User',
-        avatarUrl: 'https://avatar.url',
       };
 
-      const req = { user: googleUser } as any;
+      authService.googleLogin.mockResolvedValue(mockAuthResponse);
 
-      authService.oauthLogin.mockResolvedValue(mockAuthResponse);
+      const result = await controller.googleAuth(googleAuthDto);
 
-      const result = await controller.googleCallback(req);
-
-      expect(authService.oauthLogin).toHaveBeenCalledWith(googleUser, 'google');
+      expect(authService.googleLogin).toHaveBeenCalledWith(
+        googleAuthDto.idToken,
+        googleAuthDto.displayName,
+        googleAuthDto.sessionToken,
+      );
       expect(result).toEqual(mockAuthResponse);
     });
 
-    it('should throw ConflictException if email exists with different provider', async () => {
-      const googleUser: GoogleUser = {
-        providerId: 'google-123',
-        email: 'existing@example.com',
-        displayName: 'Google User',
+    it('should throw UnauthorizedException with invalid Google ID token', async () => {
+      const googleAuthDto: GoogleAuthDto = {
+        idToken: 'invalid-token',
       };
 
-      const req = { user: googleUser } as any;
-
-      authService.oauthLogin.mockRejectedValue(
-        new ConflictException('Email already registered with email'),
+      authService.googleLogin.mockRejectedValue(
+        new UnauthorizedException('Invalid Google ID token'),
       );
 
-      await expect(controller.googleCallback(req)).rejects.toThrow(ConflictException);
+      await expect(controller.googleAuth(googleAuthDto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should pass sessionToken to googleLogin for onboarding linking', async () => {
+      const googleAuthDto: GoogleAuthDto = {
+        idToken: 'google-id-token',
+        sessionToken: 'onboard-sess-uuid',
+      };
+
+      authService.googleLogin.mockResolvedValue(mockAuthResponse);
+
+      await controller.googleAuth(googleAuthDto);
+
+      expect(authService.googleLogin).toHaveBeenCalledWith(
+        'google-id-token',
+        undefined,
+        'onboard-sess-uuid',
+      );
     });
   });
 
@@ -178,6 +184,7 @@ describe('AuthController', () => {
       expect(authService.appleLogin).toHaveBeenCalledWith(
         appleAuthDto.idToken,
         appleAuthDto.displayName,
+        appleAuthDto.sessionToken,
       );
       expect(result).toEqual(mockAuthResponse);
     });
@@ -191,7 +198,7 @@ describe('AuthController', () => {
 
       const result = await controller.appleAuth(appleAuthDto);
 
-      expect(authService.appleLogin).toHaveBeenCalledWith(appleAuthDto.idToken, undefined);
+      expect(authService.appleLogin).toHaveBeenCalledWith(appleAuthDto.idToken, undefined, undefined);
       expect(result).toEqual(mockAuthResponse);
     });
 

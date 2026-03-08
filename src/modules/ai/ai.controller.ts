@@ -4,6 +4,7 @@ import {
   Get,
   Body,
   Param,
+  Req,
   Sse,
   UseInterceptors,
   UseGuards,
@@ -11,6 +12,7 @@ import {
   ParseUUIDPipe,
   BadRequestException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import {
@@ -24,7 +26,9 @@ import {
 import { Observable, Subject } from 'rxjs';
 import { LearningAgentService } from './services/learning-agent.service';
 import { WhisperTranscriptionService } from './services/whisper-transcription.service';
+import { TranslationService } from './services/translation.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
 import { User } from '../../database/entities';
 import {
   ChatRequestDto,
@@ -32,10 +36,14 @@ import {
   CreateConversationDto,
   GrammarCheckRequestDto,
   GrammarCheckResult,
+  CorrectionCheckRequestDto,
+  CorrectionCheckResponseDto,
   GenerateExerciseRequestDto,
   ExerciseResult,
   PronunciationAssessmentRequestDto,
   PronunciationResult,
+  TranslateRequestDto,
+  TranslateType,
 } from './dto';
 
 // Max audio file size: 10MB
@@ -54,6 +62,7 @@ export class AiController {
   constructor(
     private learningAgent: LearningAgentService,
     private whisperService: WhisperTranscriptionService,
+    private translationService: TranslationService,
   ) {}
 
   @Post('chat')
@@ -90,6 +99,20 @@ export class AiController {
   @ApiResponse({ status: 200, type: GrammarCheckResult })
   async checkGrammar(@Body() dto: GrammarCheckRequestDto): Promise<GrammarCheckResult> {
     return this.learningAgent.checkGrammar(dto.text, dto.targetLanguage, dto.model);
+  }
+
+  @Post('chat/correct')
+  @OptionalAuth()
+  @ApiOperation({ summary: 'Check grammar/vocabulary of user chat reply' })
+  @ApiResponse({ status: 200, type: CorrectionCheckResponseDto })
+  async checkCorrection(
+    @Body() dto: CorrectionCheckRequestDto,
+  ): Promise<CorrectionCheckResponseDto> {
+    return this.learningAgent.checkCorrection(
+      dto.previousAiMessage,
+      dto.userMessage,
+      dto.targetLanguage,
+    );
   }
 
   @Post('exercises/generate')
@@ -148,6 +171,32 @@ export class AiController {
 
     // Include transcribed text in response
     return { ...result, transcribedText };
+  }
+
+  @Post('translate')
+  @OptionalAuth()
+  @ApiOperation({ summary: 'Translate a word or sentence (JWT or sessionToken)' })
+  @ApiResponse({ status: 200, description: 'Translation result' })
+  async translate(@Req() req: Request, @Body() dto: TranslateRequestDto) {
+    const user = req.user as User | null;
+    const userId = user?.id ?? null;
+
+    if (dto.type === TranslateType.WORD) {
+      return this.translationService.translateWord(
+        dto.text!,
+        dto.sourceLang,
+        dto.targetLang,
+        userId,
+        dto.sessionToken,
+      );
+    }
+    return this.translationService.translateSentence(
+      dto.messageId!,
+      dto.sourceLang,
+      dto.targetLang,
+      userId,
+      dto.sessionToken,
+    );
   }
 
   @Post('conversations')

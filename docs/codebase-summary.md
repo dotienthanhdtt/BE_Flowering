@@ -1,20 +1,20 @@
 # Codebase Summary
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-03-08
 **Generated from:** repomix-output.xml
 
 ## Overview
 
-AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 6 feature modules supporting authentication, AI-driven learning, subscriptions, and push notifications.
+AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 8 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, and push notifications.
 
 ## Metrics
 
-- **Total TypeScript Files:** 99 files in src/
-- **Code Lines:** ~5,356 LOC in src/
-- **Modules:** 6 feature modules (auth, user, language, ai, subscription, notification)
-- **Database Entities:** 12 TypeORM entities
-- **API Endpoints:** 20+ REST endpoints
-- **External Integrations:** 7 (Supabase, RevenueCat, Firebase, OpenAI, Anthropic, Google AI, Langfuse)
+- **Total TypeScript Files:** 129 files in src/
+- **Code Lines:** ~7,500 LOC in src/
+- **Modules:** 8 feature modules
+- **Database Entities:** 14 TypeORM entities
+- **API Endpoints:** 30+ REST endpoints
+- **External Integrations:** 8 (Supabase, RevenueCat, Firebase, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
 
 ## Tech Stack
 
@@ -22,637 +22,324 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 |----------|-----------|
 | Framework | NestJS 11.0 |
 | Language | TypeScript 5.7 |
-| Runtime | Node.js 18+ |
+| Runtime | Node.js 20+ |
 | Database | PostgreSQL 14+ (Supabase) |
 | ORM | TypeORM 0.3.28 |
 | Auth | JWT, Passport.js, bcrypt |
-| AI | LangChain, OpenAI, Anthropic, Google AI |
+| AI | LangChain, multi-provider LLM |
 | Subscriptions | RevenueCat |
 | Notifications | Firebase Admin SDK |
 | Observability | Langfuse, Sentry |
 | Validation | class-validator, class-transformer, Joi |
-| Documentation | Swagger (NestJS OpenAPI) |
-| Rate Limiting | @nestjs/throttler |
+| Monitoring | HTTP logger middleware |
 
-## Project Structure
+## Module Structure
 
-```
-src/
-├── main.ts                     # Entry point, Swagger setup, global config
-├── app.module.ts               # Root module with global JwtAuthGuard
-├── app.controller.ts           # Health check endpoint
-├── app.service.ts              # Basic app service
-│
-├── common/                     # Cross-cutting concerns
-│   ├── decorators/
-│   │   ├── current-user.decorator.ts      # @CurrentUser() - Extract user from JWT
-│   │   └── public-route.decorator.ts      # @Public() - Bypass global auth
-│   ├── dto/
-│   │   ├── base-response.dto.ts           # {code: 1, message, data}
-│   │   └── pagination.dto.ts              # Pagination query params
-│   ├── filters/
-│   │   └── all-exceptions.filter.ts       # Global exception handler
-│   ├── guards/
-│   │   └── [deprecated guards]            # Migrated to modules
-│   └── interceptors/
-│       └── response-transform.interceptor.ts  # Wrap responses in BaseResponseDto
-│
-├── config/                     # Configuration management
-│   ├── app-configuration.ts               # Config factory for ConfigModule
-│   └── environment-validation-schema.ts   # Joi schema for .env validation
-│
-├── database/                   # Database infrastructure
-│   ├── entities/              # TypeORM entities (12 total)
-│   │   ├── user.entity.ts
-│   │   ├── refresh-token.entity.ts
-│   │   ├── language.entity.ts
-│   │   ├── user-language.entity.ts
-│   │   ├── lesson.entity.ts
-│   │   ├── exercise.entity.ts
-│   │   ├── user-progress.entity.ts
-│   │   ├── user-exercise-attempt.entity.ts
-│   │   ├── subscription.entity.ts
-│   │   ├── ai-conversation.entity.ts
-│   │   ├── ai-conversation-message.entity.ts
-│   │   └── device-token.entity.ts
-│   ├── migrations/            # TypeORM migrations (timestamped)
-│   │   └── 1706976000000-initial-schema.ts
-│   ├── database.module.ts     # TypeORM configuration
-│   ├── supabase-storage.service.ts  # Supabase Storage for file uploads
-│   └── typeorm-data-source.ts       # CLI data source for migrations
-│
-├── swagger/                    # API documentation
-│   └── swagger-documentation-setup.ts  # Swagger config
-│
-└── modules/                    # Feature modules (domain-driven)
-    ├── auth/                  # Authentication & authorization
-    ├── user/                  # User profile management
-    ├── language/              # Language preferences & proficiency
-    ├── ai/                    # AI-powered learning features
-    ├── subscription/          # RevenueCat subscription management
-    └── notification/          # Firebase push notifications
-```
+### 1. Auth Module (24 files, ~600 LOC)
 
-## Module Details
-
-### 1. Auth Module (`src/modules/auth/`)
-
-**Purpose:** User authentication via email/password, Google OAuth, Apple Sign-In
-
-**Key Components:**
-- `auth.service.ts` - Registration, login, token refresh, OAuth validation
-- `jwt.strategy.ts` - Passport JWT strategy (validates tokens)
-- `google.strategy.ts` - Google OAuth 2.0 strategy
-- `apple.strategy.ts` - Apple Sign-In strategy
-- `jwt-auth.guard.ts` - Global guard (applied via APP_GUARD)
-- `google-auth.guard.ts` - Google OAuth flow guard
-
-**DTOs:** `register.dto.ts`, `login.dto.ts`, `refresh-token.dto.ts`, `apple-auth.dto.ts`
+**Purpose:** User authentication via email/password, Google ID token, Apple Sign-In with account auto-linking
 
 **Endpoints:**
-- `POST /auth/register` - Email/password signup
-- `POST /auth/login` - Email/password login
-- `GET /auth/google` - Initiate Google OAuth
-- `GET /auth/google/callback` - Google OAuth callback
-- `POST /auth/apple` - Apple Sign-In callback
-- `POST /auth/refresh` - Refresh access token
-- `POST /auth/logout` - Logout (invalidate refresh token)
+- POST /auth/register, /login, /google, /apple, /refresh, /logout
+- POST /auth/forgot-password, /verify-otp, /reset-password
+
+**Key Features:**
+- Composite refresh tokens (uuid:hex format) for O(1) validation
+- Auto-linking: OAuth accounts merge with existing email matches
+- Provider-specific IDs (`googleProviderId`, `appleProviderId`) prevent duplicates
+- Password reset: OTP (10min) + reset token (15min)
 
 **Security:**
-- bcrypt password hashing (6.0.0)
-- JWT tokens (HS256, 7d expiry)
-- Refresh token rotation with device tracking
-- OAuth token validation via provider APIs
+- bcrypt password hashing
+- JWT HS256 (7d expiry)
+- Google Auth Library for ID token verification
 
-### 2. User Module (`src/modules/user/`)
+### 2. AI Module (~30 files, ~800 LOC)
 
-**Purpose:** User profile management
-
-**Key Components:**
-- `user.service.ts` - Profile CRUD operations
-- `user.controller.ts` - Profile endpoints
-
-**DTOs:** `update-user-profile.dto.ts`
+**Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing
 
 **Endpoints:**
-- `GET /users/me` - Get current user profile
-- `PATCH /users/me` - Update profile (name, profile_picture)
+- POST /ai/chat, /grammar/check, /exercises/generate, /pronunciation/assess
+- POST /ai/conversations, GET /ai/conversations/:id/messages
+- SSE /ai/chat/stream (Server-Sent Events)
 
-**Relations:** User → UserLanguage, Subscription, DeviceToken, AiConversation, RefreshToken
+**Supported Models:** GPT-4o, GPT-4o-mini, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash
 
-### 3. Language Module (`src/modules/language/`)
+**Rate Limiting:** 20 req/min, 100 req/hr per user
+
+**Key Features:**
+- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini)
+- Prompts stored as markdown in prompts/ directory
+- Whisper audio transcription
+- Langfuse tracing for all AI requests
+- Async processing for long-running tasks
+
+### 3. Onboarding Module (11 files, ~280 LOC)
+
+**Purpose:** Anonymous session-based chat for new users
+
+**Endpoints:**
+- POST /onboarding/start, /onboarding/chat, /onboarding/complete
+
+**Config:**
+- maxTurns: 10
+- sessionTtlDays: 7
+- model: GPT-4o-mini
+- maxTokens: 1024
+- temperature: 0.7
+
+**Features:**
+- No authentication required
+- Profile extraction via AI
+- Scenario generation
+- Session-based state management
+
+### 4. Language Module (10 files, ~400 LOC)
 
 **Purpose:** Language catalog and user language preferences
 
-**Key Components:**
-- `language.service.ts` - Language management, proficiency tracking
-- `language.controller.ts` - Language endpoints
-
-**DTOs:** `add-user-language.dto.ts`, `update-user-language.dto.ts`
-
 **Endpoints:**
-- `GET /language` - List all available languages (public)
-- `GET /language/user` - Get user's learning languages
-- `POST /language/user` - Add language to learning list
-- `PATCH /language/user/:languageId` - Update proficiency level
-- `DELETE /language/user/:languageId` - Remove language from list
+- GET /languages (public, filterable by type)
+- GET/POST /languages/user
+- PATCH /languages/user/native
+- PATCH/DELETE /languages/user/:id
 
 **Entities:**
-- `Language` - Available languages (e.g., English, Spanish)
-- `UserLanguage` - User's target languages with proficiency level
+- Language: Available languages with `isNativeAvailable`, `isLearningAvailable`, `flagUrl`
+- UserLanguage: User's learning languages with proficiency level
 
-### 4. AI Module (`src/modules/ai/`)
+### 5. User Module (5 files, ~130 LOC)
 
-**Purpose:** AI-powered language learning features using LangChain
-
-**Architecture:**
-- Multi-provider support (OpenAI, Anthropic, Google AI)
-- LangChain agent framework for complex workflows
-- Langfuse tracing for observability
-- SSE streaming for real-time chat responses
-
-**Key Services:**
-- `learning-agent.service.ts` - Main orchestration (chat, grammar, exercises)
-- `unified-llm.service.ts` - Multi-provider LLM abstraction
-- `openai-llm.provider.ts` - OpenAI GPT-4, GPT-3.5
-- `anthropic-llm.provider.ts` - Claude Sonnet, Opus, Haiku
-- `gemini-llm.provider.ts` - Gemini Pro, Flash
-- `prompt-loader.service.ts` - Load system prompts from files
-- `langfuse-tracing.service.ts` - Request tracing & analytics
-- `whisper-transcription.service.ts` - Audio → text (pronunciation assessment)
-
-**10 Supported Models:**
-- OpenAI: gpt-4, gpt-4-turbo, gpt-3.5-turbo
-- Anthropic: claude-sonnet-4-20250514, claude-opus-4, claude-haiku-3-5
-- Google AI: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash, gemini-1.0-pro
-
-**DTOs:** `chat-request.dto.ts`, `grammar-check-request.dto.ts`, `generate-exercise-request.dto.ts`, `pronunciation-assessment-request.dto.ts`, `create-conversation.dto.ts`
+**Purpose:** User profile management
 
 **Endpoints:**
-- `POST /ai/chat` - Chat with AI tutor (request/response)
-- `SSE /ai/chat/stream` - Stream chat response (Server-Sent Events)
-- `POST /ai/grammar/check` - Grammar correction & feedback
-- `POST /ai/exercises/generate` - Generate language exercises
-- `POST /ai/pronunciation/assess` - Assess pronunciation from audio upload
-- `POST /ai/conversations` - Start new conversation session
-- `GET /ai/conversations/:id/messages` - Get conversation history
+- GET /users/me
+- PATCH /users/me
 
-**Rate Limiting:** 20 req/min, 100 req/hr (via @nestjs/throttler)
+### 6. Subscription Module (6 files, ~400 LOC)
 
-**Entities:**
-- `AiConversation` - Chat session metadata
-- `AiConversationMessage` - Individual messages (user/assistant/system)
-
-### 5. Subscription Module (`src/modules/subscription/`)
-
-**Purpose:** Cross-platform subscription management via RevenueCat
-
-**Key Components:**
-- `subscription.service.ts` - Subscription CRUD, status checks
-- `subscription.controller.ts` - User subscription endpoints
-- `revenuecat-webhook.controller.ts` - Webhook event processing
-
-**DTOs:** `revenuecat-webhook.dto.ts`
+**Purpose:** RevenueCat subscription management
 
 **Endpoints:**
-- `GET /subscriptions/me` - Get current subscription status
-- `POST /webhooks/revenuecat` - RevenueCat webhook (public, bearer auth)
+- GET /subscriptions/me
+- POST /webhooks/revenuecat (public, bearer auth)
 
-**Subscription Plans:**
-- `free` - Default tier
-- `monthly` - Monthly recurring
-- `yearly` - Annual recurring
-- `lifetime` - One-time purchase
+**Webhook Events:** INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, PRODUCT_CHANGE
 
-**Subscription Status:**
-- `active` - Active subscription
-- `trial` - Trial period
-- `expired` - Expired subscription
-- `cancelled` - Cancelled (may still be active until period end)
+**Plans:** free, monthly, yearly, lifetime
+**Status:** active, trial, expired, cancelled
 
-**Webhook Events Handled:**
-- `INITIAL_PURCHASE` - New subscription created
-- `RENEWAL` - Subscription renewed
-- `CANCELLATION` - Subscription cancelled
-- `EXPIRATION` - Subscription expired
-- `PRODUCT_CHANGE` - Plan changed
+**Security:** Timing-safe Bearer token validation
 
-**Security:** Bearer token validation using `REVENUECAT_WEBHOOK_SECRET`
+### 7. Notification Module (6 files, ~400 LOC)
 
-### 6. Notification Module (`src/modules/notification/`)
-
-**Purpose:** Push notifications via Firebase Cloud Messaging (FCM)
-
-**Key Components:**
-- `notification.service.ts` - Device token management
-- `firebase.service.ts` - Firebase Admin SDK wrapper
-- `notification.controller.ts` - Device registration endpoints
-
-**DTOs:** `register-device-token.dto.ts`
+**Purpose:** Firebase FCM push notifications
 
 **Endpoints:**
-- `POST /notifications/devices` - Register FCM device token
-- `DELETE /notifications/devices/:token` - Unregister device
+- POST /notifications/devices
+- DELETE /notifications/devices/:token
 
-**Device Platforms:**
-- `ios` - iOS devices
-- `android` - Android devices
-- `web` - Web push notifications
+**Platforms:** ios, android, web
 
 **Features:**
 - Multi-device support per user
 - Automatic token deduplication
-- Device name tracking for user management
+- Device name tracking
 - Last used timestamp for cleanup
 
-**Entity:** `DeviceToken` - FCM token storage with user relation
+### 8. Email Module (2 files, ~45 LOC)
 
-## Database Schema
+**Purpose:** Nodemailer SMTP for OTP delivery
 
-### Entity Relationships
+**Features:**
+- OTP email sending for password reset
+- Configured via SMTP environment variables
 
-```
-User (1) ──< (N) UserLanguage
-User (1) ──< (1) Subscription
-User (1) ──< (N) DeviceToken
-User (1) ──< (N) AiConversation
-User (1) ──< (N) RefreshToken
-User (1) ──< (N) UserProgress
-User (1) ──< (N) UserExerciseAttempt
+## Database Schema (14 Entities)
 
-Language (1) ──< (N) UserLanguage
-Language (1) ──< (N) Lesson
+**Core:** User, Language, UserLanguage
+**Content:** Lesson, Exercise
+**Progress:** UserProgress, UserExerciseAttempt
+**AI:** AiConversation, AiConversationMessage
+**Infrastructure:** Subscription, DeviceToken, RefreshToken, PasswordReset
 
-Lesson (1) ──< (N) Exercise
-Exercise (1) ──< (N) UserExerciseAttempt
+### User Entity Updates
+- `googleProviderId` - OAuth account linking
+- `appleProviderId` - OAuth account linking
 
-AiConversation (1) ──< (N) AiConversationMessage
-```
+### AiConversation Entity Updates
+- `type` - ANONYMOUS or AUTHENTICATED
+- `sessionToken` - Session identifier for anonymous users
+- `expiresAt` - Session expiration (7 days)
+- `messageCount` - Turn counter
+- `metadata` - JSONB for flexible data storage
 
-### Table Details
-
-**users**
-- PK: `id` (UUID)
-- Unique: `email`
-- Fields: `password_hash`, `name`, `profile_picture`, `email_verified`, `created_at`, `updated_at`
-
-**refresh_tokens**
-- PK: `id` (UUID)
-- FK: `user_id` → users(id) CASCADE
-- Unique: `token`
-- Fields: `device_info`, `expires_at`, `created_at`
-
-**languages**
-- PK: `id` (UUID)
-- Unique: `code` (e.g., 'en', 'es')
-- Fields: `name`, `native_name`, `flag_emoji`, `is_active`
-
-**user_languages**
-- PK: `id` (UUID)
-- FK: `user_id` → users(id) CASCADE, `language_id` → languages(id) CASCADE
-- Unique: (user_id, language_id)
-- Fields: `proficiency_level` (beginner, intermediate, advanced, native), `started_at`
-
-**subscriptions**
-- PK: `id` (UUID)
-- FK: `user_id` → users(id) CASCADE
-- Unique: `user_id`, `revenuecat_id`
-- Fields: `plan`, `status`, `current_period_start`, `current_period_end`, `cancel_at_period_end`
-
-**device_tokens**
-- PK: `id` (UUID)
-- FK: `user_id` → users(id) CASCADE
-- Unique: `token`
-- Fields: `platform` (ios, android, web), `device_name`, `last_used_at`
-
-**ai_conversations**
-- PK: `id` (UUID)
-- FK: `user_id` → users(id) CASCADE
-- Fields: `title`, `language`, `session_metadata`, `created_at`, `updated_at`
-
-**ai_conversation_messages**
-- PK: `id` (UUID)
-- FK: `conversation_id` → ai_conversations(id) CASCADE
-- Fields: `role` (user, assistant, system), `content`, `model_used`, `token_count`, `created_at`
-
-**lessons** (future content structure)
-- PK: `id` (UUID)
-- FK: `language_id` → languages(id) CASCADE
-- Fields: `title`, `description`, `difficulty_level`, `order_index`, `is_published`
-
-**exercises** (future content structure)
-- PK: `id` (UUID)
-- FK: `lesson_id` → lessons(id) CASCADE
-- Fields: `type`, `prompt`, `expected_answer`, `points`, `order_index`
-
-**user_progress** (future tracking)
-- PK: `id` (UUID)
-- FK: `user_id` → users(id) CASCADE, `lesson_id` → lessons(id) CASCADE
-- Fields: `status` (not_started, in_progress, completed), `score`, `completed_at`
-
-**user_exercise_attempts** (future tracking)
-- PK: `id` (UUID)
-- FK: `user_id` → users(id) CASCADE, `exercise_id` → exercises(id) CASCADE
-- Fields: `user_answer`, `is_correct`, `points_earned`, `feedback`, `attempted_at`
-
-### Row-Level Security (RLS)
-
-All tables implement Supabase RLS policies:
-- Users can only SELECT/UPDATE their own data (WHERE user_id = auth.uid())
-- Public access blocked (service role key required for backend)
-- Webhook endpoints use service role credentials to bypass RLS
-- CASCADE deletion ensures data cleanup on user account removal
+### PasswordReset Entity (New)
+- `otpHash` - Hashed OTP
+- `resetTokenHash` - Hashed reset token
+- `attempts` - Failed attempt counter
+- `expiresAt` - Token expiration
 
 ## Configuration
 
-### Environment Variables (see .env.example)
+**Environment Variables:** .env validated via Joi schema
 
-**Application:**
-- `NODE_ENV` - Environment (development, production)
-- `PORT` - Server port (default: 3000)
-- `CORS_ALLOWED_ORIGINS` - Comma-separated origins
+**Key Variables:**
+- NODE_ENV, PORT
+- DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+- JWT_SECRET, JWT_EXPIRES_IN (default: 7d)
+- OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY
+- LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
+- SENTRY_DSN
+- REVENUECAT_API_KEY, REVENUECAT_WEBHOOK_SECRET
+- FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
+- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
 
-**Database (Supabase):**
-- `DATABASE_URL` - PostgreSQL connection string
-- `SUPABASE_URL` - Supabase project URL
-- `SUPABASE_ANON_KEY` - Anon key (unused, for future client SDK)
-- `SUPABASE_SERVICE_ROLE_KEY` - Service role key (bypasses RLS)
+## Global Infrastructure
 
-**Authentication:**
-- `JWT_SECRET` - JWT signing secret (min 32 chars)
-- `JWT_EXPIRES_IN` - Token expiration (default: 7d)
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`
-- `APPLE_CLIENT_ID`
+### Middleware & Interceptors
+- **ValidationPipe:** Auto-transform DTOs, whitelist unknown properties
+- **ResponseTransformInterceptor:** Wraps all responses in `{code: 1, message, data}` format
+- **AllExceptionsFilter:** Global exception handler with Sentry integration for 5xx
+- **HttpLoggerMiddleware:** Logs incoming requests and responses
+- **JwtAuthGuard:** Global auth (bypass with @Public())
+- **CORS:** Configured via CORS_ALLOWED_ORIGINS env var
 
-**Subscriptions (RevenueCat):**
-- `REVENUECAT_API_KEY` - REST API key
-- `REVENUECAT_WEBHOOK_SECRET` - Webhook authorization secret
-
-**Push Notifications (Firebase):**
-- `FIREBASE_PROJECT_ID`
-- `FIREBASE_CLIENT_EMAIL` - Service account email
-- `FIREBASE_PRIVATE_KEY` - Service account private key (with \n escapes)
-
-**AI Services (all optional):**
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `GOOGLE_AI_API_KEY`
-- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`
-
-**Monitoring (optional):**
-- `SENTRY_DSN`
-
-### Validation
-
-Environment validation via Joi schema (`environment-validation-schema.ts`):
-- Required variables throw errors on startup
-- Type validation (string, number, boolean)
-- Default values for optional variables
-- Regex validation for secrets (e.g., JWT_SECRET min length)
-
-## Global Middleware & Interceptors
-
-**Applied in main.ts:**
-
-1. **ValidationPipe** (global)
-   - `transform: true` - Auto-transform DTOs
-   - `whitelist: true` - Strip unknown properties
-   - `forbidNonWhitelisted: true` - Throw on unknown properties
-   - `enableImplicitConversion: true` - Auto-convert types
-
-2. **ResponseTransformInterceptor** (global)
-   - Wraps all responses in BaseResponseDto format:
-     ```typescript
-     { code: 1, message: "Success", data: {...} }
-     ```
-
-3. **AllExceptionsFilter** (global)
-   - Catches all exceptions
-   - Returns BaseResponseDto with error details:
-     ```typescript
-     { code: 0, message: "Error message", data: null }
-     ```
-
-4. **JwtAuthGuard** (global via APP_GUARD)
-   - Protects all endpoints by default
-   - Bypass with `@Public()` decorator
-   - Extracts user via `@CurrentUser()` decorator
-
-5. **CORS** (configured)
-   - Origins from `CORS_ALLOWED_ORIGINS` env var
-   - Credentials: true
-   - Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
-
-## API Documentation
-
-**Swagger UI:** Available at `/api/docs` in non-production environments
-
-**Features:**
-- Auto-generated from decorators (@ApiTags, @ApiOperation, @ApiResponse)
-- Bearer token authentication UI
-- Request/response schemas
-- DTO validation details
-
-**Setup:** `swagger-documentation-setup.ts` configures DocumentBuilder
-
-## Security Patterns
-
-### Authentication Flow
-
-1. **Registration:**
-   - Email/password → bcrypt hash → store in DB
-   - Generate JWT access token + refresh token
-   - Return tokens to client
-
-2. **Login:**
-   - Validate credentials (bcrypt.compare)
-   - Generate new token pair
-   - Store refresh token with device info
-
-3. **Token Refresh:**
-   - Validate refresh token from DB
-   - Generate new access token
-   - Rotate refresh token (delete old, create new)
-
-4. **OAuth (Google/Apple):**
-   - Redirect to provider
-   - Validate OAuth token via provider API
-   - Find or create user
-   - Generate JWT token pair
-
-### Webhook Security
-
-- Bearer token authorization header
-- Timing-safe comparison (`crypto.timingSafeEqual`)
-- Request body validation via DTOs
-- Async processing (responds in <60s)
-
-### Input Validation
-
-All DTOs use class-validator:
-```typescript
-export class ChatRequestDto {
-  @IsString()
-  @IsNotEmpty()
-  message: string;
-
-  @IsOptional()
-  @IsEnum(['gpt-4', 'claude-sonnet-4', 'gemini-2.0-flash-exp'])
-  model?: string;
+### Response Format
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {...}
 }
 ```
 
-## Testing
-
-### Unit Tests
-
-- Framework: Jest
-- Location: `*.spec.ts` files next to source
-- Coverage: Auth module has comprehensive tests (auth.service.spec.ts)
-- Run: `npm run test`
-
-### E2E Tests
-
-- Config: `test/jest-e2e.json`
-- Location: `test/` directory
-- Run: `npm run test:e2e`
-
-### Test Commands
-
-```bash
-npm run test              # Unit tests
-npm run test:watch        # Watch mode
-npm run test:cov          # Coverage report
-npm run test:debug        # Debug mode
-npm run test:e2e          # E2E tests
+### Error Format
+```json
+{
+  "code": 0,
+  "message": "Error description",
+  "data": null
+}
 ```
 
-## Development Workflow
+## Security Patterns
 
-### Setup
+**Authentication Flow:**
+1. Email/password → bcrypt validation
+2. Generate JWT + composite refresh token
+3. Store refresh token with device info
+4. On refresh: validate token, generate new pair
 
+**OAuth Flow (Google/Apple):**
+1. Client obtains ID token via SDK
+2. POST /auth/{google|apple} with idToken
+3. Backend verifies via provider library
+4. Auto-link to existing email or create new account
+5. Generate JWT token pair
+
+**Webhook Security (RevenueCat):**
+1. Bearer token in Authorization header
+2. Timing-safe comparison vs REVENUECAT_WEBHOOK_SECRET
+3. DTO validation
+4. Respond <60s
+5. Async processing via setImmediate()
+
+**Database Security:**
+- Row-Level Security (RLS) on all tables
+- Service role key for backend operations
+- User data isolation via user_id FK
+- CASCADE deletion on user removal
+
+## API Documentation
+
+**Swagger UI:** Available at `/api/docs` in non-production
+
+**Endpoints covered:**
+- Auth (registration, login, OAuth, refresh, password reset)
+- User profile management
+- AI features (chat, grammar, exercises, pronunciation)
+- Onboarding chat
+- Languages (CRUD, user preferences)
+- Subscriptions (status, webhooks)
+- Notifications (device registration)
+
+## Testing
+
+**Framework:** Jest
+**Unit Tests:** `.spec.ts` files next to source
+**E2E Tests:** `test/` directory
+**Commands:**
+- `npm run test` - Unit tests
+- `npm run test:watch` - Watch mode
+- `npm run test:cov` - Coverage report
+- `npm run test:e2e` - E2E tests
+
+## Development Commands
+
+**Startup:**
 ```bash
 npm install
 cp .env.example .env
-# Edit .env with actual credentials
 npm run migration:run
 npm run start:dev
 ```
 
-### Database Migrations
-
+**Database:**
 ```bash
-npm run migration:generate -- src/database/migrations/MigrationName  # Generate from entities
-npm run migration:run                                                # Apply pending
-npm run migration:revert                                             # Rollback last
+npm run migration:generate -- src/database/migrations/Name
+npm run migration:run
+npm run migration:revert
 ```
 
-### Code Quality
-
+**Code Quality:**
 ```bash
-npm run lint              # ESLint check + auto-fix
-npm run format            # Prettier format
-npm run build             # TypeScript build check
+npm run lint
+npm run format
+npm run build
 ```
-
-### Scripts
-
-- `npm run start` - Production mode
-- `npm run start:dev` - Development with hot reload
-- `npm run start:debug` - Debug mode with inspector
-- `npm run start:prod` - Production build execution
 
 ## Key Dependencies
 
-**Core Framework:**
-- `@nestjs/core`, `@nestjs/common` - NestJS framework
-- `@nestjs/config` - Configuration management
-- `@nestjs/jwt`, `@nestjs/passport` - Authentication
-- `@nestjs/typeorm` - Database ORM
-- `@nestjs/swagger` - API documentation
-- `@nestjs/throttler` - Rate limiting
+**Framework:** @nestjs/core, @nestjs/common, @nestjs/config, @nestjs/jwt, @nestjs/passport, @nestjs/typeorm, @nestjs/swagger, @nestjs/throttler
 
-**Database:**
-- `typeorm` - ORM
-- `pg` - PostgreSQL driver
-- `@supabase/supabase-js` - Supabase client
+**Database:** typeorm, pg, @supabase/supabase-js
 
-**Authentication:**
-- `passport`, `passport-jwt`, `passport-google-oauth20` - Auth strategies
-- `bcrypt` - Password hashing
-- `apple-signin-auth` - Apple OAuth
+**Auth:** passport, passport-jwt, google-auth-library, bcrypt, apple-signin-auth
 
-**AI:**
-- `langchain`, `@langchain/core` - LangChain framework
-- `@langchain/openai`, `@langchain/anthropic`, `@langchain/google-genai` - LLM providers
-- `openai` - OpenAI SDK
-- `langfuse-langchain` - Tracing
+**AI:** langchain, @langchain/core, @langchain/openai, @langchain/anthropic, @langchain/google-genai, openai, langfuse-langchain
 
-**External Services:**
-- `firebase-admin` - FCM push notifications
-- Revenue Cat integration (HTTP client only, no SDK)
+**Services:** firebase-admin, nodemailer
 
-**Validation:**
-- `class-validator`, `class-transformer` - DTO validation
-- `joi` - Environment validation
+**Validation:** class-validator, class-transformer, joi
+
+**Observability:** @sentry/node
 
 ## Monitoring & Observability
 
-### Langfuse Tracing
+**Sentry:** Captures 5xx exceptions, error tracking in production (configurable trace sample)
 
-- Tracks all AI requests
-- Records: prompt, response, model, tokens, latency
-- Accessible via Langfuse dashboard
-- Integration: `langfuse-tracing.service.ts`
+**Langfuse:** All AI requests traced with prompt, response, model, tokens, latency
 
-### Sentry Error Tracking
+**HTTP Logger:** Logs all incoming requests and outgoing responses
 
-- Captures uncaught exceptions
-- Production error monitoring
-- Configuration: `SENTRY_DSN` env var
-
-### Application Logging
-
-- NestJS built-in Logger
-- Contextual logging with module names
-- Log levels: log, error, warn, debug, verbose
+**NestJS Logger:** Contextual logging with module names, log levels (log, error, warn, debug, verbose)
 
 ## Deployment Considerations
 
-### Build
-
-```bash
-npm run build            # Compiles TypeScript to dist/
-npm run start:prod       # Runs built code
-```
-
-### Environment
-
-- Node.js 18+ required
-- PostgreSQL connection required
-- At least one AI provider API key recommended
-- Firebase service account for push notifications
-- RevenueCat webhook endpoint must be publicly accessible
-
-### Migrations
-
-- Run `npm run migration:run` before starting production server
-- Migrations are idempotent (safe to re-run)
-
-### Horizontal Scaling
-
-- Stateless design (no in-memory session storage)
-- Database connection pooling via TypeORM
-- Refresh tokens stored in DB (multi-instance safe)
-- No shared file storage (use Supabase Storage for uploads)
+- **Build:** `npm run build` compiles TypeScript to dist/
+- **Start:** `npm run start:prod` runs built code
+- **Migrations:** Run `npm run migration:run` before startup
+- **Scaling:** Stateless design, DB connection pooling, refresh tokens in DB (multi-instance safe)
+- **Files:** Use Supabase Storage for uploads (no local file storage)
 
 ## Future Enhancements
 
-- Rate limiting per user (currently per IP via @nestjs/throttler)
-- Redis caching layer for frequently accessed data
-- Background job processing (Bull/BullMQ) for async tasks
+- Rate limiting per user (currently per IP)
+- Redis caching layer
+- Background job processing (Bull/BullMQ)
 - Email notification service (SendGrid/Mailgun)
-- Admin dashboard for user management
-- Analytics tracking and reporting
-- Real-time features via WebSocket
-- GraphQL API alongside REST
+- Admin dashboard
+- Analytics tracking
+- Real-time features (WebSocket)
+- GraphQL API

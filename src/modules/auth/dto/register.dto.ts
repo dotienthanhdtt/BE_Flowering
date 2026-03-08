@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional, IsUUID } from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty({ example: 'user@example.com' })
@@ -15,4 +15,9 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   displayName?: string;
+
+  @ApiProperty({ required: false, description: 'Onboarding session token to link conversation' })
+  @IsUUID()
+  @IsOptional()
+  sessionToken?: string;
 }

@@ -1,12 +1,32 @@
 # API Documentation
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-03-08
 **Base URL:** `http://localhost:3000` (development)
 **API Version:** 1.0
 
 ## Overview
 
-RESTful API for AI-powered language learning application. All endpoints except webhooks require JWT authentication via Bearer token in the Authorization header.
+RESTful API for AI-powered language learning application. All endpoints except webhooks and public auth require JWT authentication via Bearer token. All responses wrapped in standard format: `{code: 1, message, data}` (code 1 = success, 0 = error).
+
+## Response Format
+
+### Success Response (code: 1)
+```json
+{
+  "code": 1,
+  "message": "Success message",
+  "data": {...}
+}
+```
+
+### Error Response (code: 0)
+```json
+{
+  "code": 0,
+  "message": "Error description",
+  "data": null
+}
+```
 
 ## Authentication
 
@@ -15,38 +35,19 @@ RESTful API for AI-powered language learning application. All endpoints except w
 Authorization: Bearer <jwt_token>
 ```
 
-### Token Expiration
-Default: 7 days (configurable via `JWT_EXPIRES_IN`)
-
-## Response Format
-
-### Success Response
-```json
-{
-  "data": { ... },
-  "statusCode": 200
-}
-```
-
-### Error Response
-```json
-{
-  "statusCode": 400,
-  "message": "Validation failed",
-  "error": "Bad Request"
-}
-```
+### Token Details
+- Default expiry: 7 days
+- Algorithm: HS256
+- Public routes: Use @Public() decorator
 
 ## Endpoints
 
-### Authentication
+### Authentication (POST /auth/*)
 
-#### POST /auth/signup
-Register a new user account.
+#### POST /auth/register
+Register new user account.
 
-**Authentication:** Not required
-
-**Request Body:**
+**Auth:** Not required | **Request:**
 ```json
 {
   "email": "user@example.com",
@@ -55,36 +56,16 @@ Register a new user account.
 }
 ```
 
-**Validation:**
-- `email`: Valid email format, required
-- `password`: Minimum 8 characters, required
-- `name`: String, optional
+**Response (201):** `{code: 1, message: "User registered", data: {access_token, user: {id, email, name}}}`
 
-**Success Response (201):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "emailVerified": false
-  }
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid input data
-- `409 Conflict` - Email already registered
+**Errors:** 400 (invalid input), 409 (email exists)
 
 ---
 
 #### POST /auth/login
 Login with email and password.
 
-**Authentication:** Not required
-
-**Request Body:**
+**Auth:** Not required | **Request:**
 ```json
 {
   "email": "user@example.com",
@@ -92,60 +73,40 @@ Login with email and password.
 }
 ```
 
-**Success Response (200):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "emailVerified": true
-  }
-}
-```
+**Response (200):** `{code: 1, message: "Logged in", data: {access_token, user: {...}}}`
 
-**Error Responses:**
-- `401 Unauthorized` - Invalid credentials
+**Errors:** 401 (invalid credentials)
 
 ---
 
 #### POST /auth/google
-Google OAuth authentication.
+Google ID token authentication.
 
-**Authentication:** Not required
-
-**Request Body:**
+**Auth:** Not required | **Request:**
 ```json
 {
-  "token": "google_oauth_token"
+  "idToken": "google_id_token",
+  "displayName": "John Doe",
+  "sessionToken": "optional_session_id"
 }
 ```
 
-**Success Response (200):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "uuid",
-    "email": "user@gmail.com",
-    "name": "John Doe",
-    "profilePicture": "https://..."
-  }
-}
-```
+**Response (200):** `{code: 1, message: "Authenticated", data: {access_token, user: {...}}}`
 
-**Error Responses:**
-- `401 Unauthorized` - Invalid Google token
+**Behavior:**
+- Verifies ID token via Google Auth Library
+- Auto-links to existing email
+- Creates new account if email not found
+- Stores googleProviderId
+
+**Errors:** 401 (invalid token), 400 (missing idToken)
 
 ---
 
 #### POST /auth/apple
 Apple Sign-In authentication.
 
-**Authentication:** Not required
-
-**Request Body:**
+**Auth:** Not required | **Request:**
 ```json
 {
   "identityToken": "apple_identity_token",
@@ -156,54 +117,97 @@ Apple Sign-In authentication.
 }
 ```
 
-**Success Response (200):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "uuid",
-    "email": "user@privaterelay.appleid.com",
-    "name": "John Doe"
-  }
-}
-```
+**Response (200):** `{code: 1, message: "Authenticated", data: {access_token, user: {...}}}`
 
-**Error Responses:**
-- `401 Unauthorized` - Invalid Apple token
+**Errors:** 401 (invalid token)
 
 ---
 
-### User Management
+#### POST /auth/refresh
+Refresh access token.
 
-#### GET /users/me
-Get current authenticated user profile.
-
-**Authentication:** Required
-
-**Success Response (200):**
+**Auth:** Not required | **Request:**
 ```json
 {
-  "id": "uuid",
-  "email": "user@example.com",
-  "name": "John Doe",
-  "profilePicture": null,
-  "emailVerified": true,
-  "createdAt": "2026-02-04T00:00:00.000Z",
-  "updatedAt": "2026-02-04T00:00:00.000Z"
+  "refreshToken": "uuid:hex"
 }
 ```
 
-**Error Responses:**
-- `401 Unauthorized` - Missing or invalid token
+**Response (200):** `{code: 1, message: "Token refreshed", data: {access_token, refreshToken}}`
+
+**Errors:** 401 (invalid/expired token)
+
+---
+
+#### POST /auth/logout
+Invalidate refresh token.
+
+**Auth:** Required | **Response (200):** `{code: 1, message: "Logged out", data: null}`
+
+---
+
+#### POST /auth/forgot-password
+Request password reset via OTP.
+
+**Auth:** Not required | **Request:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (200):** `{code: 1, message: "OTP sent to email", data: null}`
+
+---
+
+#### POST /auth/verify-otp
+Verify OTP code.
+
+**Auth:** Not required | **Request:**
+```json
+{
+  "email": "user@example.com",
+  "otp": "123456"
+}
+```
+
+**Response (200):** `{code: 1, message: "OTP verified", data: {resetToken}}`
+
+**Errors:** 400 (invalid/expired OTP), 429 (too many attempts)
+
+---
+
+#### POST /auth/reset-password
+Reset password with reset token.
+
+**Auth:** Not required | **Request:**
+```json
+{
+  "email": "user@example.com",
+  "resetToken": "token_from_verify_otp",
+  "newPassword": "NewPassword123!"
+}
+```
+
+**Response (200):** `{code: 1, message: "Password reset", data: null}`
+
+**Errors:** 400 (invalid token/password)
+
+---
+
+### User Management (GET/PATCH /users/me)
+
+#### GET /users/me
+Get current user profile.
+
+**Auth:** Required | **Response (200):** `{code: 1, message: "User found", data: {id, email, name, profilePicture, emailVerified, createdAt, updatedAt}}`
 
 ---
 
 #### PATCH /users/me
-Update current user profile.
+Update user profile.
 
-**Authentication:** Required
-
-**Request Body:**
+**Auth:** Required | **Request:**
 ```json
 {
   "name": "Jane Doe",
@@ -211,265 +215,170 @@ Update current user profile.
 }
 ```
 
-**Validation:**
-- `name`: String, optional
-- `profilePicture`: Valid URL, optional
-
-**Success Response (200):**
-```json
-{
-  "id": "uuid",
-  "email": "user@example.com",
-  "name": "Jane Doe",
-  "profilePicture": "https://example.com/avatar.jpg",
-  "emailVerified": true
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid input data
-- `401 Unauthorized` - Missing or invalid token
+**Response (200):** `{code: 1, message: "Profile updated", data: {...}}`
 
 ---
 
 ### Subscriptions
 
 #### GET /subscriptions/me
-Get current user's subscription status.
+Get subscription status.
 
-**Authentication:** Required
+**Auth:** Required | **Response (200):** `{code: 1, message: "Subscription found", data: {id, plan, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd}}`
 
-**Success Response (200):**
-```json
-{
-  "id": "uuid",
-  "plan": "monthly",
-  "status": "active",
-  "currentPeriodStart": "2026-02-01T00:00:00.000Z",
-  "currentPeriodEnd": "2026-03-01T00:00:00.000Z",
-  "cancelAtPeriodEnd": false
-}
-```
-
-**Response when no subscription:**
-```json
-null
-```
-
-**Plan Types:**
-- `free` - Free tier
-- `monthly` - Monthly subscription
-- `yearly` - Annual subscription
-- `lifetime` - One-time purchase
-
-**Status Types:**
-- `active` - Active subscription
-- `expired` - Subscription expired
-- `cancelled` - Subscription cancelled
-- `trial` - Trial period
-
-**Error Responses:**
-- `401 Unauthorized` - Missing or invalid token
+**Plan types:** free, monthly, yearly, lifetime
+**Status types:** active, trial, expired, cancelled
 
 ---
 
 #### POST /webhooks/revenuecat
-RevenueCat webhook endpoint for subscription lifecycle events.
+RevenueCat webhook endpoint.
 
-**Authentication:** Bearer token in Authorization header (webhook secret)
-
-**Request Headers:**
-```
-Authorization: Bearer <REVENUECAT_WEBHOOK_SECRET>
-Content-Type: application/json
-```
-
-**Request Body:**
+**Auth:** Bearer token (REVENUECAT_WEBHOOK_SECRET) | **Request:**
 ```json
 {
   "event": {
-    "type": "INITIAL_PURCHASE",
+    "type": "INITIAL_PURCHASE|RENEWAL|CANCELLATION|EXPIRATION|PRODUCT_CHANGE",
     "app_user_id": "user_uuid",
     "product_id": "monthly_subscription",
-    "period_type": "NORMAL",
     "purchased_at_ms": 1706976000000,
-    "expiration_at_ms": 1709654400000,
-    "store": "APP_STORE",
-    "environment": "PRODUCTION"
+    "expiration_at_ms": 1709654400000
   }
 }
 ```
 
-**Event Types:**
-- `INITIAL_PURCHASE` - First subscription purchase
-- `RENEWAL` - Subscription renewed
-- `CANCELLATION` - Subscription cancelled
-- `EXPIRATION` - Subscription expired
-- `PRODUCT_CHANGE` - Plan changed
+**Response (200):** `{code: 1, message: "Webhook received", data: {status: "received"}}`
 
-**Success Response (200):**
-```json
-{
-  "status": "received"
-}
-```
-
-**Response Time:** < 60 seconds (processes asynchronously)
-
-**Error Responses:**
-- `401 Unauthorized` - Invalid webhook secret
-- `400 Bad Request` - Invalid payload format
-
-**Note:** This endpoint is excluded from Swagger documentation.
+**Processing:** Async (responds <60s)
 
 ---
 
 ### Push Notifications
 
 #### POST /notifications/devices
-Register device token for push notifications.
+Register FCM device token.
 
-**Authentication:** Required
-
-**Request Body:**
+**Auth:** Required | **Request:**
 ```json
 {
-  "token": "firebase_fcm_device_token",
-  "platform": "ios",
+  "token": "firebase_fcm_token",
+  "platform": "ios|android|web",
   "deviceName": "iPhone 15 Pro"
 }
 ```
 
-**Validation:**
-- `token`: Non-empty string, required
-- `platform`: Enum (`ios`, `android`, `web`), required
-- `deviceName`: String, optional
-
-**Platform Types:**
-- `ios` - iOS devices
-- `android` - Android devices
-- `web` - Web push notifications
-
-**Success Response (200):**
-```json
-{
-  "message": "Device registered successfully"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid input data
-- `401 Unauthorized` - Missing or invalid token
-- `409 Conflict` - Token already registered
+**Response (200):** `{code: 1, message: "Device registered", data: null}`
 
 ---
 
 #### DELETE /notifications/devices/:token
-Unregister device token from push notifications.
+Unregister device.
 
-**Authentication:** Required
+**Auth:** Required | **Response (200):** `{code: 1, message: "Device unregistered", data: null}`
 
-**URL Parameters:**
-- `token`: FCM device token to unregister
+---
 
-**Success Response (200):**
+### Languages
+
+#### GET /languages
+List available languages (public).
+
+**Auth:** Not required | **Query params:** type=native|learning
+
+**Response (200):** `{code: 1, message: "Languages found", data: [{id, code, name, nativeName, flagUrl, isActive}]}`
+
+---
+
+#### GET /languages/user
+Get user's learning languages.
+
+**Auth:** Required | **Response (200):** `{code: 1, message: "User languages found", data: [...]}`
+
+---
+
+#### POST /languages/user
+Add language to learning list.
+
+**Auth:** Required | **Request:**
 ```json
 {
-  "message": "Device unregistered successfully"
+  "languageId": "uuid",
+  "proficiencyLevel": "beginner|intermediate|advanced|native"
 }
 ```
 
-**Error Responses:**
-- `401 Unauthorized` - Missing or invalid token
-- `404 Not Found` - Token not found for current user
+**Response (201):** `{code: 1, message: "Language added", data: {...}}`
+
+---
+
+#### PATCH /languages/user/:languageId
+Update language proficiency.
+
+**Auth:** Required | **Request:**
+```json
+{
+  "proficiencyLevel": "intermediate"
+}
+```
+
+**Response (200):** `{code: 1, message: "Language updated", data: {...}}`
+
+---
+
+#### PATCH /languages/user/native
+Set native language.
+
+**Auth:** Required | **Request:**
+```json
+{
+  "languageId": "uuid"
+}
+```
+
+**Response (200):** `{code: 1, message: "Native language set", data: {...}}`
+
+---
+
+#### DELETE /languages/user/:languageId
+Remove language.
+
+**Auth:** Required | **Response (200):** `{code: 1, message: "Language removed", data: null}`
 
 ---
 
 ### AI Features
 
-#### POST /ai/conversation
-Start or continue conversation with AI tutor.
+#### POST /ai/chat
+Chat with AI tutor.
 
-**Authentication:** Required
-
-**Request Body:**
+**Auth:** Required | **Rate Limit:** 20 req/min, 100 req/hr | **Request:**
 ```json
 {
   "message": "How do I use the past tense in Spanish?",
   "conversationId": "uuid",
   "language": "spanish",
-  "level": "beginner"
+  "level": "beginner",
+  "model": "gpt-4o"
 }
 ```
 
-**Validation:**
-- `message`: Non-empty string, required
-- `conversationId`: UUID, optional (creates new if omitted)
-- `language`: String, optional
-- `level`: String, optional
-
-**Success Response (200):**
-```json
-{
-  "conversationId": "uuid",
-  "response": "In Spanish, the past tense has several forms...",
-  "aiProvider": "openai",
-  "tokensUsed": 150
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid input data
-- `401 Unauthorized` - Missing or invalid token
-- `503 Service Unavailable` - All AI providers unavailable
+**Response (200):** `{code: 1, message: "Response generated", data: {conversationId, response, aiProvider, tokensUsed}}`
 
 ---
 
-#### POST /ai/vocabulary/explain
-Get AI explanation of vocabulary words.
+#### SSE /ai/chat/stream
+Stream chat response (Server-Sent Events).
 
-**Authentication:** Required
+**Auth:** Required | **Request:** Same as POST /ai/chat
 
-**Request Body:**
-```json
-{
-  "word": "hola",
-  "language": "spanish",
-  "context": "greeting someone in the morning"
-}
-```
-
-**Validation:**
-- `word`: Non-empty string, required
-- `language`: String, required
-- `context`: String, optional
-
-**Success Response (200):**
-```json
-{
-  "word": "hola",
-  "explanation": "A common Spanish greeting meaning 'hello'...",
-  "examples": [
-    "Hola, ¿cómo estás? - Hello, how are you?",
-    "Hola amigos - Hello friends"
-  ],
-  "pronunciation": "oh-lah",
-  "partOfSpeech": "interjection"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid input data
-- `401 Unauthorized` - Missing or invalid token
+**Response:** Streaming text chunks
 
 ---
 
 #### POST /ai/grammar/check
-Get grammar correction and feedback.
+Check grammar and get feedback.
 
-**Authentication:** Required
-
-**Request Body:**
+**Auth:** Required | **Request:**
 ```json
 {
   "text": "I goed to the store yesterday",
@@ -478,360 +387,215 @@ Get grammar correction and feedback.
 }
 ```
 
-**Validation:**
-- `text`: Non-empty string, required
-- `language`: String, required
-- `targetLanguage`: String, optional
-
-**Success Response (200):**
-```json
-{
-  "originalText": "I goed to the store yesterday",
-  "correctedText": "I went to the store yesterday",
-  "errors": [
-    {
-      "type": "verb_conjugation",
-      "original": "goed",
-      "correction": "went",
-      "explanation": "'Go' is an irregular verb. Past tense is 'went', not 'goed'."
-    }
-  ],
-  "score": 85
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid input data
-- `401 Unauthorized` - Missing or invalid token
+**Response (200):** `{code: 1, message: "Grammar checked", data: {originalText, correctedText, errors: [{type, original, correction, explanation}], score}}`
 
 ---
 
-#### POST /ai/translate
-Translate text between languages.
+#### POST /ai/chat/correct
+Check grammar/vocabulary of user's chat reply in context of previous AI message.
 
-**Authentication:** Required
-
-**Request Body:**
+**Auth:** Optional (JWT or anonymous) | **Request:**
 ```json
 {
-  "text": "Hello, how are you?",
-  "sourceLanguage": "english",
-  "targetLanguage": "spanish"
+  "previousAiMessage": "How was your weekend?",
+  "userMessage": "I go to park yesterday",
+  "targetLanguage": "en"
 }
 ```
 
-**Validation:**
-- `text`: Non-empty string, required
-- `sourceLanguage`: String, required
-- `targetLanguage`: String, required
+| Field | Type | Required | Max | Description |
+|-------|------|----------|-----|-------------|
+| previousAiMessage | string | Yes | 4000 | AI tutor's previous message (context) |
+| userMessage | string | Yes | 4000 | User's reply to check |
+| targetLanguage | string | Yes | 10 | Target language code (e.g. "en", "ja", "vi") |
 
-**Success Response (200):**
+**Response (200) — errors found:** `{code: 1, message: "Success", data: {correctedText: "I went to the park yesterday."}}`
+
+**Response (200) — no errors:** `{code: 1, message: "Success", data: {correctedText: null}}`
+
+**Errors:** 400 (missing/empty fields), 429 (rate limit)
+
+---
+
+#### POST /ai/exercises/generate
+Generate language exercises.
+
+**Auth:** Required | **Request:**
 ```json
 {
-  "originalText": "Hello, how are you?",
-  "translatedText": "Hola, ¿cómo estás?",
-  "sourceLanguage": "english",
-  "targetLanguage": "spanish",
-  "confidence": 0.98
+  "language": "spanish",
+  "level": "beginner",
+  "type": "vocabulary|grammar|conversation"
 }
 ```
 
-**Error Responses:**
-- `400 Bad Request` - Invalid input data
-- `401 Unauthorized` - Missing or invalid token
+**Response (200):** `{code: 1, message: "Exercises generated", data: [{type, prompt, expectedAnswer, difficulty}]}`
+
+---
+
+#### POST /ai/pronunciation/assess
+Assess pronunciation from audio.
+
+**Auth:** Required | **Request:** Multipart form with audio file
+
+**Response (200):** `{code: 1, message: "Pronunciation assessed", data: {score, feedback, suggestions}}`
+
+---
+
+#### POST /ai/conversations
+Start new conversation session.
+
+**Auth:** Required | **Request:**
+```json
+{
+  "language": "spanish",
+  "topic": "daily_life"
+}
+```
+
+**Response (201):** `{code: 1, message: "Conversation started", data: {conversationId}}`
+
+---
+
+#### GET /ai/conversations/:id/messages
+Get conversation history.
+
+**Auth:** Required | **Response (200):** `{code: 1, message: "Messages found", data: [{role, content, model, tokensUsed, createdAt}]}`
+
+---
+
+### Onboarding (No Auth Required)
+
+#### POST /onboarding/start
+Start anonymous onboarding session.
+
+**Auth:** Not required | **Request:**
+```json
+{
+  "nativeLanguage": "english"
+}
+```
+
+**Response (200):** `{code: 1, message: "Session started", data: {sessionId, expiresAt}}`
+
+---
+
+#### POST /onboarding/chat
+Chat in onboarding session.
+
+**Auth:** Not required | **Request:**
+```json
+{
+  "sessionId": "session_token",
+  "message": "I want to learn Spanish"
+}
+```
+
+**Response (200):** `{code: 1, message: "Response generated", data: {response, turnCount, maxTurns}}`
+
+---
+
+#### POST /onboarding/complete
+Complete onboarding and extract profile.
+
+**Auth:** Not required | **Request:**
+```json
+{
+  "sessionId": "session_token"
+}
+```
+
+**Response (200):** `{code: 1, message: "Onboarding completed", data: {extractedProfile: {languages, interests, level}}}`
 
 ---
 
 ## Error Codes
 
-### HTTP Status Codes
-
-| Code | Description |
-|------|-------------|
-| 200  | OK - Request successful |
-| 201  | Created - Resource created |
-| 400  | Bad Request - Invalid input |
-| 401  | Unauthorized - Missing or invalid token |
-| 403  | Forbidden - Insufficient permissions |
-| 404  | Not Found - Resource not found |
-| 409  | Conflict - Resource already exists |
-| 500  | Internal Server Error - Server error |
-| 503  | Service Unavailable - External service down |
-
-### Common Error Messages
-
-**Validation Errors:**
-```json
-{
-  "statusCode": 400,
-  "message": [
-    "email must be an email",
-    "password must be longer than or equal to 8 characters"
-  ],
-  "error": "Bad Request"
-}
-```
-
-**Authentication Errors:**
-```json
-{
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized"
-}
-```
-
-**Not Found Errors:**
-```json
-{
-  "statusCode": 404,
-  "message": "Subscription not found",
-  "error": "Not Found"
-}
-```
+| Code | Status | Meaning |
+|------|--------|---------|
+| 200 | OK | Request successful |
+| 201 | Created | Resource created |
+| 400 | Bad Request | Invalid input |
+| 401 | Unauthorized | Missing/invalid token |
+| 403 | Forbidden | Insufficient permissions |
+| 404 | Not Found | Resource not found |
+| 409 | Conflict | Resource exists |
+| 500 | Server Error | Internal error |
+| 503 | Service Unavailable | External service down |
 
 ## Rate Limiting
 
-**Current Status:** Not implemented
-
-**Planned:**
-- 100 requests per minute per IP
-- 1000 requests per hour per user
-- Separate limits for AI endpoints
-
-## Pagination
-
-**Current Status:** Not implemented for collection endpoints
-
-**Planned Format:**
-```json
-{
-  "data": [...],
-  "meta": {
-    "page": 1,
-    "perPage": 20,
-    "total": 100,
-    "totalPages": 5
-  }
-}
-```
-
-## Webhook Security
-
-### RevenueCat Webhook Authentication
-
-**Method:** Bearer token in Authorization header
-
-**Validation:**
-- Timing-safe comparison to prevent timing attacks
-- Exact match required for webhook secret
-- Invalid requests return 401 Unauthorized
-
-**Example:**
-```bash
-curl -X POST https://api.example.com/webhooks/revenuecat \
-  -H "Authorization: Bearer your_webhook_secret" \
-  -H "Content-Type: application/json" \
-  -d '{"event": {...}}'
-```
+**AI Endpoints:**
+- Free users: 100 requests/hour
+- Premium users: 1000 requests/hour
+- Per-user rate limiting enforced
 
 ## CORS Configuration
 
-**Allowed Origins:** Configured via `CORS_ALLOWED_ORIGINS` environment variable
+**Allowed Origins:** Via CORS_ALLOWED_ORIGINS env var
 
-**Default (Development):**
-```
-http://localhost:3001
-http://localhost:5173
-```
+**Allowed Methods:** GET, POST, PATCH, DELETE, OPTIONS
 
-**Allowed Methods:**
-```
-GET, POST, PATCH, DELETE, OPTIONS
-```
+**Allowed Headers:** Authorization, Content-Type
 
-**Allowed Headers:**
-```
-Authorization, Content-Type
-```
+## Webhook Security
 
-## API Versioning
+**RevenueCat:** Bearer token in Authorization header with timing-safe comparison
 
-**Current:** No versioning (v1 implicit)
+## Example Requests
 
-**Future Strategy:** URL-based versioning
-```
-/v1/users/me
-/v2/users/me
-```
-
-## Interactive Documentation
-
-**Swagger UI:** Available at `/api/docs` in development mode
-
-**Features:**
-- Interactive API testing
-- Request/response examples
-- Schema definitions
-- Authentication testing
-
-**Access:** http://localhost:3000/api/docs
-
-## SDK Examples
-
-### JavaScript/TypeScript
-
-```typescript
-// Authentication
-const response = await fetch('http://localhost:3000/auth/login', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    email: 'user@example.com',
-    password: 'password123'
-  })
-});
-const { access_token } = await response.json();
-
-// Authenticated Request
-const user = await fetch('http://localhost:3000/users/me', {
-  headers: {
-    'Authorization': `Bearer ${access_token}`
-  }
-});
-const userData = await user.json();
-```
-
-### Python
-
-```python
-import requests
-
-# Authentication
-response = requests.post('http://localhost:3000/auth/login', json={
-    'email': 'user@example.com',
-    'password': 'password123'
-})
-access_token = response.json()['access_token']
-
-# Authenticated Request
-headers = {'Authorization': f'Bearer {access_token}'}
-user = requests.get('http://localhost:3000/users/me', headers=headers)
-user_data = user.json()
-```
-
-### Swift (iOS)
-
-```swift
-struct LoginRequest: Codable {
-    let email: String
-    let password: String
-}
-
-struct AuthResponse: Codable {
-    let access_token: String
-    let user: User
-}
-
-// Authentication
-let loginData = LoginRequest(email: "user@example.com", password: "password123")
-let url = URL(string: "http://localhost:3000/auth/login")!
-var request = URLRequest(url: url)
-request.httpMethod = "POST"
-request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-request.httpBody = try? JSONEncoder().encode(loginData)
-
-let (data, _) = try await URLSession.shared.data(for: request)
-let authResponse = try JSONDecoder().decode(AuthResponse.self, from: data)
-
-// Authenticated Request
-var userRequest = URLRequest(url: URL(string: "http://localhost:3000/users/me")!)
-userRequest.setValue("Bearer \(authResponse.access_token)", forHTTPHeaderField: "Authorization")
-let (userData, _) = try await URLSession.shared.data(for: userRequest)
-```
-
-### Kotlin (Android)
-
-```kotlin
-// Authentication
-val client = OkHttpClient()
-val json = JSONObject().apply {
-    put("email", "user@example.com")
-    put("password", "password123")
-}
-
-val request = Request.Builder()
-    .url("http://localhost:3000/auth/login")
-    .post(json.toString().toRequestBody("application/json".toMediaType()))
-    .build()
-
-val response = client.newCall(request).execute()
-val accessToken = JSONObject(response.body!!.string()).getString("access_token")
-
-// Authenticated Request
-val userRequest = Request.Builder()
-    .url("http://localhost:3000/users/me")
-    .addHeader("Authorization", "Bearer $accessToken")
-    .build()
-
-val userResponse = client.newCall(userRequest).execute()
-```
-
-## Testing
-
-### Postman Collection
-
-Export Swagger spec and import into Postman:
-```bash
-curl http://localhost:3000/api/docs-json > api-spec.json
-```
-
-### cURL Examples
-
-**Login:**
+**cURL - Login:**
 ```bash
 curl -X POST http://localhost:3000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","password":"password123"}'
 ```
 
-**Get Profile:**
+**cURL - Get Profile:**
 ```bash
 curl http://localhost:3000/users/me \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-**Register Device:**
+**cURL - AI Chat:**
 ```bash
-curl -X POST http://localhost:3000/notifications/devices \
+curl -X POST http://localhost:3000/ai/chat \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"token":"fcm_token","platform":"ios","deviceName":"iPhone 15"}'
+  -d '{"message":"Hello!","language":"spanish"}'
 ```
 
-## Troubleshooting
+## Interactive Documentation
 
-### Common Issues
+**Swagger UI:** Available at `/api/docs` in development mode
+- Interactive API testing
+- Request/response examples
+- Schema definitions
+- Authentication testing
+
+Access: `http://localhost:3000/api/docs`
+
+## Troubleshooting
 
 **401 Unauthorized:**
 - Verify JWT token is valid and not expired
 - Check Authorization header format: `Bearer <token>`
-- Ensure token was obtained from login/signup
+- Ensure token from login/signup endpoint
 
 **400 Bad Request:**
-- Check request body matches schema
-- Verify all required fields are present
+- Verify request body matches schema
+- Check all required fields present
 - Validate data types and formats
 
 **503 Service Unavailable:**
-- AI providers may be temporarily unavailable
-- Check provider API keys in environment variables
+- AI providers may be temporarily down
+- Check API keys in environment variables
 - Review Langfuse logs for provider errors
 
 ## Support
 
-For API issues or questions:
+For API issues:
 - Check Swagger documentation at `/api/docs`
 - Review error messages and status codes
-- Check application logs for detailed error information
+- Check application logs
 - Contact development team via GitHub Issues

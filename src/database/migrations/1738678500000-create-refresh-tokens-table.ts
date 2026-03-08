@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateRefreshTokensTable1738678500000
-  implements MigrationInterface
-{
+export class CreateRefreshTokensTable1738678500000 implements MigrationInterface {
   name = 'CreateRefreshTokensTable1738678500000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -31,9 +29,7 @@ export class CreateRefreshTokensTable1738678500000
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_refresh_tokens_user_id"`);
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_refresh_tokens_token_hash"`,
-    );
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_refresh_tokens_token_hash"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "refresh_tokens"`);
   }
 }

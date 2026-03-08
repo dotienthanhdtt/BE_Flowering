@@ -13,6 +13,8 @@ import { AiConversation } from './entities/ai-conversation.entity';
 import { AiConversationMessage } from './entities/ai-conversation-message.entity';
 import { DeviceToken } from './entities/device-token.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { PasswordReset } from './entities/password-reset.entity';
+import { Vocabulary } from './entities/vocabulary.entity';
 
 const entities = [
   Language,
@@ -27,6 +29,8 @@ const entities = [
   AiConversationMessage,
   DeviceToken,
   RefreshToken,
+  PasswordReset,
+  Vocabulary,
 ];
 
 @Module({
@@ -47,7 +51,7 @@ const entities = [
         },
         entities,
         synchronize: false,
-        logging: configService.get<string>('nodeEnv') === 'development',
+        logging: false,
       }),
     }),
   ],

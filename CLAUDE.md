@@ -35,12 +35,13 @@ npm run migration:generate # Generate migration from entities
 ### Module Structure
 All feature modules follow NestJS modular architecture in `src/modules/`:
 
-- **auth/** - JWT authentication, Google/Apple OAuth strategies, guards
+- **auth/** - JWT authentication, Google idToken POST + Apple OAuth, composite refresh tokens, account auto-linking
 - **ai/** - LangChain-based AI features (chat, exercises, grammar, pronunciation)
 - **user/** - User profile management
 - **language/** - User language preferences and progress
 - **subscription/** - RevenueCat subscription handling with webhooks
 - **notification/** - Firebase push notifications
+- **onboarding/** - Anonymous onboarding chat with session-based AI conversations (no auth required)
 
 ### Core Components
 
@@ -115,7 +116,11 @@ All docs in `docs/` directory:
 - **Response Wrapper**: All responses wrapped in `{code: 1, message, data}` via interceptor
 - **Error Handling**: `AllExceptionsFilter` catches all errors, never exposes raw exceptions
 - **Rate Limiting**: AI endpoints: 20 req/min, 100 req/hour per user
-- **RLS Policies**: Database-level row security for user data isolation
+  - **RLS Policies**: Database-level row security for user data isolation
+- **Composite Refresh Tokens**: Stored hashed in DB with device fingerprint; 90-day expiry
+- **Google Auth**: POST `/auth/google` accepts `idToken` directly (no OAuth redirect flow)
+- **Account Auto-linking**: Google/Apple login auto-links to existing email account
+- **Anonymous Onboarding**: Session-based chat at `/onboarding/*`; no JWT needed; state stored in-memory per `sessionId`
 
 ## Rules
 
@@ -140,11 +145,11 @@ All docs in `docs/` directory:
 
 ### Database Changes (Migrations)
 Always show complete implementation including:
-1. Migration file with proper up/down methods
+1. Migration file for Supbase DB with proper up/down methods
 2. Entity/type updates
 3. DTO modifications
 4. API endpoint changes
-5. Example API request/response
+5. Example API request/responsafe
 
 ### Documentation Tasks
 - Output complete file content using Write tool
@@ -166,3 +171,26 @@ Before ending any session, confirm:
 2. Code compiles without errors (`npm run build`)
 3. Tests pass (`npm test`)
 4. Summary of what was done vs what remains (if any)
+
+## Railway Deployment Rules
+
+**CRITICAL: Prevent Railway build failures**
+
+### Dependency Management
+- **Always install new packages with `npm install <package>`** before using them in code — never `import` a package that isn't in `package.json`.
+- **`@types/*` packages go in `devDependencies`** (auto-placed by `npm install --save-dev`). The runtime package itself must be in `dependencies`.
+- **Before committing any new `import` statement**, verify the package exists in the `dependencies` section of `package.json`:
+  ```bash
+  grep '"<package-name>"' package.json
+  ```
+- **After adding a new module/service that uses external npm packages**, run `npm run build` locally to confirm no `TS2307: Cannot find module` errors before pushing.
+
+> **Root cause of 2026-02-28 Railway failure:** `nodemailer` was used in `email.service.ts` but never added to `package.json`. Railway's `npm ci` + `nest build` failed with `TS2307: Cannot find module 'nodemailer'`. Fix: `npm install nodemailer`.
+
+### Entity Registration
+- **When creating a new TypeORM entity**, you MUST register it in **both** places:
+  1. `src/database/database.module.ts` — add to the global `entities` array (required for `DataSource` metadata, `createQueryBuilder`, raw queries)
+  2. `src/modules/<feature>/<feature>.module.ts` — add to `TypeOrmModule.forFeature([...])` (required for `@InjectRepository()` in that module)
+- **Missing either registration causes runtime errors** (`EntityMetadataNotFoundError` or `No repository was found`). These won't surface at build time — only at runtime when the entity is first used.
+
+> **Root cause of 2026-03-08 runtime 500:** `Vocabulary` entity was added to `AiModule`'s `TypeOrmModule.forFeature()` but not to `database.module.ts` global entities array. `createQueryBuilder().insert().into(Vocabulary)` hit the DataSource directly and threw `EntityMetadataNotFoundError`. Fix: add entity to both locations.

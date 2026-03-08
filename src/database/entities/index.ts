@@ -9,3 +9,5 @@ export * from './subscription.entity';
 export * from './ai-conversation.entity';
 export * from './ai-conversation-message.entity';
 export * from './device-token.entity';
+export * from './password-reset.entity';
+export * from './vocabulary.entity';

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import appConfiguration from './config/app-configuration';
@@ -13,7 +13,9 @@ import { UserModule } from './modules/user/user.module';
 import { LanguageModule } from './modules/language/language.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware';
 
 @Module({
   imports: [
@@ -32,6 +34,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     LanguageModule,
     SubscriptionModule,
     NotificationModule,
+    OnboardingModule,
   ],
   controllers: [AppController],
   providers: [
@@ -44,5 +47,8 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
   ],
   exports: [SupabaseStorageService],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(HttpLoggerMiddleware).forRoutes('*');
+  }
+}

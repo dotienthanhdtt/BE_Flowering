@@ -1,3 +1,4 @@
+import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -45,8 +46,9 @@ async function bootstrap(): Promise<void> {
     console.log(`Swagger docs available at http://localhost:${port}/api/docs`);
   }
 
-  await app.listen(port);
-  console.log(`Application running on http://localhost:${port}`);
+  // Bind to 0.0.0.0 explicitly for Railway/Docker compatibility (IPv4)
+  await app.listen(port, '0.0.0.0');
+  console.log(`Application running on http://0.0.0.0:${port}`);
 }
 
 bootstrap().catch((error) => {

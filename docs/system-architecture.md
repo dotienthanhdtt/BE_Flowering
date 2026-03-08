@@ -1,10 +1,10 @@
 # System Architecture
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-03-08
 
 ## Architecture Overview
 
-AI-powered language learning backend following **Clean Architecture** principles with NestJS framework, implementing modular design with clear separation of concerns.
+AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 8 feature modules and clear separation of concerns.
 
 ## Architecture Layers
 
@@ -33,7 +33,7 @@ AI-powered language learning backend following **Clean Architecture** principles
 ## Core Architecture Patterns
 
 ### 1. Modular Architecture
-Each feature is self-contained in its own module with dependencies injected via NestJS DI.
+Each feature is self-contained with dependencies injected via NestJS DI.
 
 **Module Structure:**
 ```
@@ -46,7 +46,7 @@ module/
 ```
 
 ### 2. Dependency Injection
-NestJS IoC container manages all dependencies, enabling testability and loose coupling.
+NestJS IoC container manages all dependencies for testability and loose coupling.
 
 ### 3. Repository Pattern
 TypeORM provides repository abstraction for database operations.
@@ -57,283 +57,249 @@ AI module uses strategy pattern for multi-provider support (OpenAI, Anthropic, G
 ### 5. Factory Pattern
 AI client factory dynamically selects provider based on configuration.
 
-## Module Architecture
+## Module Architecture Details
 
-### Authentication Module
-
+### Authentication Module Flow
 ```
-┌──────────────────────────────────────────────────┐
-│           Auth Controller                        │
-│  POST /auth/signup                              │
-│  POST /auth/login                               │
-│  POST /auth/google                              │
-│  POST /auth/apple                               │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│           Auth Controller                            │
+│  POST /auth/register, /login, /google, /apple       │
+│  POST /auth/refresh, /logout                         │
+│  POST /auth/forgot-password, /verify-otp, /reset... │
+└──────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────┐
-│           Auth Service                           │
-│  - validateUser()                               │
-│  - createUser()                                 │
-│  - generateJWT()                                │
-│  - validateOAuth()                              │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│           Auth Service                               │
+│  - validateUser()                                   │
+│  - createUser()                                     │
+│  - generateJWT()                                    │
+│  - validateOAuth()                                  │
+│  - processPasswordReset()                           │
+└──────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────┐
-│        Passport Strategies                       │
-│  - JwtStrategy (JWT validation)                 │
-│  - GoogleStrategy (OAuth)                       │
-│  - AppleStrategy (OAuth)                        │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│        Passport Strategies & Validators             │
+│  - JwtStrategy (JWT validation)                     │
+│  - GoogleIdTokenValidator (Google token verify)     │
+│  - AppleStrategy (Apple OAuth)                      │
+└──────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────┐
-│           Database Layer                         │
-│  UserRepository → PostgreSQL (Supabase)         │
-└──────────────────────────────────────────────────┘
-```
-
-**Key Components:**
-- **JwtAuthGuard:** Protects endpoints requiring authentication
-- **OptionalJwtAuthGuard:** Allows optional authentication
-- **Public Decorator:** Marks routes as public (bypasses auth)
-- **CurrentUser Decorator:** Extracts user from request context
-
-### Subscription Module
-
-```
-┌──────────────────────────────────────────────────┐
-│      Subscription Controller                     │
-│  GET /subscriptions/me                          │
-└──────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────┐
-│      RevenueCat Webhook Controller               │
-│  POST /webhooks/revenuecat (Public)             │
-│  - Timing-safe auth verification                │
-│  - Async webhook processing                     │
-└──────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────┐
-│        Subscription Service                      │
-│  - getUserSubscription()                        │
-│  - processWebhook()                             │
-│  - updateSubscriptionStatus()                   │
-└──────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────┐
-│         Database Layer                           │
-│  SubscriptionRepository → PostgreSQL            │
-└──────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────┐
-│       External Integration                       │
-│  RevenueCat REST API (future feature)           │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│           Database Layer                             │
+│  UserRepository → PostgreSQL (Supabase)             │
+│  PasswordResetRepository → PostgreSQL               │
+└──────────────────────────────────────────────────────┘
 ```
 
-**Webhook Flow:**
-1. RevenueCat sends webhook to `/webhooks/revenuecat`
-2. Controller validates Bearer token using timing-safe comparison
-3. Responds immediately with `{ status: 'received' }` (< 60s requirement)
-4. Processes webhook asynchronously via `setImmediate()`
-5. Updates subscription status in database
-6. Logs processing errors without failing webhook
+**Key Features:**
+- Composite refresh tokens (uuid:hex) for O(1) validation
+- OAuth auto-linking to existing email
+- Password reset: OTP (10min) + reset token (15min)
+- Provider-specific IDs prevent duplicates
 
-**Subscription Lifecycle:**
-- User purchases subscription in mobile app
-- RevenueCat sends webhook event
-- Backend updates subscription status
-- User gains access to premium features
-
-### Notification Module
-
+### AI Module Flow
 ```
-┌──────────────────────────────────────────────────┐
-│      Notification Controller                     │
-│  POST /notifications/devices                    │
-│  DELETE /notifications/devices/:token           │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│           AI Controller                              │
+│  POST /ai/chat, /grammar/check, /exercises/...     │
+│  SSE /ai/chat/stream, /ai/conversations/:id/msgs   │
+└──────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────┐
-│       Notification Service                       │
-│  - registerDevice()                             │
-│  - unregisterDevice()                           │
-│  - sendNotification() (future)                  │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│           Learning Agent Service                     │
+│  - processChat()                                    │
+│  - checkGrammar()                                   │
+│  - generateExercises()                              │
+│  - assessPronunciation()                            │
+└──────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────┐
-│        Firebase Service                          │
-│  - initializeApp()                              │
-│  - getMessaging()                               │
-│  - send() (future feature)                      │
-└──────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────┐
-│         Database Layer                           │
-│  NotificationDeviceRepository → PostgreSQL      │
-└──────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────┐
-│       External Integration                       │
-│  Firebase Cloud Messaging (FCM)                 │
-└──────────────────────────────────────────────────┘
-```
-
-**Push Notification Flow (Future):**
-1. User triggers notification event (e.g., learning reminder)
-2. Backend queries user's registered devices
-3. Firebase service sends FCM message to each device
-4. Updates `last_used_at` timestamp on successful delivery
-
-### AI Module
-
-```
-┌──────────────────────────────────────────────────┐
-│           AI Controller                          │
-│  POST /ai/conversation                          │
-│  POST /ai/vocabulary/explain                    │
-│  POST /ai/grammar/check                         │
-│  POST /ai/translate                             │
-└──────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────┐
-│           AI Service                             │
-│  - processConversation()                        │
-│  - explainVocabulary()                          │
-│  - checkGrammar()                               │
-│  - translate()                                  │
-└──────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────┐
-│        AI Client Factory                         │
-│  - selectProvider() (strategy pattern)          │
-│  - createClient()                               │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│        Unified LLM Service                           │
+│  - selectProvider()                                 │
+│  - callLLM()                                        │
+│  - handleFallback()                                 │
+└──────────────────────────────────────────────────────┘
                     ↓
 ┌────────────────┬────────────────┬────────────────┐
-│  OpenAI Client │ Anthropic      │ Google AI      │
-│                │ Client         │ Client         │
+│  OpenAI        │  Anthropic     │  Google AI     │
+│  Provider      │  Provider      │  Provider      │
 └────────────────┴────────────────┴────────────────┘
                     ↓
-┌──────────────────────────────────────────────────┐
-│         Langfuse Observability                   │
-│  - Trace AI requests                            │
-│  - Log prompts & responses                      │
-│  - Track usage metrics                          │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│         Langfuse Observability                       │
+│  - Trace AI requests                                │
+│  - Log prompts & responses                          │
+│  - Track usage metrics                              │
+└──────────────────────────────────────────────────────┘
 ```
 
-**AI Provider Selection Strategy:**
-- Load balancing across providers
-- Fallback on provider failure
-- Cost optimization based on request type
-- Feature-specific provider selection
+**AI Provider Selection:** Load balancing with fallback, cost optimization per request type
+
+### Subscription Module Flow
+```
+┌──────────────────────────────────────────────────────┐
+│      Subscription Controller & Webhook Controller    │
+│  GET /subscriptions/me                              │
+│  POST /webhooks/revenuecat (public, bearer auth)   │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│        Subscription Service                          │
+│  - getUserSubscription()                            │
+│  - processWebhook()                                 │
+│  - updateSubscriptionStatus()                       │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┘
+│        Webhook Processing Flow:                      │
+│  1. Validate Bearer token (timing-safe)             │
+│  2. Respond immediately with 200 (< 60s)            │
+│  3. Process async via setImmediate()                │
+│  4. Update subscription status in DB                │
+│  5. Log processing errors                           │
+└──────────────────────────────────────────────────────┘
+```
+
+### Onboarding Module Flow
+```
+┌──────────────────────────────────────────────────────┐
+│      Onboarding Controller (No Auth Required)        │
+│  POST /onboarding/start, /chat, /complete           │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│        Onboarding Service                            │
+│  - createSession()                                  │
+│  - processMessage()                                 │
+│  - extractProfile()                                 │
+│  - cleanupExpiredSessions()                         │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│        AI Learning Agent (for Onboarding)           │
+│  - Session-based state management                   │
+│  - Profile extraction via AI                        │
+│  - Max 10 turns per session                         │
+│  - 7-day session TTL                                │
+└──────────────────────────────────────────────────────┘
+```
 
 ## Database Architecture
 
 ### Entity Relationships
-
 ```
-┌─────────────────┐
-│     Users       │
-│  - id (PK)      │
-│  - email        │
-│  - password     │
-│  - name         │
-└─────────────────┘
-        │
-        │ 1:1
-        ↓
-┌─────────────────┐
-│ Subscriptions   │
-│  - id (PK)      │
-│  - user_id (FK) │
-│  - plan         │
-│  - status       │
-│  - revenuecat_id│
-└─────────────────┘
+User (1) ──< (N) UserLanguage
+User (1) ──< (1) Subscription
+User (1) ──< (N) DeviceToken
+User (1) ──< (N) AiConversation
+User (1) ──< (N) RefreshToken
+User (1) ──< (N) PasswordReset
 
-        │ 1:N
-        ↓
-┌─────────────────┐
-│ Notification    │
-│    Devices      │
-│  - id (PK)      │
-│  - user_id (FK) │
-│  - token        │
-│  - platform     │
-└─────────────────┘
+Language (1) ──< (N) UserLanguage
+Language (1) ──< (N) Lesson
+
+Lesson (1) ──< (N) Exercise
+Exercise (1) ──< (N) UserExerciseAttempt
+
+AiConversation (1) ──< (N) AiConversationMessage
 ```
 
-### Database Layer
-
-**Technology:** PostgreSQL 14+ (hosted on Supabase)
-
-**Features:**
-- Row-Level Security (RLS) for multi-tenant isolation
-- Timestamptz columns for timezone-aware dates
-- UUID primary keys for security
-- Foreign key constraints with CASCADE deletion
-- Indexed columns for query optimization
-
-**Connection Management:**
-- TypeORM connection pool
-- Environment-based configuration
-- Automatic reconnection on failure
+### Technology Stack
+- **Database:** PostgreSQL 14+ (Supabase)
+- **Features:** Row-Level Security (RLS), timestamptz columns, UUID PKs, CASCADE deletion, indexed columns
+- **Connection:** TypeORM connection pool with auto-reconnect
 
 ## Security Architecture
 
 ### Authentication Flow
-
 ```
-1. User Login Request
+1. User Login/Register
    ↓
 2. Validate Credentials (bcrypt hash comparison)
    ↓
-3. Generate JWT Token (HS256 signed)
+3. Generate JWT Token (HS256 signed, 7d expiry)
    ↓
-4. Return Token to Client
+4. Store Refresh Token (composite format, device info)
    ↓
-5. Client Includes Token in Authorization Header
+5. Return Token Pair to Client
    ↓
-6. JwtAuthGuard Validates Token
+6. Client Includes JWT in Authorization Header
    ↓
-7. Extract User from Payload
+7. JwtAuthGuard Validates Token
    ↓
-8. Attach User to Request Context
+8. Extract User from Payload
    ↓
-9. Controller Access via @CurrentUser() Decorator
+9. Attach User to Request Context
+   ↓
+10. Controller Access via @CurrentUser() Decorator
 ```
 
-### OAuth Flow (Google/Apple)
-
+### Google OAuth Flow (ID Token)
 ```
-1. Client Initiates OAuth (Mobile/Web)
+1. Client Obtains Google ID Token (via SDK)
    ↓
-2. User Authenticates with Provider
+2. Client Sends POST /auth/google with idToken
    ↓
-3. Provider Returns Authorization Code
+3. Backend Verifies ID Token (google-auth-library)
    ↓
-4. Client Sends Code to Backend
+4. Extract User Email & Profile from Token Payload
    ↓
-5. Backend Validates with Provider API
+5. Check if User Exists (by email)
    ↓
-6. Extract User Profile Data
+6. If Exists: Auto-link account (store googleProviderId)
    ↓
-7. Create/Update User in Database
+7. If Not Exists: Create new user
    ↓
 8. Generate JWT Token
    ↓
-9. Return Token to Client
+9. Return Access Token to Client
+```
+
+### Apple OAuth Flow
+```
+1. Client Obtains Apple Identity Token (via SDK)
+   ↓
+2. Client Sends POST /auth/apple with identityToken
+   ↓
+3. Backend Verifies Token (apple-signin-auth library)
+   ↓
+4. Extract User Email & Profile from Token Payload
+   ↓
+5. Check if User Exists (by email)
+   ↓
+6. If Exists: Auto-link account (store appleProviderId)
+   ↓
+7. If Not Exists: Create new user
+   ↓
+8. Generate JWT Token
+   ↓
+9. Return Access Token to Client
+```
+
+### Password Reset Flow
+```
+1. User requests password reset via /forgot-password
+   ↓
+2. Generate OTP (10-minute expiry)
+   ↓
+3. Send OTP via email (Nodemailer)
+   ↓
+4. User verifies OTP via /verify-otp
+   ↓
+5. Generate reset token (15-minute expiry)
+   ↓
+6. User resets password via /reset-password
+   ↓
+7. Update password hash, invalidate reset token
 ```
 
 ### Webhook Security (RevenueCat)
-
 ```
 1. RevenueCat Sends Webhook with Bearer Token
    ↓
 2. Extract Authorization Header
    ↓
-3. Timing-Safe Comparison with Expected Secret
+3. Timing-Safe Comparison with Secret
    ↓
 4. Reject if Invalid (UnauthorizedException)
    ↓
@@ -345,33 +311,56 @@ AI client factory dynamically selects provider based on configuration.
    ↓
 8. Update Database
    ↓
-9. Log Errors (no retry on webhook failure)
+9. Log Errors (no retry)
 ```
+
+### Database Security
+- Row-Level Security (RLS) on all tables
+- Service role key for backend operations
+- User data isolated via user_id FK
+- CASCADE deletion on user removal
 
 ## External Integrations
 
-### Supabase Integration
-- **Purpose:** PostgreSQL database hosting + Row-Level Security
-- **Authentication:** Service role key for backend operations
-- **Features Used:** Database, RLS policies, real-time subscriptions (future)
+| Service | Purpose | Auth | Features |
+|---------|---------|------|----------|
+| **Supabase** | PostgreSQL + Storage | Service role key | Database, RLS, file storage |
+| **RevenueCat** | Subscription management | Bearer token | Webhook events, status checks |
+| **Firebase** | Push notifications | Service account JSON | FCM, multi-device support |
+| **OpenAI** | GPT models | API key | GPT-4o, GPT-4o-mini |
+| **Anthropic** | Claude models | API key | Claude 3.5 Sonnet, Haiku |
+| **Google AI** | Gemini models | API key | Gemini 2.5 Flash, 1.5 Pro |
+| **Langfuse** | AI observability | Public/secret keys | Request tracing, analytics |
+| **Sentry** | Error tracking | DSN | 5xx exception tracking, traces |
 
-### RevenueCat Integration
-- **Purpose:** Cross-platform subscription management
-- **Integration Type:** Webhook-based event processing
-- **Events Handled:** Purchase, renewal, cancellation, expiration
-- **Security:** Bearer token authentication
+## Global Infrastructure
 
-### Firebase Integration
-- **Purpose:** Push notification delivery
-- **Integration Type:** Firebase Admin SDK
-- **Authentication:** Service account credentials (JSON key)
-- **Features Used:** Cloud Messaging (FCM)
+### Middleware Stack
+1. **ValidationPipe:** Auto-transform DTOs, whitelist unknown properties
+2. **ResponseTransformInterceptor:** Wrap all responses in `{code: 1, message, data}` format
+3. **AllExceptionsFilter:** Global exception handler, Sentry integration for 5xx
+4. **HttpLoggerMiddleware:** Log incoming requests and outgoing responses
+5. **JwtAuthGuard:** Protect endpoints (bypass with @Public())
+6. **CORS:** Configured via CORS_ALLOWED_ORIGINS
 
-### AI Providers
-- **OpenAI:** GPT models for conversation and text generation
-- **Anthropic:** Claude models for advanced reasoning
-- **Google AI:** Gemini models for multimodal capabilities
-- **Langfuse:** AI observability and tracing
+### Response Format
+All responses follow consistent format:
+```json
+{
+  "code": 1,
+  "message": "Success message",
+  "data": {...}
+}
+```
+
+### Error Format
+```json
+{
+  "code": 0,
+  "message": "Error description",
+  "data": null
+}
+```
 
 ## Scalability Considerations
 
@@ -383,20 +372,20 @@ AI client factory dynamically selects provider based on configuration.
 ### Future Enhancements
 - **Caching Layer:** Redis for session data and frequent queries
 - **Background Jobs:** Bull/BullMQ for async task processing
-- **CDN:** Static asset delivery for media content
-- **Load Balancer:** Distribute traffic across multiple instances
+- **CDN:** Static asset delivery
+- **Load Balancer:** Distribute traffic across instances
 - **Database Read Replicas:** Separate read/write workloads
 - **Message Queue:** RabbitMQ/SQS for event-driven architecture
 
 ## Monitoring & Observability
 
 ### Application Monitoring
-- **Error Tracking:** Sentry for production errors
+- **Error Tracking:** Sentry for 5xx exceptions (configurable trace sample: 20% prod, 100% dev)
 - **Logging:** NestJS Logger with contextual information
-- **Health Checks:** `/health` endpoint (future feature)
+- **Health Checks:** `/health` endpoint (future)
 
 ### AI Monitoring
-- **Request Tracing:** Langfuse for AI provider requests
+- **Request Tracing:** Langfuse for all AI provider requests
 - **Usage Tracking:** Token consumption and cost analysis
 - **Performance:** Response time and latency metrics
 
@@ -405,42 +394,37 @@ AI client factory dynamically selects provider based on configuration.
 - **Error Tracking:** Async processing errors logged separately
 - **Validation:** DTO schema validation errors captured
 
+### HTTP Logging
+- **Middleware:** HttpLoggerMiddleware logs all requests/responses
+- **Details:** Method, URL, status code, response time, payload
+
 ## Configuration Management
 
 ### Environment-Based Config
-```typescript
-@Module({
-  imports: [
-    ConfigModule.forRoot({
-      load: [appConfiguration],
-      validationSchema: environmentValidationSchema,
-    }),
-  ],
-})
-```
-
-### Validation Schema
-All environment variables validated on application startup using Joi schema.
+All configuration via ConfigModule with validation:
+- Required variables throw errors on startup
+- Type validation (string, number, boolean)
+- Default values for optional variables
+- Regex validation for secrets
 
 ### Configuration Access
 ```typescript
 constructor(private configService: ConfigService) {}
-
-const apiKey = this.configService.get<string>('revenuecat.apiKey');
+const apiKey = this.configService.get<string>('openai.apiKey');
 ```
 
 ## Deployment Architecture
 
 ### Application Deployment
-- **Platform:** Cloud hosting (e.g., Vercel, Railway, AWS)
-- **Runtime:** Node.js 18+
+- **Platform:** Cloud hosting (Vercel, Railway, AWS)
+- **Runtime:** Node.js 20+
 - **Build:** TypeScript compiled to JavaScript
 - **Environment:** Production environment variables
 
 ### Database Deployment
 - **Provider:** Supabase (managed PostgreSQL)
 - **Migrations:** Automated via TypeORM CLI
-- **Backups:** Automated daily backups (Supabase)
+- **Backups:** Automated daily backups
 
 ### CI/CD Pipeline (Future)
 ```
@@ -459,7 +443,7 @@ const apiKey = this.configService.get<string>('revenuecat.apiKey');
 7. Deploy to Production
 ```
 
-## API Design Principles
+## API Design
 
 ### RESTful Conventions
 - **GET:** Retrieve resources
@@ -467,126 +451,40 @@ const apiKey = this.configService.get<string>('revenuecat.apiKey');
 - **PATCH:** Partial update
 - **DELETE:** Remove resources
 
-### Response Format
-```json
-{
-  "data": {},
-  "message": "Success message",
-  "statusCode": 200
-}
-```
+### Response Wrapper
+All responses wrapped in standard format:
+- Success: `{code: 1, message: "...", data: {...}}`
+- Error: `{code: 0, message: "...", data: null}`
 
-### Error Format
-```json
-{
-  "statusCode": 400,
-  "message": "Validation failed",
-  "error": "Bad Request"
-}
-```
-
-### Versioning Strategy
-- Currently: No versioning (v1 implicit)
-- Future: URL-based versioning (`/v2/...`)
-
-## Data Flow Examples
-
-### User Subscription Update Flow
-```
-1. User purchases subscription in mobile app
-   ↓
-2. RevenueCat processes payment via App Store/Play Store
-   ↓
-3. RevenueCat sends webhook to backend
-   ↓
-4. Backend validates webhook authorization
-   ↓
-5. Backend updates subscription record in database
-   ↓
-6. User's next API request reflects updated subscription
-   ↓
-7. Frontend displays premium features
-```
-
-### Push Notification Registration Flow
-```
-1. User logs in on mobile device
-   ↓
-2. App requests FCM token from Firebase SDK
-   ↓
-3. App sends token to backend via POST /notifications/devices
-   ↓
-4. Backend stores token with user_id and platform
-   ↓
-5. Backend can now send push notifications to this device
-   ↓
-6. User uninstalls app → token becomes invalid
-   ↓
-7. App sends DELETE request on logout (optional cleanup)
-```
+### Error Handling
+- Global exception filter catches all errors
+- Never exposes raw exceptions to frontend
+- Consistent error format with meaningful messages
 
 ## Technology Decisions
 
-### Why NestJS?
-- Enterprise-grade architecture out of the box
-- Strong TypeScript support
-- Dependency injection and modularity
-- Extensive ecosystem (Passport, TypeORM, Swagger)
+**Why NestJS?** Enterprise architecture, TypeScript support, DI, extensive ecosystem
 
-### Why TypeORM?
-- TypeScript-first ORM with decorator-based entities
-- Migration support for version control
-- Active Record and Repository patterns
-- Good PostgreSQL support
+**Why TypeORM?** TypeScript-first ORM, migration support, Active Record & Repository patterns
 
-### Why Supabase?
-- Managed PostgreSQL with RLS for security
-- Real-time subscriptions (future feature)
-- Built-in authentication (not used, but available)
-- Generous free tier for development
+**Why Supabase?** Managed PostgreSQL, RLS, real-time ready, generous free tier
 
-### Why RevenueCat?
-- Cross-platform subscription management (iOS, Android, Web)
-- Handles App Store/Play Store complexity
-- Webhook-based integration
-- Analytics and reporting dashboard
+**Why RevenueCat?** Cross-platform subscriptions, handles App Store/Play Store, webhook-based
 
-### Why Firebase?
-- Industry-standard push notification service
-- Multi-platform support (iOS, Android, Web)
-- Reliable delivery with retries
-- Free tier sufficient for most use cases
+**Why Firebase?** Industry-standard FCM, multi-platform, reliable delivery, free tier
+
+**Why LangChain?** Multi-provider AI abstraction, agent framework, production-ready
 
 ## Constraints & Trade-offs
 
-### Current Limitations
-- No rate limiting (potential abuse vector)
-- Synchronous webhook processing (blocking under heavy load)
-- No caching layer (database overhead on frequent queries)
-- No background job processing (all tasks synchronous)
+**Current Limitations:**
+- No distributed caching (single instance)
+- No background job processing (all synchronous)
+- No GraphQL (REST only)
+- No real-time features (REST polling)
 
-### Trade-offs Made
+**Trade-offs Made:**
 - **Simplicity vs. Performance:** Chose simpler architecture for faster development
 - **Cost vs. Features:** Using free tiers where possible
-- **Monolith vs. Microservices:** Monolithic for easier development and deployment
+- **Monolith vs. Microservices:** Monolithic for easier development
 - **SQL vs. NoSQL:** PostgreSQL for ACID compliance and relational data
-
-## Future Architecture Evolution
-
-### Short-term (1-3 months)
-- Add Redis caching layer
-- Implement rate limiting middleware
-- Add health check endpoints
-- Implement proper logging aggregation
-
-### Medium-term (3-6 months)
-- Background job processing with Bull
-- Database read replicas for scalability
-- API versioning strategy
-- Comprehensive monitoring dashboard
-
-### Long-term (6-12 months)
-- Microservices architecture for AI module
-- Event-driven architecture with message queues
-- GraphQL API alongside REST
-- Real-time features via WebSocket

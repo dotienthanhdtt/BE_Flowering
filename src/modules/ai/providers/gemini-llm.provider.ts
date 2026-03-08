@@ -39,12 +39,13 @@ export class GeminiLLMProvider implements LLMProvider {
       const model = this.createModel(options.model, options);
       const response = await model.invoke(messages, {
         metadata: options.metadata,
+        runName: (options.metadata?.feature as string) || undefined,
       });
       return typeof response.content === 'string'
         ? response.content
         : JSON.stringify(response.content);
     } catch (error) {
-      this.logger.error('Gemini chat failed', error);
+      this.logger.error('Gemini chat failed', (error as Error)?.message);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
     }
   }
@@ -54,6 +55,7 @@ export class GeminiLLMProvider implements LLMProvider {
       const model = this.createModel(options.model, options);
       const stream = await model.stream(messages, {
         metadata: options.metadata,
+        runName: (options.metadata?.feature as string) || undefined,
       });
 
       for await (const chunk of stream) {
