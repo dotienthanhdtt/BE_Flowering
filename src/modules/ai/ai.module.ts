@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 // Entities
-import { AiConversation, AiConversationMessage } from '../../database/entities';
+import { AiConversation, AiConversationMessage, Vocabulary } from '../../database/entities';
 
 // Providers
 import { OpenAILLMProvider } from './providers/openai-llm.provider';
@@ -16,6 +16,7 @@ import { PromptLoaderService } from './services/prompt-loader.service';
 import { UnifiedLLMService } from './services/unified-llm.service';
 import { WhisperTranscriptionService } from './services/whisper-transcription.service';
 import { LearningAgentService } from './services/learning-agent.service';
+import { TranslationService } from './services/translation.service';
 
 // Controller
 import { AiController } from './ai.controller';
@@ -27,7 +28,7 @@ import { AiController } from './ai.controller';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AiConversation, AiConversationMessage]),
+    TypeOrmModule.forFeature([AiConversation, AiConversationMessage, Vocabulary]),
     ThrottlerModule.forRoot([
       {
         name: 'ai-short',
@@ -54,6 +55,7 @@ import { AiController } from './ai.controller';
     UnifiedLLMService,
     WhisperTranscriptionService,
     LearningAgentService,
+    TranslationService,
   ],
   exports: [UnifiedLLMService, LearningAgentService, PromptLoaderService],
 })
