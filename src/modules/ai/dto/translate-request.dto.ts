@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
 
 export enum TranslateType {
   WORD = 'word',
@@ -32,4 +32,9 @@ export class TranslateRequestDto {
   @IsString()
   @MaxLength(10)
   targetLang!: string;
+
+  @ApiPropertyOptional({ description: 'Session token for anonymous onboarding users (required when no JWT)' })
+  @IsOptional()
+  @IsString()
+  sessionToken?: string;
 }

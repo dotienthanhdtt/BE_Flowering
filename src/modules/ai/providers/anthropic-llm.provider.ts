@@ -39,6 +39,7 @@ export class AnthropicLLMProvider implements LLMProvider {
       const model = this.createModel(options.model, options);
       const response = await model.invoke(messages, {
         metadata: options.metadata,
+        runName: (options.metadata?.feature as string) || undefined,
       });
       return typeof response.content === 'string'
         ? response.content
@@ -54,6 +55,7 @@ export class AnthropicLLMProvider implements LLMProvider {
       const model = this.createModel(options.model, options);
       const stream = await model.stream(messages, {
         metadata: options.metadata,
+        runName: (options.metadata?.feature as string) || undefined,
       });
 
       for await (const chunk of stream) {

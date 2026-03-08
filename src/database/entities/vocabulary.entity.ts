@@ -40,6 +40,12 @@ export class Vocabulary {
   @Column({ type: 'varchar', length: 255, nullable: true })
   pronunciation?: string;
 
+  @Column({ type: 'text', nullable: true })
+  definition?: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  examples?: string[];
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }
