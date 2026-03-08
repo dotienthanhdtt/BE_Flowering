@@ -82,10 +82,10 @@ export class OnboardingService {
     });
 
     await this.saveMessage(conversation.id, MessageRole.USER, dto.message);
-    await this.saveMessage(conversation.id, MessageRole.ASSISTANT, reply);
+    const messageId = await this.saveMessage(conversation.id, MessageRole.ASSISTANT, reply);
     await this.conversationRepo.increment({ id: conversation.id }, 'messageCount', 2);
 
-    return { reply, turnNumber: currentTurn, isLastTurn };
+    return { reply, messageId, turnNumber: currentTurn, isLastTurn };
   }
 
   async complete(dto: OnboardingCompleteDto) {
@@ -195,8 +195,9 @@ export class OnboardingService {
     conversationId: string,
     role: MessageRole,
     content: string,
-  ): Promise<void> {
-    await this.messageRepo.save({ conversationId, role, content });
+  ): Promise<string> {
+    const saved = await this.messageRepo.save({ conversationId, role, content });
+    return saved.id;
   }
 
   private parseExtraction(response: string): Record<string, unknown> {
