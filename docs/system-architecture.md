@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-11
 
 ## Architecture Overview
 
@@ -33,7 +33,7 @@ AI-powered language learning backend following Clean Architecture principles wit
 ## Core Architecture Patterns
 
 ### 1. Modular Architecture
-Each feature is self-contained with dependencies injected via NestJS DI.
+8 feature modules (auth, ai, user, language, subscription, notification, onboarding, email) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
 
 **Module Structure:**
 ```
@@ -41,9 +41,13 @@ module/
 ├── dto/                    # Data Transfer Objects
 ├── module.controller.ts    # HTTP endpoints
 ├── module.service.ts       # Business logic
-├── module.module.ts        # NestJS module definition
+├── module.module.ts        # NestJS module definition (with TypeOrmModule.forFeature())
 └── [additional services]   # Feature-specific services
 ```
+
+**Critical:** All entities must be registered in BOTH:
+1. `database.module.ts` (global entities array for DataSource)
+2. Feature module's `TypeOrmModule.forFeature([...])` (for @InjectRepository)
 
 ### 2. Dependency Injection
 NestJS IoC container manages all dependencies for testability and loose coupling.
@@ -102,16 +106,18 @@ AI client factory dynamically selects provider based on configuration.
 ┌──────────────────────────────────────────────────────┐
 │           AI Controller                              │
 │  POST /ai/chat, /grammar/check, /exercises/...     │
+│  POST /ai/chat/correct, /ai/translate              │
 │  SSE /ai/chat/stream, /ai/conversations/:id/msgs   │
 └──────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────────┐
-│           Learning Agent Service                     │
-│  - processChat()                                    │
-│  - checkGrammar()                                   │
-│  - generateExercises()                              │
-│  - assessPronunciation()                            │
-└──────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│           Learning Agent Service        │  Translation Service │
+│  - processChat()                        │  - translateWord()   │
+│  - checkGrammar()                       │  - translateSentence │
+│  - checkCorrection()                    │  - upsertVocabulary()│
+│  - generateExercises()                  │                      │
+│  - assessPronunciation()                │                      │
+└────────────────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │        Unified LLM Service                           │
@@ -120,10 +126,14 @@ AI client factory dynamically selects provider based on configuration.
 │  - handleFallback()                                 │
 └──────────────────────────────────────────────────────┘
                     ↓
-┌────────────────┬────────────────┬────────────────┐
-│  OpenAI        │  Anthropic     │  Google AI     │
-│  Provider      │  Provider      │  Provider      │
-└────────────────┴────────────────┴────────────────┘
+┌─────────────────────┬──────────────────┬──────────────────┐
+│  OpenAI (3)         │  Anthropic (2)   │  Google AI (5)   │
+│  - GPT-4o           │  - Claude 3.5    │  - Gemini 2.5 FL │
+│  - GPT-4o-mini      │  - Claude 3 HK   │  - Gemini 2.0 FL │
+│  - GPT-4.1-nano     │                  │  - Gemini 1.5 Pro│
+│                     │                  │  - Gemini 1.5 FL │
+│                     │                  │  - Gemini 1.0 Pro│
+└─────────────────────┴──────────────────┴──────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │         Langfuse Observability                       │
@@ -131,9 +141,27 @@ AI client factory dynamically selects provider based on configuration.
 │  - Log prompts & responses                          │
 │  - Track usage metrics                              │
 └──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│         Database Operations                          │
+│  - Save AiConversationMessage                       │
+│  - Save/update Vocabulary (word translations)       │
+│  - Cache sentence translation on message            │
+└──────────────────────────────────────────────────────┘
 ```
 
 **AI Provider Selection:** Load balancing with fallback, cost optimization per request type
+
+**Translation Service:**
+- Word translation: LLM call → save to Vocabulary entity for user recall
+- Sentence translation: Fetch AiConversationMessage by ID → cache on message entity
+- Model: OPENAI_GPT4_1_NANO (temp 0.1)
+
+**Correction Check:**
+- Input: Previous AI message + user message + target language
+- LLM prompt: correction-check-prompt.md
+- Output: correctedText (null if no errors)
+- Model: OPENAI_GPT4_1_NANO (temp 0.3)
 
 ### Subscription Module Flow
 ```
@@ -194,6 +222,7 @@ User (1) ──< (N) DeviceToken
 User (1) ──< (N) AiConversation
 User (1) ──< (N) RefreshToken
 User (1) ──< (N) PasswordReset
+User (1) ──< (N) Vocabulary
 
 Language (1) ──< (N) UserLanguage
 Language (1) ──< (N) Lesson
@@ -203,6 +232,12 @@ Exercise (1) ──< (N) UserExerciseAttempt
 
 AiConversation (1) ──< (N) AiConversationMessage
 ```
+
+**Vocabulary Entity:**
+- Unique constraint: (userId, word, sourceLang, targetLang)
+- Fields: word, translation, sourceLang, targetLang, partOfSpeech, pronunciation, definition, examples (JSONB)
+- Purpose: Persist user's translated words for recall/learning
+- Created by: TranslationService on word translation endpoint
 
 ### Technology Stack
 - **Database:** PostgreSQL 14+ (Supabase)

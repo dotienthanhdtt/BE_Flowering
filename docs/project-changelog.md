@@ -1,6 +1,6 @@
 # Project Changelog
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-11
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
@@ -14,6 +14,41 @@ All notable changes documented here. Format follows [Keep a Changelog](https://k
 - Email notification service (SendGrid/Mailgun)
 - Admin dashboard for user management
 - Health check endpoints
+
+---
+
+## [1.2.0] - 2026-03-09 (Current)
+
+### Added
+- **Translation Service:** POST /ai/translate endpoint supporting WORD and SENTENCE types
+  - Word translation with vocabulary persistence (saves to Vocabulary entity)
+  - Sentence translation with message-based caching (fetches AiConversationMessage by ID)
+  - Optional authentication (JWT or sessionToken)
+  - Pronunciation extraction for word translations
+- **Vocabulary Entity:** Database entity for storing user's translated words
+  - Fields: word, translation, sourceLang, targetLang, partOfSpeech, pronunciation, definition, examples (JSONB)
+  - Unique constraint: (userId, word, sourceLang, targetLang)
+- **Correction Check Endpoint:** POST /ai/chat/correct with context-aware grammar checking
+  - Validates previousAiMessage, userMessage, targetLanguage (max 10 chars)
+  - Returns correctedText or null if no errors
+  - Optional auth (JWT or anonymous)
+- **Comprehensive Documentation:** All docs updated to reflect actual codebase state
+  - API endpoints: 34 total (verified)
+  - Database entities: 14 total (registered in database.module.ts)
+  - AI models: 12 supported (OpenAI 3, Anthropic 2, Google 5)
+  - TypeScript files: 138 in src/, ~8,330 LOC
+
+### Changed
+- AI module: 28 files, ~2,234 LOC with translation and correction services
+- System architecture updated with Translation service flow, 14 entities mapped
+- Code standards clarified entity registration pattern (database.module.ts + feature module)
+- Roadmap Phase 2 progress: 50% → 65% complete (documentation completed)
+- Project changelog updated with accurate entity count (14, not 15)
+
+### Fixed
+- Entity count corrected: 14 entities (Language, User, UserLanguage, Lesson, Exercise, UserProgress, UserExerciseAttempt, AiConversation, AiConversationMessage, Vocabulary, Subscription, DeviceToken, RefreshToken, PasswordReset)
+- API endpoint count: 34 (9 auth, 9 AI, 6 language, 2 user, 1 subscription, 1 webhook, 2 notification, 3 onboarding, 1 health)
+- All documentation files aligned with actual codebase state
 
 ---
 
@@ -192,9 +227,24 @@ All notable changes documented here. Format follows [Keep a Changelog](https://k
 
 | Version | Release Date | Status | Focus |
 |---------|-------------|--------|-------|
-| 1.1.0 | 2026-03-08 | Current | HTTP logging, Sentry, language flags, documentation |
-| 1.0.0 | 2026-02-04 | Stable | MVP foundation - 8 modules, 30+ endpoints |
-| 2.0.0 | 2026-02-24 | Stable | OAuth improvements, auto-linking, composite tokens |
+| 1.2.0 | 2026-03-09 | Current | Translation, correction, vocabulary, docs alignment |
+| 1.1.0 | 2026-03-08 | Stable | HTTP logging, Sentry, language flags |
+| 1.0.0 | 2026-02-04 | Stable | MVP foundation - 8 modules, 34 endpoints |
+
+---
+
+## Migration Guide: v1.1.0 to v1.2.0
+
+**No Breaking Changes**
+- All existing endpoints compatible
+- New endpoints: POST /ai/translate, POST /ai/chat/correct
+- Vocabulary entity added (non-breaking)
+- Documentation updates with accurate counts
+
+**New Features to Test:**
+- Translation endpoint (WORD and SENTENCE types)
+- Correction check with context
+- Vocabulary persistence
 
 ---
 
@@ -202,38 +252,14 @@ All notable changes documented here. Format follows [Keep a Changelog](https://k
 
 **No Breaking Changes**
 - All existing endpoints compatible
-- Documentation updates only
-- Infrastructure improvements (logging, monitoring)
+- HTTP logger added (transparent)
+- Language flags added (non-breaking schema)
 
 ---
 
-## Migration Guide: v1.0.0 to v2.0.0
+## Migration Guide: v1.0.0 (Early Version to Current)
 
-**Breaking Changes:**
-
-1. Google OAuth endpoint changed
-   - Old: OAuth redirect flow (GET /auth/google → callback)
-   - New: Direct ID token (POST /auth/google with idToken)
-   - Action: Update frontend to use Google SDK for ID token generation
-
-2. All refresh tokens revoked
-   - Reason: Changed to composite format
-   - Action: Users must re-login after migration
-   - System generates new tokens automatically
-
-3. Deprecated dependencies removed
-   - Remove: passport-google-oauth20
-   - Update: Frontend OAuth integration
-
-**Database Schema:**
-- Migration auto-applies provider ID columns
-- Columns nullable (backward compatible)
-- No manual intervention required
-
-**Testing:**
-- Unit tests updated for new token format
-- E2E tests updated for Google ID token endpoint
-- Comprehensive coverage maintained
+**Complete rewrite** of OAuth system (see v2.0.0 notes in archived releases)
 
 ---
 

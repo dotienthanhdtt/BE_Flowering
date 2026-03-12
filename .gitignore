@@ -23,6 +23,8 @@ dist/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+.claude/
+.opencode/
 
 # Logs
 logs/
@@ -38,7 +40,6 @@ coverage/
 .nyc_output/
 test-results/
 junit.xml
-.claude/
 
 # Build
 *.tsbuildinfo
