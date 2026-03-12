@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-11
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.0
+**API Version:** 1.2
 
 ## Overview
 
@@ -403,17 +403,58 @@ Check grammar/vocabulary of user's chat reply in context of previous AI message.
 }
 ```
 
-| Field | Type | Required | Max | Description |
-|-------|------|----------|-----|-------------|
-| previousAiMessage | string | Yes | 4000 | AI tutor's previous message (context) |
-| userMessage | string | Yes | 4000 | User's reply to check |
-| targetLanguage | string | Yes | 10 | Target language code (e.g. "en", "ja", "vi") |
+| Field | Type | Required | Limit | Description |
+|-------|------|----------|-------|-------------|
+| previousAiMessage | string | Yes | 4000 chars | AI tutor's previous message (context) |
+| userMessage | string | Yes | 4000 chars | User's reply to check |
+| targetLanguage | string | Yes | 10 chars | Target language code (e.g., "en", "ja", "vi") |
 
 **Response (200) — errors found:** `{code: 1, message: "Success", data: {correctedText: "I went to the park yesterday."}}`
 
 **Response (200) — no errors:** `{code: 1, message: "Success", data: {correctedText: null}}`
 
 **Errors:** 400 (missing/empty fields), 429 (rate limit)
+
+---
+
+#### POST /ai/translate
+Translate words or sentences with vocabulary persistence for words.
+
+**Auth:** Optional (JWT or sessionToken) | **Request:**
+```json
+{
+  "type": "WORD",
+  "text": "beautiful",
+  "sourceLang": "en",
+  "targetLang": "es"
+}
+```
+
+**OR (sentence translation by messageId):**
+```json
+{
+  "type": "SENTENCE",
+  "messageId": "uuid",
+  "sourceLang": "en",
+  "targetLang": "es",
+  "sessionToken": "optional_session_id"
+}
+```
+
+| Field | Type | Required | Limit | Description |
+|-------|------|----------|-------|-------------|
+| type | enum | Yes | - | WORD or SENTENCE |
+| text | string | No | 255 chars | Word/phrase to translate (WORD only) |
+| messageId | UUID | No | - | Conversation message ID (SENTENCE only) |
+| sourceLang | string | Yes | 10 chars | Source language code (e.g., "en", "ja") |
+| targetLang | string | Yes | 10 chars | Target language code (e.g., "es", "vi") |
+| sessionToken | string | No | - | Optional session token for anonymous users |
+
+**Response (200) — word translation:** `{code: 1, message: "Success", data: {translation: "hermoso", word: "beautiful", pronunciation: "er-MO-so"}}`
+
+**Response (200) — sentence translation:** `{code: 1, message: "Success", data: {translatedContent: "Eso es hermoso."}}`
+
+**Errors:** 400 (invalid type/missing fields), 404 (message not found), 429 (rate limit)
 
 ---
 

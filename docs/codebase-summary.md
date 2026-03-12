@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-03-08
-**Generated from:** repomix-output.xml
+**Last Updated:** 2026-03-11
+**Generated from:** repomix-output.xml (updated 2026-03-11)
 
 ## Overview
 
@@ -9,11 +9,11 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ## Metrics
 
-- **Total TypeScript Files:** 129 files in src/
-- **Code Lines:** ~7,500 LOC in src/
+- **Total TypeScript Files:** 138 files in src/
+- **Code Lines:** ~8,330 LOC in src/
 - **Modules:** 8 feature modules
-- **Database Entities:** 14 TypeORM entities
-- **API Endpoints:** 30+ REST endpoints
+- **Database Entities:** 14 TypeORM entities (registered in database.module.ts)
+- **API Endpoints:** 34 REST endpoints
 - **External Integrations:** 8 (Supabase, RevenueCat, Firebase, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
 
 ## Tech Stack
@@ -35,7 +35,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ## Module Structure
 
-### 1. Auth Module (24 files, ~600 LOC)
+### 1. Auth Module (27 files, ~3,567 LOC)
 
 **Purpose:** User authentication via email/password, Google ID token, Apple Sign-In with account auto-linking
 
@@ -54,27 +54,31 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - JWT HS256 (7d expiry)
 - Google Auth Library for ID token verification
 
-### 2. AI Module (~30 files, ~800 LOC)
+### 2. AI Module (28 files, ~2,234 LOC)
 
 **Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing
 
 **Endpoints:**
 - POST /ai/chat, /grammar/check, /exercises/generate, /pronunciation/assess
+- POST /ai/chat/correct (grammar correction with context)
+- POST /ai/translate (word/sentence translation)
 - POST /ai/conversations, GET /ai/conversations/:id/messages
 - SSE /ai/chat/stream (Server-Sent Events)
 
-**Supported Models:** GPT-4o, GPT-4o-mini, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash
+**Supported Models:** GPT-4o, GPT-4o-mini, GPT-4.1-nano, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash
 
 **Rate Limiting:** 20 req/min, 100 req/hr per user
 
 **Key Features:**
 - Multi-provider strategy pattern (OpenAI, Anthropic, Gemini)
-- Prompts stored as markdown in prompts/ directory
+- Prompts stored as markdown in prompts/ directory (10 templates)
 - Whisper audio transcription
 - Langfuse tracing for all AI requests
 - Async processing for long-running tasks
+- Translation service (word/sentence) with vocabulary storage
+- Correction check endpoint for grammar validation
 
-### 3. Onboarding Module (11 files, ~280 LOC)
+### 3. Onboarding Module (11 files, ~1,309 LOC)
 
 **Purpose:** Anonymous session-based chat for new users
 
@@ -94,7 +98,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Scenario generation
 - Session-based state management
 
-### 4. Language Module (10 files, ~400 LOC)
+### 4. Language Module (9 files, 570 LOC)
 
 **Purpose:** Language catalog and user language preferences
 
@@ -108,7 +112,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Language: Available languages with `isNativeAvailable`, `isLearningAvailable`, `flagUrl`
 - UserLanguage: User's learning languages with proficiency level
 
-### 5. User Module (5 files, ~130 LOC)
+### 5. User Module (5 files, 179 LOC)
 
 **Purpose:** User profile management
 
@@ -116,7 +120,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - GET /users/me
 - PATCH /users/me
 
-### 6. Subscription Module (6 files, ~400 LOC)
+### 6. Subscription Module (6 files, 404 LOC)
 
 **Purpose:** RevenueCat subscription management
 
@@ -131,7 +135,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Security:** Timing-safe Bearer token validation
 
-### 7. Notification Module (6 files, ~400 LOC)
+### 7. Notification Module (6 files, 424 LOC)
 
 **Purpose:** Firebase FCM push notifications
 
@@ -147,7 +151,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Device name tracking
 - Last used timestamp for cleanup
 
-### 8. Email Module (2 files, ~45 LOC)
+### 8. Email Module (2 files, 43 LOC)
 
 **Purpose:** Nodemailer SMTP for OTP delivery
 
@@ -160,8 +164,21 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Core:** User, Language, UserLanguage
 **Content:** Lesson, Exercise
 **Progress:** UserProgress, UserExerciseAttempt
-**AI:** AiConversation, AiConversationMessage
+**AI:** AiConversation, AiConversationMessage, Vocabulary
 **Infrastructure:** Subscription, DeviceToken, RefreshToken, PasswordReset
+
+### Vocabulary Entity (New)
+- `id` - UUID primary key
+- `userId` - FK to User
+- `word` - String (lexeme)
+- `translation` - String
+- `sourceLang` - String (max 10, e.g., "en", "ja")
+- `targetLang` - String (max 10)
+- `partOfSpeech` - String (noun, verb, etc.)
+- `pronunciation` - String (IPA)
+- `definition` - Text
+- `examples` - JSONB (array of example sentences)
+- Unique constraint: (userId, word, sourceLang, targetLang)
 
 ### User Entity Updates
 - `googleProviderId` - OAuth account linking
@@ -173,6 +190,10 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `expiresAt` - Session expiration (7 days)
 - `messageCount` - Turn counter
 - `metadata` - JSONB for flexible data storage
+
+### AiConversationMessage Entity Updates
+- `translatedContent` - Cached sentence translation
+- `translatedLang` - Language code of translation
 
 ### PasswordReset Entity (New)
 - `otpHash` - Hashed OTP
@@ -202,7 +223,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - **ResponseTransformInterceptor:** Wraps all responses in `{code: 1, message, data}` format
 - **AllExceptionsFilter:** Global exception handler with Sentry integration for 5xx
 - **HttpLoggerMiddleware:** Logs incoming requests and responses
-- **JwtAuthGuard:** Global auth (bypass with @Public())
+- **JwtAuthGuard:** Global auth (bypass with @Public(), optional with @OptionalAuth())
 - **CORS:** Configured via CORS_ALLOWED_ORIGINS env var
 
 ### Response Format
@@ -258,7 +279,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Endpoints covered:**
 - Auth (registration, login, OAuth, refresh, password reset)
 - User profile management
-- AI features (chat, grammar, exercises, pronunciation)
+- AI features (chat, grammar, exercises, pronunciation, translation, correction)
 - Onboarding chat
 - Languages (CRUD, user preferences)
 - Subscriptions (status, webhooks)
