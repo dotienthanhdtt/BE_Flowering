@@ -1,7 +1,7 @@
 # Project Overview & PDR
 
-**Last Updated:** 2026-03-08
-**Version:** 1.1
+**Last Updated:** 2026-03-11
+**Version:** 1.2
 **Status:** Active Development
 
 ## Executive Summary
@@ -23,9 +23,9 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 
 ### 2. AI-Powered Learning
 - Conversation practice with AI tutors
-- Vocabulary explanations
-- Grammar correction and feedback
-- Translation services
+- Vocabulary explanations & translations (word/sentence)
+- Grammar correction with context awareness
+- Translation services with vocabulary persistence
 - Multi-provider AI (OpenAI, Anthropic, Google AI) with Langfuse tracing
 
 ### 3. Onboarding (Anonymous)
@@ -74,7 +74,7 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 | Module | Endpoints | Key Features |
 |--------|-----------|--------------|
 | **auth/** (24 files) | POST /auth/register, /login, /google, /apple, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | JWT, OAuth auto-linking, password reset |
-| **ai/** (~30 files) | POST /ai/chat, /grammar/check, /exercises/generate, /pronunciation/assess, /conversations | LangChain, multi-provider, rate limiting (100/hr free, 1000/hr premium) |
+| **ai/** (~32 files) | POST /ai/chat, /grammar/check, /exercises/generate, /pronunciation/assess, /chat/correct, /translate, /conversations | LangChain, multi-provider, translation, correction, rate limiting (100/hr free, 1000/hr premium) |
 | **onboarding/** (11 files) | POST /onboarding/start, /chat, /complete | Anonymous chat, session-based (10-turn max, 7d TTL) |
 | **language/** (10 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags |
 | **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
@@ -87,14 +87,16 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 **Core:** User, Language, UserLanguage
 **Content:** Lesson, Exercise
 **Progress:** UserProgress, UserExerciseAttempt
-**AI:** AiConversation (anonymous/authenticated), AiConversationMessage
+**AI:** AiConversation (anonymous/authenticated), AiConversationMessage, Vocabulary
 **Infrastructure:** Subscription, DeviceToken, RefreshToken, PasswordReset
 
 **Recent Updates:**
 - Language: `isNativeAvailable`, `isLearningAvailable`, `flagUrl`
 - AiConversation: `type` (ANONYMOUS/AUTHENTICATED), `sessionToken`, `expiresAt`, `messageCount`
+- AiConversationMessage: `translatedContent`, `translatedLang` (sentence translation caching)
 - User: `googleProviderId`, `appleProviderId`
 - PasswordReset: OTP flow support
+- Vocabulary: NEW entity for user's translated words with definition & examples
 
 ## Product Development Requirements (PDR)
 
@@ -150,10 +152,10 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 
 ## Success Metrics
 
-- 20+ API endpoints operational
-- 8 modules implemented (129 TS files)
+- 34 API endpoints operational
+- 8 modules implemented (138 TS files, ~8,330 LOC)
 - 14 database entities with RLS
-- 10+ AI models supported
+- 12 AI models supported
 - Zero critical security vulnerabilities
 
 ## Deployment

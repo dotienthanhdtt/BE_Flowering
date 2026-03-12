@@ -1,6 +1,6 @@
 # Project Roadmap
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-11
 **Project:** AI Language Learning Backend
 **Status:** Phase 1 Complete, Phase 2 In Progress
 
@@ -23,14 +23,14 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - Onboarding (anonymous chat, 10-turn max, 7-day TTL)
 - Subscriptions (RevenueCat webhooks)
 - Push notifications (Firebase FCM)
-- Database (14 entities, RLS, migrations)
+- Database (14 entities, RLS, 9 migrations)
 - Swagger documentation
 
 **Metrics:**
-- ✅ 30+ API endpoints
-- ✅ 8 feature modules (129 TS files)
+- ✅ 34 API endpoints
+- ✅ 8 feature modules (138 TS files, ~8,330 LOC)
 - ✅ 14 database entities with RLS
-- ✅ 10+ AI models supported
+- ✅ 12 AI models supported
 - ✅ Global auth guard + response wrapper
 - ✅ Sentry + Langfuse integration
 
@@ -40,7 +40,7 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 **Duration:** 6 weeks
 **Status:** 🔄 In Progress
-**Progress:** 35% (HTTP logger done, Sentry done, language flags done, prompt assets done)
+**Progress:** 65% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, documentation done)
 **Target Completion:** 2026-03-20
 
 **Completed:**
@@ -49,6 +49,10 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ Language native/learning flags (2026-02-28)
 - ✅ Prompt .md files copy to dist (2026-03-04)
 - ✅ Onboarding config updates (2026-03-07)
+- ✅ Translation service (word/sentence) (2026-03-08)
+- ✅ Correction check endpoint (2026-03-08)
+- ✅ Vocabulary entity with definition & examples (2026-03-08)
+- ✅ Documentation update (project-overview, codebase-summary, code-standards, system-architecture, api-docs, roadmap, changelog) (2026-03-11)
 
 **In Progress:**
 | Feature | Priority | Status | Target Date |
@@ -145,21 +149,24 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 ---
 
-## Current Sprint (Week of 2026-03-08)
+## Current Sprint (Week of 2026-03-10)
 
-**Sprint Goal:** Complete Phase 2 foundation work
+**Sprint Goal:** Complete Phase 2 hardening with testing and caching
 
-**Completed This Week:**
-- ✅ Update all project documentation (api-docs, codebase-summary, system-architecture, etc.)
+**Completed:**
+- ✅ Translation service (word/sentence with LangChain)
+- ✅ Correction check endpoint with context awareness
+- ✅ Vocabulary entity (definition, examples, pronunciation)
+- ✅ Documentation update (all 7 docs aligned with actual codebase)
 
 **In Progress:**
-- 🔄 Comprehensive unit test infrastructure
-- 🔄 Auth module test coverage
+- 🔄 Unit test coverage for AI module
+- 🔄 Integration tests for translation service
 
 **Planned:**
-- 📋 E2E test suite setup
-- 📋 Redis caching layer design
-- 📋 Rate limiting implementation
+- 📋 E2E test suite for new endpoints
+- 📋 Redis caching layer for translations
+- 📋 Per-user rate limiting
 
 ---
 
@@ -250,7 +257,8 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 | Version | Release Date | Status | Key Features |
 |---------|-------------|--------|--------------|
-| 1.1.0 | 2026-03-08 | In Progress | HTTP logger, Sentry, language flags, prompt assets |
+| 1.2.0 | 2026-03-09 | Current | Translation, correction, vocabulary, documentation |
+| 1.1.0 | 2026-03-08 | Stable | HTTP logger, Sentry, language flags, prompt assets |
 | 1.0.0 | 2026-02-04 | Stable | MVP: auth, AI, onboarding, subscriptions, notifications |
 
 ---

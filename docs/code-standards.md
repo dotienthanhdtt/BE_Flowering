@@ -1,6 +1,6 @@
 # Code Standards
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-11
 
 ## Project Structure
 
@@ -18,9 +18,9 @@ src/
 │   └── environment-validation-schema.ts  # Joi validation
 ├── database/                  # Database layer
 │   ├── entities/             # TypeORM entities (14 total)
-│   ├── migrations/           # Database migrations (timestamped)
-│   ├── database.module.ts    # TypeORM module configuration
-│   └── supabase-storage.service.ts   # Supabase client wrapper
+│   ├── migrations/           # Database migrations (9 total, timestamped)
+│   ├── database.module.ts    # TypeORM module configuration (14 entities registered)
+│   └── supabase-storage.service.ts   # Supabase Storage wrapper
 └── modules/                   # Feature modules (domain-driven)
     ├── auth/                 # Authentication & authorization
     ├── user/                 # User management
@@ -625,6 +625,102 @@ feature/subscription-module
 bugfix/device-token-validation
 hotfix/webhook-auth-timing
 refactor/ai-client-factory
+```
+
+## AI Module Patterns
+
+### LangChain Integration
+
+Multi-provider LLM pattern with fallback:
+
+```typescript
+@Injectable()
+export class UnifiedLLMService {
+  async callLLM(prompt: string, model: ModelName): Promise<string> {
+    const client = this.getClient(model);
+    const langfuseClient = this.langfuseService.getClient();
+
+    return langfuseClient.trace({
+      name: 'ai-request',
+      input: prompt,
+      metadata: { model },
+    }).then(async (trace) => {
+      const response = await client.invoke(prompt);
+      trace.end({ output: response });
+      return response;
+    }).catch((error) => {
+      this.logger.error(`LLM error: ${error.message}`);
+      throw new BadRequestException('AI provider unavailable');
+    });
+  }
+}
+```
+
+### Optional Authentication Pattern
+
+Use `@OptionalAuth()` decorator for endpoints accepting JWT or sessionToken:
+
+```typescript
+@Post('translate')
+@OptionalAuth()
+async translateWord(
+  @CurrentUser() user?: User,
+  @Body() dto: TranslateRequestDto,
+) {
+  const userId = user?.id || dto.sessionToken;
+  // Process request (works for authenticated or anonymous)
+}
+```
+
+Guard implementation:
+
+```typescript
+@Injectable()
+export class OptionalAuthGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    const token = this.extractToken(request);
+
+    if (!token) {
+      return true; // Allow unauthenticated access
+    }
+
+    try {
+      request.user = this.jwtService.verify(token);
+    } catch {
+      // Token invalid but optional, allow anyway
+    }
+    return true;
+  }
+}
+```
+
+### Prompt Management
+
+Store prompts as markdown files in `src/modules/ai/prompts/`:
+
+**File:** `correction-check-prompt.md`
+```markdown
+# Grammar Correction Check
+
+Context: Previous AI message
+User message: {userMessage}
+Target language: {targetLanguage}
+
+Respond with corrected text or null if no errors.
+```
+
+Load and render:
+
+```typescript
+async checkCorrection(dto: CorrectionCheckRequestDto): Promise<string | null> {
+  const prompt = await this.promptLoader.load('correction-check-prompt.md');
+  const rendered = prompt
+    .replace('{userMessage}', dto.userMessage)
+    .replace('{targetLanguage}', dto.targetLanguage);
+
+  return this.llmService.callLLM(rendered, 'GPT_4_1_NANO');
+}
 ```
 
 ## Deprecated Patterns
