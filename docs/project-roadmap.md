@@ -1,8 +1,8 @@
 # Project Roadmap
 
-**Last Updated:** 2026-03-11
+**Last Updated:** 2026-03-14
 **Project:** AI Language Learning Backend
-**Status:** Phase 1 Complete, Phase 2 In Progress
+**Status:** Phase 1 Complete, Phase 2 In Progress (70%)
 
 ## Vision
 
@@ -40,7 +40,7 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 **Duration:** 6 weeks
 **Status:** 🔄 In Progress
-**Progress:** 65% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, documentation done)
+**Progress:** 70% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, premium features, documentation done)
 **Target Completion:** 2026-03-20
 
 **Completed:**
@@ -52,7 +52,12 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ Translation service (word/sentence) (2026-03-08)
 - ✅ Correction check endpoint (2026-03-08)
 - ✅ Vocabulary entity with definition & examples (2026-03-08)
-- ✅ Documentation update (project-overview, codebase-summary, code-standards, system-architecture, api-docs, roadmap, changelog) (2026-03-11)
+- ✅ Documentation update (api-docs, codebase-summary, code-standards, system-architecture, roadmap, changelog) (2026-03-11)
+- ✅ WebhookEvent entity (DB-based webhook idempotency) (2026-03-14)
+- ✅ POST /subscriptions/sync endpoint (RevenueCat sync) (2026-03-14)
+- ✅ PremiumGuard & @RequirePremium() decorator (AI endpoint protection) (2026-03-14)
+- ✅ All AI endpoints now require premium subscription (2026-03-14)
+- ✅ Updated documentation for subscription payment features (2026-03-14)
 
 **In Progress:**
 | Feature | Priority | Status | Target Date |
