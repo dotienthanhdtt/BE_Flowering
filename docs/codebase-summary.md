@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-03-11
-**Generated from:** repomix-output.xml (updated 2026-03-11)
+**Last Updated:** 2026-03-14
+**Generated from:** repomix-output.xml (updated 2026-03-14)
 
 ## Overview
 
@@ -13,7 +13,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - **Code Lines:** ~8,330 LOC in src/
 - **Modules:** 8 feature modules
 - **Database Entities:** 14 TypeORM entities (registered in database.module.ts)
-- **API Endpoints:** 34 REST endpoints
+- **API Endpoints:** 35 REST endpoints (34 + /subscriptions/sync)
 - **External Integrations:** 8 (Supabase, RevenueCat, Firebase, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
 
 ## Tech Stack
@@ -122,16 +122,19 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ### 6. Subscription Module (6 files, 404 LOC)
 
-**Purpose:** RevenueCat subscription management
+**Purpose:** RevenueCat subscription management with sync endpoint and DB-based idempotency
 
 **Endpoints:**
-- GET /subscriptions/me
-- POST /webhooks/revenuecat (public, bearer auth)
+- GET /subscriptions/me (get user's subscription)
+- POST /subscriptions/sync (sync with RevenueCat API, called by mobile)
+- POST /webhooks/revenuecat (public, bearer auth, idempotent)
 
 **Webhook Events:** INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, PRODUCT_CHANGE
 
 **Plans:** free, monthly, yearly, lifetime
 **Status:** active, trial, expired, cancelled
+
+**Idempotency:** DB-based (WebhookEvent table) replaces in-memory Set for reliability across restarts
 
 **Security:** Timing-safe Bearer token validation
 
@@ -159,13 +162,13 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - OTP email sending for password reset
 - Configured via SMTP environment variables
 
-## Database Schema (14 Entities)
+## Database Schema (15 Entities)
 
 **Core:** User, Language, UserLanguage
 **Content:** Lesson, Exercise
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation, AiConversationMessage, Vocabulary
-**Infrastructure:** Subscription, DeviceToken, RefreshToken, PasswordReset
+**Infrastructure:** Subscription, DeviceToken, RefreshToken, PasswordReset, WebhookEvent
 
 ### Vocabulary Entity (New)
 - `id` - UUID primary key
@@ -201,6 +204,13 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `attempts` - Failed attempt counter
 - `expiresAt` - Token expiration
 
+### WebhookEvent Entity (New - 2026-03-14)
+- `eventId` - Primary key from RevenueCat webhook
+- `eventType` - Event type (e.g., INITIAL_PURCHASE, RENEWAL)
+- `processedAt` - Timestamp when webhook was processed
+- **Purpose:** Webhook idempotency - prevents duplicate processing across server restarts
+- **Registration:** Both database.module.ts and subscription.module.ts
+
 ## Configuration
 
 **Environment Variables:** .env validated via Joi schema
@@ -224,6 +234,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - **AllExceptionsFilter:** Global exception handler with Sentry integration for 5xx
 - **HttpLoggerMiddleware:** Logs incoming requests and responses
 - **JwtAuthGuard:** Global auth (bypass with @Public(), optional with @OptionalAuth())
+- **PremiumGuard:** Checks active premium subscription (used with @RequirePremium() on AI endpoints)
 - **CORS:** Configured via CORS_ALLOWED_ORIGINS env var
 
 ### Response Format
