@@ -15,6 +15,7 @@ import { DeviceToken } from './entities/device-token.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { PasswordReset } from './entities/password-reset.entity';
 import { Vocabulary } from './entities/vocabulary.entity';
+import { WebhookEvent } from './entities/webhook-event.entity';
 
 const entities = [
   Language,
@@ -31,6 +32,7 @@ const entities = [
   RefreshToken,
   PasswordReset,
   Vocabulary,
+  WebhookEvent,
 ];
 
 @Module({
