@@ -34,8 +34,6 @@ import {
   ChatRequestDto,
   ChatResponseDto,
   CreateConversationDto,
-  GrammarCheckRequestDto,
-  GrammarCheckResult,
   CorrectionCheckRequestDto,
   CorrectionCheckResponseDto,
   GenerateExerciseRequestDto,
@@ -93,13 +91,6 @@ export class AiController {
     })();
 
     return subject.asObservable();
-  }
-
-  @Post('grammar/check')
-  @ApiOperation({ summary: 'Check text grammar' })
-  @ApiResponse({ status: 200, type: GrammarCheckResult })
-  async checkGrammar(@Body() dto: GrammarCheckRequestDto): Promise<GrammarCheckResult> {
-    return this.learningAgent.checkGrammar(dto.text, dto.targetLanguage, dto.model);
   }
 
   @Public()

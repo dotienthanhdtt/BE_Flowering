@@ -8,7 +8,6 @@ import { LLMModel } from '../providers/llm-models.enum';
 import { AiConversation, AiConversationMessage, MessageRole } from '../../../database/entities';
 import {
   ConversationContext,
-  GrammarCheckResult,
   ExerciseResult,
   PronunciationResult,
   CreateConversationDto,
@@ -131,31 +130,6 @@ export class LearningAgentService {
     await this.saveMessage(context.conversationId, MessageRole.USER, message);
     await this.saveMessage(context.conversationId, MessageRole.ASSISTANT, fullResponse);
     await this.conversationRepo.increment({ id: context.conversationId }, 'messageCount', 2);
-  }
-
-  /**
-   * Check grammar in provided text.
-   */
-  async checkGrammar(
-    text: string,
-    targetLanguage: string,
-    model?: LLMModel,
-  ): Promise<GrammarCheckResult> {
-    const prompt = this.promptLoader.loadPrompt('grammar-check-prompt', {
-      text,
-      targetLanguage,
-    });
-
-    const response = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: model || LLMModel.GEMINI_1_5_FLASH,
-      metadata: { feature: 'grammar-check' },
-    });
-
-    return this.parseJsonResponse<GrammarCheckResult>(response, {
-      isCorrect: true,
-      errors: [],
-      correctedText: text,
-    });
   }
 
   /**
