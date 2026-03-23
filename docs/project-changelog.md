@@ -1,11 +1,56 @@
 # Project Changelog
 
-**Last Updated:** 2026-03-11
+**Last Updated:** 2026-03-14
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+
+---
+
+## [1.2.1] - 2026-03-14 (Current - Subscription Payment Features)
+
+### Added
+- **WebhookEvent Entity:** Database-based webhook idempotency for RevenueCat
+  - Stores processed webhook event IDs to prevent duplicates across server restarts
+  - Fields: eventId (primary key), eventType, processedAt (timestamptz)
+  - Replaces previous in-memory Set implementation
+- **POST /subscriptions/sync Endpoint:** Mobile-initiated subscription sync with RevenueCat
+  - Called by mobile app after purchase and on app open
+  - Queries RevenueCat API for current entitlements
+  - Updates local Subscription record with latest status
+  - Returns: SubscriptionDto with isActive field
+- **PremiumGuard & @RequirePremium() Decorator:** Feature-level subscription checking
+  - Guards all AI endpoints (chat, grammar, exercises, pronunciation, translate, correct, conversations)
+  - Returns 403 Forbidden if user lacks active premium subscription
+  - Used alongside global JwtAuthGuard for two-tier protection
+- **Subscription.isActive Field:** Boolean flag indicating active status (replaces manual status checking)
+
+### Changed
+- **AI Module Auth Requirements:** All endpoints now require premium subscription
+  - Changed from `@OptionalAuth()` to `@RequirePremium()` for /ai/translate and /ai/chat/correct
+  - Grammar check, exercises, pronunciation, chat all now premium-only
+  - Free users can only access onboarding and language catalog
+- **Webhook Processing:** Now idempotent via WebhookEvent table
+  - Insert eventId first (acts as unique constraint lock)
+  - Skip processing if duplicate detected (catches already processed)
+  - Returns success (200) regardless to meet RevenueCat 60s requirement
+
+### Updated Documentation
+- API docs: Added POST /subscriptions/sync, marked all AI endpoints as (Premium)
+- Codebase summary: Updated entity count (15 now), documented WebhookEvent and PremiumGuard
+- System architecture: Added sync flow diagram, premium feature access section, updated Subscription module flow
+- Roadmap & changelog aligned with new features
+
+### Database Migrations
+- New migration: 1740500000000-create-webhook-events-table.ts
+  - Creates webhook_events table with eventId as primary key
+  - Indexes: processedAt for cleanup queries
+
+---
+
+## [Unreleased] (Future)
 
 ### Planned
 - Redis caching layer for frequently accessed data

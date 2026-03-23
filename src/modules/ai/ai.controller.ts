@@ -4,7 +4,6 @@ import {
   Get,
   Body,
   Param,
-  Req,
   Sse,
   UseInterceptors,
   UseGuards,
@@ -12,7 +11,6 @@ import {
   ParseUUIDPipe,
   BadRequestException,
 } from '@nestjs/common';
-import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import {
@@ -28,7 +26,9 @@ import { LearningAgentService } from './services/learning-agent.service';
 import { WhisperTranscriptionService } from './services/whisper-transcription.service';
 import { TranslationService } from './services/translation.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
+import { Public } from '../../common/decorators/public-route.decorator';
+import { RequirePremium } from '../../common/decorators/require-premium.decorator';
+import { PremiumGuard } from '../../common/guards/premium.guard';
 import { User } from '../../database/entities';
 import {
   ChatRequestDto,
@@ -57,7 +57,8 @@ const MAX_AUDIO_SIZE = 10 * 1024 * 1024;
 @ApiTags('ai')
 @ApiBearerAuth('JWT-auth')
 @Controller('ai')
-@UseGuards(ThrottlerGuard)
+@UseGuards(ThrottlerGuard, PremiumGuard)
+@RequirePremium()
 export class AiController {
   constructor(
     private learningAgent: LearningAgentService,
@@ -101,8 +102,9 @@ export class AiController {
     return this.learningAgent.checkGrammar(dto.text, dto.targetLanguage, dto.model);
   }
 
+  @Public()
+  @RequirePremium(false)
   @Post('chat/correct')
-  @OptionalAuth()
   @ApiOperation({ summary: 'Check grammar/vocabulary of user chat reply' })
   @ApiResponse({ status: 200, type: CorrectionCheckResponseDto })
   async checkCorrection(
@@ -173,12 +175,12 @@ export class AiController {
     return { ...result, transcribedText };
   }
 
+  @Public()
+  @RequirePremium(false)
   @Post('translate')
-  @OptionalAuth()
-  @ApiOperation({ summary: 'Translate a word or sentence (JWT or sessionToken)' })
+  @ApiOperation({ summary: 'Translate a word or sentence' })
   @ApiResponse({ status: 200, description: 'Translation result' })
-  async translate(@Req() req: Request, @Body() dto: TranslateRequestDto) {
-    const user = req.user as User | null;
+  async translate(@CurrentUser() user: User | null, @Body() dto: TranslateRequestDto) {
     const userId = user?.id ?? null;
 
     if (dto.type === TranslateType.WORD) {

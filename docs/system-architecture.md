@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-03-11
+**Last Updated:** 2026-03-14
 
 ## Architecture Overview
 
@@ -166,26 +166,39 @@ AI client factory dynamically selects provider based on configuration.
 ### Subscription Module Flow
 ```
 ┌──────────────────────────────────────────────────────┐
-│      Subscription Controller & Webhook Controller    │
+│    Subscription Controller & Webhook Controller      │
 │  GET /subscriptions/me                              │
+│  POST /subscriptions/sync (mobile-initiated)        │
 │  POST /webhooks/revenuecat (public, bearer auth)   │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │        Subscription Service                          │
 │  - getUserSubscription()                            │
+│  - syncSubscription() → RevenueCat API              │
 │  - processWebhook()                                 │
 │  - updateSubscriptionStatus()                       │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┘
-│        Webhook Processing Flow:                      │
+│        Webhook Processing Flow (Idempotent):         │
 │  1. Validate Bearer token (timing-safe)             │
-│  2. Respond immediately with 200 (< 60s)            │
-│  3. Process async via setImmediate()                │
-│  4. Update subscription status in DB                │
-│  5. Log processing errors                           │
+│  2. Check WebhookEvent table for eventId            │
+│  3. Respond immediately with 200 (< 60s)            │
+│  4. Process async via setImmediate()                │
+│  5. Insert into WebhookEvent (acts as lock)         │
+│  6. Update subscription status in DB                │
+│  7. Log processing errors                           │
 └──────────────────────────────────────────────────────┘
+```
+
+**Sync Flow (Mobile → Backend):**
+```
+1. Mobile app calls POST /subscriptions/sync
+2. Backend queries RevenueCat API with user's app_user_id
+3. Parse entitlements from RevenueCat response
+4. Upsert local Subscription record
+5. Return updated subscription status to client
 ```
 
 ### Onboarding Module Flow
@@ -370,13 +383,21 @@ AiConversation (1) ──< (N) AiConversationMessage
 
 ## Global Infrastructure
 
-### Middleware Stack
+### Middleware & Guard Stack
 1. **ValidationPipe:** Auto-transform DTOs, whitelist unknown properties
 2. **ResponseTransformInterceptor:** Wrap all responses in `{code: 1, message, data}` format
 3. **AllExceptionsFilter:** Global exception handler, Sentry integration for 5xx
 4. **HttpLoggerMiddleware:** Log incoming requests and outgoing responses
-5. **JwtAuthGuard:** Protect endpoints (bypass with @Public())
-6. **CORS:** Configured via CORS_ALLOWED_ORIGINS
+5. **JwtAuthGuard:** Global protect endpoints (bypass with @Public())
+6. **PremiumGuard:** Feature-level check for active subscription (use with @RequirePremium() on AI endpoints)
+7. **CORS:** Configured via CORS_ALLOWED_ORIGINS
+
+### Premium Feature Access
+AI endpoints use two-tier protection:
+1. **JwtAuthGuard (global):** Ensures user is authenticated
+2. **PremiumGuard (feature-level):** Verifies subscription.isActive == true
+3. **Decorator:** `@RequirePremium()` marks endpoint as premium-only
+4. **Error:** Returns 403 Forbidden if subscription inactive
 
 ### Response Format
 All responses follow consistent format:

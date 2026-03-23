@@ -5,6 +5,9 @@ import { ThrottlerModule } from '@nestjs/throttler';
 // Entities
 import { AiConversation, AiConversationMessage, Vocabulary } from '../../database/entities';
 
+// Subscription module (for PremiumGuard)
+import { SubscriptionModule } from '../subscription/subscription.module';
+
 // Providers
 import { OpenAILLMProvider } from './providers/openai-llm.provider';
 import { AnthropicLLMProvider } from './providers/anthropic-llm.provider';
@@ -29,6 +32,7 @@ import { AiController } from './ai.controller';
 @Module({
   imports: [
     TypeOrmModule.forFeature([AiConversation, AiConversationMessage, Vocabulary]),
+    SubscriptionModule,
     ThrottlerModule.forRoot([
       {
         name: 'ai-short',

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import {
   Subscription,
@@ -7,6 +8,7 @@ import {
   SubscriptionStatus,
 } from '../../database/entities/subscription.entity';
 import { User } from '../../database/entities/user.entity';
+import { WebhookEvent } from '../../database/entities/webhook-event.entity';
 import { RevenueCatWebhookDto, RevenueCatEventDto } from './dto/revenuecat-webhook.dto';
 import { SubscriptionDto } from './dto/subscription.dto';
 
@@ -16,14 +18,15 @@ import { SubscriptionDto } from './dto/subscription.dto';
 @Injectable()
 export class SubscriptionService {
   private readonly logger = new Logger(SubscriptionService.name);
-  /** In-memory set for idempotency (in production, use Redis or DB) */
-  private processedEvents = new Set<string>();
 
   constructor(
     @InjectRepository(Subscription)
     private readonly subscriptionRepo: Repository<Subscription>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(WebhookEvent)
+    private readonly webhookEventRepo: Repository<WebhookEvent>,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -45,12 +48,20 @@ export class SubscriptionService {
   async processWebhook(payload: RevenueCatWebhookDto): Promise<void> {
     const { event } = payload;
 
-    // Idempotency check - skip if already processed
-    if (this.processedEvents.has(event.id)) {
-      this.logger.debug(`Event ${event.id} already processed, skipping`);
-      return;
+    // DB-based idempotency: insert first as lock, catch duplicate
+    try {
+      await this.webhookEventRepo.insert({
+        eventId: event.id,
+        eventType: event.type,
+      });
+    } catch (error: unknown) {
+      const dbError = error as { code?: string };
+      if (dbError.code === '23505') {
+        this.logger.debug(`Event ${event.id} already processed, skipping`);
+        return;
+      }
+      throw error;
     }
-    this.processedEvents.add(event.id);
 
     // Find user by RevenueCat app_user_id (which should be our user ID)
     const user = await this.userRepo.findOne({ where: { id: event.app_user_id } });
@@ -161,6 +172,113 @@ export class SubscriptionService {
     }
 
     return SubscriptionPlan.MONTHLY; // Default to monthly
+  }
+
+  /**
+   * Sync subscription with RevenueCat REST API.
+   * Called by mobile after purchase and on app open.
+   */
+  async syncSubscription(userId: string): Promise<SubscriptionDto> {
+    const rcApiKey = this.configService.get<string>('revenuecat.apiKey');
+    if (!rcApiKey) {
+      this.logger.warn('RevenueCat API key not configured, returning current subscription');
+      return this.ensureFreeSubscription(userId);
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.revenuecat.com/v1/subscribers/${userId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${rcApiKey}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        this.logger.warn(`RevenueCat API returned ${response.status} for user ${userId}`);
+        return this.ensureFreeSubscription(userId);
+      }
+
+      const data = await response.json();
+      return this.upsertFromRevenueCat(userId, data.subscriber);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to sync with RevenueCat for user ${userId}: ${message}`);
+      // Fallback: return existing subscription or FREE
+      return this.ensureFreeSubscription(userId);
+    }
+  }
+
+  /**
+   * Parse RevenueCat subscriber data and upsert local subscription
+   */
+  private async upsertFromRevenueCat(
+    userId: string,
+    subscriber: Record<string, unknown>,
+  ): Promise<SubscriptionDto> {
+    const entitlements = subscriber.entitlements as Record<string, Record<string, unknown>> | undefined;
+    if (!entitlements || Object.keys(entitlements).length === 0) {
+      return this.ensureFreeSubscription(userId);
+    }
+
+    // Find first active entitlement
+    const activeEntitlement = Object.values(entitlements).find(
+      (e) => e.expires_date === null || new Date(e.expires_date as string) > new Date(),
+    );
+
+    if (!activeEntitlement) {
+      return this.ensureFreeSubscription(userId);
+    }
+
+    const productId = activeEntitlement.product_identifier as string;
+    const plan = this.mapProductToPlan(productId);
+    const expiresAt = activeEntitlement.expires_date
+      ? new Date(activeEntitlement.expires_date as string)
+      : undefined;
+    const purchaseDate = activeEntitlement.purchase_date
+      ? new Date(activeEntitlement.purchase_date as string)
+      : new Date();
+
+    const existing = await this.subscriptionRepo.findOne({ where: { userId } });
+
+    if (existing) {
+      await this.subscriptionRepo.update(existing.id, {
+        plan,
+        status: SubscriptionStatus.ACTIVE,
+        currentPeriodEnd: expiresAt,
+        currentPeriodStart: purchaseDate,
+        cancelAtPeriodEnd: false,
+      });
+      return this.mapToDto({ ...existing, plan, status: SubscriptionStatus.ACTIVE, currentPeriodEnd: expiresAt, currentPeriodStart: purchaseDate, cancelAtPeriodEnd: false });
+    }
+
+    const subscription = this.subscriptionRepo.create({
+      userId,
+      plan,
+      status: SubscriptionStatus.ACTIVE,
+      currentPeriodEnd: expiresAt,
+      currentPeriodStart: purchaseDate,
+    });
+    const saved = await this.subscriptionRepo.save(subscription);
+    return this.mapToDto(saved);
+  }
+
+  /**
+   * Ensure user has at least a FREE subscription record
+   */
+  private async ensureFreeSubscription(userId: string): Promise<SubscriptionDto> {
+    const existing = await this.subscriptionRepo.findOne({ where: { userId } });
+    if (existing) return this.mapToDto(existing);
+
+    const subscription = this.subscriptionRepo.create({
+      userId,
+      plan: SubscriptionPlan.FREE,
+      status: SubscriptionStatus.ACTIVE,
+    });
+    const saved = await this.subscriptionRepo.save(subscription);
+    return this.mapToDto(saved);
   }
 
   /**

@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-03-11
+**Last Updated:** 2026-03-14
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.2
+**API Version:** 1.3
 
 ## Overview
 
@@ -224,15 +224,28 @@ Update user profile.
 #### GET /subscriptions/me
 Get subscription status.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "Subscription found", data: {id, plan, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd}}`
+**Auth:** Required | **Response (200):** `{code: 1, message: "Subscription found", data: {id, plan, status, isActive, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd}}`
 
 **Plan types:** free, monthly, yearly, lifetime
 **Status types:** active, trial, expired, cancelled
 
 ---
 
+#### POST /subscriptions/sync
+Sync subscription with RevenueCat (mobile-initiated sync).
+
+**Auth:** Required | **Request:** Empty body
+
+**Response (200):** `{code: 1, message: "Subscription synced", data: {id, plan, status, isActive, currentPeriodStart, currentPeriodEnd}}`
+
+**Purpose:** Called by mobile after purchase and on app open. Queries RevenueCat API for current entitlements.
+
+**Errors:** 500 (RevenueCat API unavailable, returns current subscription)
+
+---
+
 #### POST /webhooks/revenuecat
-RevenueCat webhook endpoint.
+RevenueCat webhook endpoint (idempotency via WebhookEvent table).
 
 **Auth:** Bearer token (REVENUECAT_WEBHOOK_SECRET) | **Request:**
 ```json
@@ -346,12 +359,14 @@ Remove language.
 
 ---
 
-### AI Features
+### AI Features (Premium Required)
+
+All AI endpoints require an active premium subscription. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
 
 #### POST /ai/chat
 Chat with AI tutor.
 
-**Auth:** Required | **Rate Limit:** 20 req/min, 100 req/hr | **Request:**
+**Auth:** Required (Premium) | **Rate Limit:** 20 req/min, 100 req/hr | **Request:**
 ```json
 {
   "message": "How do I use the past tense in Spanish?",
@@ -378,7 +393,7 @@ Stream chat response (Server-Sent Events).
 #### POST /ai/grammar/check
 Check grammar and get feedback.
 
-**Auth:** Required | **Request:**
+**Auth:** Required (Premium) | **Request:**
 ```json
 {
   "text": "I goed to the store yesterday",
@@ -394,7 +409,7 @@ Check grammar and get feedback.
 #### POST /ai/chat/correct
 Check grammar/vocabulary of user's chat reply in context of previous AI message.
 
-**Auth:** Optional (JWT or anonymous) | **Request:**
+**Auth:** Required (Premium) | **Request:**
 ```json
 {
   "previousAiMessage": "How was your weekend?",
@@ -420,7 +435,7 @@ Check grammar/vocabulary of user's chat reply in context of previous AI message.
 #### POST /ai/translate
 Translate words or sentences with vocabulary persistence for words.
 
-**Auth:** Optional (JWT or sessionToken) | **Request:**
+**Auth:** Required (Premium) | **Request:**
 ```json
 {
   "type": "WORD",
@@ -461,7 +476,7 @@ Translate words or sentences with vocabulary persistence for words.
 #### POST /ai/exercises/generate
 Generate language exercises.
 
-**Auth:** Required | **Request:**
+**Auth:** Required (Premium) | **Request:**
 ```json
 {
   "language": "spanish",
@@ -477,7 +492,7 @@ Generate language exercises.
 #### POST /ai/pronunciation/assess
 Assess pronunciation from audio.
 
-**Auth:** Required | **Request:** Multipart form with audio file
+**Auth:** Required (Premium) | **Request:** Multipart form with audio file
 
 **Response (200):** `{code: 1, message: "Pronunciation assessed", data: {score, feedback, suggestions}}`
 
@@ -486,7 +501,7 @@ Assess pronunciation from audio.
 #### POST /ai/conversations
 Start new conversation session.
 
-**Auth:** Required | **Request:**
+**Auth:** Required (Premium) | **Request:**
 ```json
 {
   "language": "spanish",
@@ -501,7 +516,7 @@ Start new conversation session.
 #### GET /ai/conversations/:id/messages
 Get conversation history.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "Messages found", data: [{role, content, model, tokensUsed, createdAt}]}`
+**Auth:** Required (Premium) | **Response (200):** `{code: 1, message: "Messages found", data: [{role, content, model, tokensUsed, createdAt}]}`
 
 ---
 
