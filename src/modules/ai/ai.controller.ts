@@ -26,6 +26,7 @@ import { LearningAgentService } from './services/learning-agent.service';
 import { WhisperTranscriptionService } from './services/whisper-transcription.service';
 import { TranslationService } from './services/translation.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public-route.decorator';
 import { RequirePremium } from '../../common/decorators/require-premium.decorator';
 import { PremiumGuard } from '../../common/guards/premium.guard';
 import { User } from '../../database/entities';
@@ -101,6 +102,7 @@ export class AiController {
     return this.learningAgent.checkGrammar(dto.text, dto.targetLanguage, dto.model);
   }
 
+  @Public()
   @Post('chat/correct')
   @ApiOperation({ summary: 'Check grammar/vocabulary of user chat reply' })
   @ApiResponse({ status: 200, type: CorrectionCheckResponseDto })
