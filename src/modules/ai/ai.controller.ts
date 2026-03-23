@@ -103,6 +103,7 @@ export class AiController {
   }
 
   @Public()
+  @RequirePremium(false)
   @Post('chat/correct')
   @ApiOperation({ summary: 'Check grammar/vocabulary of user chat reply' })
   @ApiResponse({ status: 200, type: CorrectionCheckResponseDto })
@@ -174,11 +175,13 @@ export class AiController {
     return { ...result, transcribedText };
   }
 
+  @Public()
+  @RequirePremium(false)
   @Post('translate')
   @ApiOperation({ summary: 'Translate a word or sentence' })
   @ApiResponse({ status: 200, description: 'Translation result' })
-  async translate(@CurrentUser() user: User, @Body() dto: TranslateRequestDto) {
-    const userId = user.id;
+  async translate(@CurrentUser() user: User | null, @Body() dto: TranslateRequestDto) {
+    const userId = user?.id ?? null;
 
     if (dto.type === TranslateType.WORD) {
       return this.translationService.translateWord(
