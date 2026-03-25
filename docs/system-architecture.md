@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-03-14
+**Last Updated:** 2026-03-24
 
 ## Architecture Overview
 
@@ -105,7 +105,7 @@ AI client factory dynamically selects provider based on configuration.
 ```
 ┌──────────────────────────────────────────────────────┐
 │           AI Controller                              │
-│  POST /ai/chat, /grammar/check, /exercises/...     │
+│  POST /ai/chat, /exercises/...                      │
 │  POST /ai/chat/correct, /ai/translate              │
 │  SSE /ai/chat/stream, /ai/conversations/:id/msgs   │
 └──────────────────────────────────────────────────────┘
@@ -113,9 +113,8 @@ AI client factory dynamically selects provider based on configuration.
 ┌────────────────────────────────────────────────────────────────┐
 │           Learning Agent Service        │  Translation Service │
 │  - processChat()                        │  - translateWord()   │
-│  - checkGrammar()                       │  - translateSentence │
-│  - checkCorrection()                    │  - upsertVocabulary()│
-│  - generateExercises()                  │                      │
+│  - checkCorrection()                    │  - translateSentence │
+│  - generateExercises()                  │  - upsertVocabulary()│
 │  - assessPronunciation()                │                      │
 └────────────────────────────────────────────────────────────────┘
                     ↓
@@ -159,9 +158,10 @@ AI client factory dynamically selects provider based on configuration.
 
 **Correction Check:**
 - Input: Previous AI message + user message + target language
-- LLM prompt: correction-check-prompt.md
-- Output: correctedText (null if no errors)
+- LLM prompt: correction-check-prompt.md (ignores punctuation/capitalization, bolds corrections)
+- Output: correctedText (null if no errors, handles gibberish/emoji input)
 - Model: OPENAI_GPT4_1_NANO (temp 0.3)
+- Access: Public endpoint with optional premium (both authenticated and anonymous)
 
 ### Subscription Module Flow
 ```
@@ -441,7 +441,10 @@ All responses follow consistent format:
 - **Health Checks:** `/health` endpoint (future)
 
 ### AI Monitoring
-- **Request Tracing:** Langfuse for all AI provider requests
+- **Request Tracing:** Langfuse for all AI provider requests with per-invocation handlers
+  - Fresh CallbackHandler created per request (not shared)
+  - Explicit await handler.flushAsync() in finally blocks ensures traces are sent
+  - Applied to OpenAI, Anthropic, and Gemini providers
 - **Usage Tracking:** Token consumption and cost analysis
 - **Performance:** Response time and latency metrics
 

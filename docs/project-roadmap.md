@@ -1,8 +1,8 @@
 # Project Roadmap
 
-**Last Updated:** 2026-03-14
+**Last Updated:** 2026-03-24
 **Project:** AI Language Learning Backend
-**Status:** Phase 1 Complete, Phase 2 In Progress (70%)
+**Status:** Phase 1 Complete, Phase 2 In Progress (75%)
 
 ## Vision
 
@@ -40,8 +40,8 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 **Duration:** 6 weeks
 **Status:** 🔄 In Progress
-**Progress:** 70% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, premium features, documentation done)
-**Target Completion:** 2026-03-20
+**Progress:** 75% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, premium features, grammar consolidation, Langfuse fixes, documentation done)
+**Target Completion:** 2026-03-27
 
 **Completed:**
 - ✅ HTTP logger middleware (2026-03-07)
@@ -58,6 +58,11 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ PremiumGuard & @RequirePremium() decorator (AI endpoint protection) (2026-03-14)
 - ✅ All AI endpoints now require premium subscription (2026-03-14)
 - ✅ Updated documentation for subscription payment features (2026-03-14)
+- ✅ Removed /ai/grammar/check endpoint, consolidated into /ai/chat/correct (2026-03-24)
+- ✅ Simplified correction prompt (ignore punctuation/capitalization, bold corrections) (2026-03-24)
+- ✅ Fixed Langfuse output tracing (per-invocation handler with flushAsync) across all 3 LLM providers (2026-03-24)
+- ✅ Made correction & translate endpoints public with @RequirePremium(false) (2026-03-24)
+- ✅ Updated documentation for grammar consolidation & Langfuse fixes (2026-03-24)
 
 **In Progress:**
 | Feature | Priority | Status | Target Date |

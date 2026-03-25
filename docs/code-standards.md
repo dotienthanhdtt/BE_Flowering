@@ -1,6 +1,6 @@
 # Code Standards
 
-**Last Updated:** 2026-03-11
+**Last Updated:** 2026-03-24
 
 ## Project Structure
 
@@ -629,71 +629,63 @@ refactor/ai-client-factory
 
 ## AI Module Patterns
 
-### LangChain Integration
+### Langfuse Tracing Pattern
 
-Multi-provider LLM pattern with fallback:
+Per-invocation handler with explicit flush for all 3 LLM providers:
 
 ```typescript
 @Injectable()
-export class UnifiedLLMService {
-  async callLLM(prompt: string, model: ModelName): Promise<string> {
-    const client = this.getClient(model);
-    const langfuseClient = this.langfuseService.getClient();
+export class OpenaiLLMProvider {
+  async chat(prompt: string): Promise<string> {
+    const handler = this.langfuseService.getHandler(); // Fresh handler per invocation
 
-    return langfuseClient.trace({
-      name: 'ai-request',
-      input: prompt,
-      metadata: { model },
-    }).then(async (trace) => {
-      const response = await client.invoke(prompt);
-      trace.end({ output: response });
+    try {
+      const model = this.modelFactory.create({
+        callbacks: [handler], // Pass handler to model
+      });
+      const response = await model.invoke(prompt);
       return response;
-    }).catch((error) => {
-      this.logger.error(`LLM error: ${error.message}`);
-      throw new BadRequestException('AI provider unavailable');
-    });
+    } finally {
+      await handler.flushAsync(); // Ensure traces sent before returning
+    }
   }
 }
 ```
 
-### Optional Authentication Pattern
+**Key Points:**
+- Create new CallbackHandler per request (not shared instance)
+- Pass same handler to createModel() for consistent tracing
+- Always flush in finally block to ensure trace delivery
+- Applies to OpenAI, Anthropic, and Gemini providers
 
-Use `@OptionalAuth()` decorator for endpoints accepting JWT or sessionToken:
+### Optional Premium Pattern
+
+Use `@RequirePremium(false)` decorator for endpoints that are public but optionally premium:
 
 ```typescript
 @Post('translate')
-@OptionalAuth()
+@Public()
+@RequirePremium(false)
 async translateWord(
   @CurrentUser() user?: User,
   @Body() dto: TranslateRequestDto,
 ) {
-  const userId = user?.id || dto.sessionToken;
-  // Process request (works for authenticated or anonymous)
+  // Process request (works for authenticated with optional premium, or anonymous)
 }
 ```
 
-Guard implementation:
+Decorator implementation:
 
 ```typescript
-@Injectable()
-export class OptionalAuthGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
-    const token = this.extractToken(request);
-
-    if (!token) {
-      return true; // Allow unauthenticated access
-    }
-
-    try {
-      request.user = this.jwtService.verify(token);
-    } catch {
-      // Token invalid but optional, allow anyway
-    }
-    return true;
-  }
+export function RequirePremium(required = true): MethodDecorator {
+  return (target: any, propertyKey?: string | symbol, descriptor?: PropertyDescriptor) => {
+    Reflect.defineMetadata('require_premium', required, descriptor!.value);
+    return descriptor;
+  };
 }
 ```
+
+Guard checks decorator metadata and skips premium check if false.
 
 ### Prompt Management
 
@@ -708,6 +700,9 @@ User message: {userMessage}
 Target language: {targetLanguage}
 
 Respond with corrected text or null if no errors.
+Ignore punctuation and capitalization differences.
+Bold only grammar fixes and language replacements (e.g., **went** for **go**).
+Handle gibberish/emoji-only input: return null.
 ```
 
 Load and render:
