@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-03-14
+**Last Updated:** 2026-03-24
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.3
+**API Version:** 1.3.1
 
 ## Overview
 
@@ -359,9 +359,9 @@ Remove language.
 
 ---
 
-### AI Features (Premium Required)
+### AI Features
 
-All AI endpoints require an active premium subscription. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
+Core AI endpoints (chat, exercises, pronunciation, conversations) require active premium subscription. Translation and correction endpoints are public but support optional premium. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
 
 #### POST /ai/chat
 Chat with AI tutor.
@@ -390,26 +390,10 @@ Stream chat response (Server-Sent Events).
 
 ---
 
-#### POST /ai/grammar/check
-Check grammar and get feedback.
-
-**Auth:** Required (Premium) | **Request:**
-```json
-{
-  "text": "I goed to the store yesterday",
-  "language": "english",
-  "targetLanguage": "english"
-}
-```
-
-**Response (200):** `{code: 1, message: "Grammar checked", data: {originalText, correctedText, errors: [{type, original, correction, explanation}], score}}`
-
----
-
 #### POST /ai/chat/correct
 Check grammar/vocabulary of user's chat reply in context of previous AI message.
 
-**Auth:** Required (Premium) | **Request:**
+**Auth:** Public (optional premium) | **Request:**
 ```json
 {
   "previousAiMessage": "How was your weekend?",
@@ -435,7 +419,7 @@ Check grammar/vocabulary of user's chat reply in context of previous AI message.
 #### POST /ai/translate
 Translate words or sentences with vocabulary persistence for words.
 
-**Auth:** Required (Premium) | **Request:**
+**Auth:** Public (optional premium) | **Request:**
 ```json
 {
   "type": "WORD",

@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-03-14
-**Generated from:** repomix-output.xml (updated 2026-03-14)
+**Last Updated:** 2026-03-24
+**Generated from:** repomix-output.xml (updated 2026-03-24)
 
 ## Overview
 
@@ -59,9 +59,9 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing
 
 **Endpoints:**
-- POST /ai/chat, /grammar/check, /exercises/generate, /pronunciation/assess
-- POST /ai/chat/correct (grammar correction with context)
-- POST /ai/translate (word/sentence translation)
+- POST /ai/chat, /exercises/generate, /pronunciation/assess
+- POST /ai/chat/correct (grammar correction with context, public + optional premium)
+- POST /ai/translate (word/sentence translation, public + optional premium)
 - POST /ai/conversations, GET /ai/conversations/:id/messages
 - SSE /ai/chat/stream (Server-Sent Events)
 
@@ -71,12 +71,12 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Key Features:**
 - Multi-provider strategy pattern (OpenAI, Anthropic, Gemini)
-- Prompts stored as markdown in prompts/ directory (10 templates)
+- Prompts stored as markdown in prompts/ directory (9 templates)
 - Whisper audio transcription
-- Langfuse tracing for all AI requests
+- Langfuse tracing with per-invocation handlers and explicit flushAsync
 - Async processing for long-running tasks
 - Translation service (word/sentence) with vocabulary storage
-- Correction check endpoint for grammar validation
+- Correction check endpoint with context awareness, ignores punctuation/capitalization
 
 ### 3. Onboarding Module (11 files, ~1,309 LOC)
 
@@ -351,7 +351,7 @@ npm run build
 
 **Sentry:** Captures 5xx exceptions, error tracking in production (configurable trace sample)
 
-**Langfuse:** All AI requests traced with prompt, response, model, tokens, latency
+**Langfuse:** All AI requests traced with prompt, response, model, tokens, latency. Fresh CallbackHandler per invocation with explicit await handler.flushAsync() in finally blocks to ensure output flushing across all 3 LLM providers (OpenAI, Anthropic, Gemini).
 
 **HTTP Logger:** Logs all incoming requests and outgoing responses
 

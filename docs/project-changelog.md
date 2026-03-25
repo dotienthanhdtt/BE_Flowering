@@ -1,15 +1,54 @@
 # Project Changelog
 
-**Last Updated:** 2026-03-14
+**Last Updated:** 2026-03-24
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### In Progress
+- Grammar correction consolidation into single endpoint
+- Langfuse tracing stability improvements
+
 ---
 
-## [1.2.1] - 2026-03-14 (Current - Subscription Payment Features)
+## [1.2.2] - 2026-03-24 (Current - Grammar Consolidation & Langfuse Stability)
+
+### Removed
+- **POST /ai/grammar/check Endpoint:** Consolidated grammar checking into /ai/chat/correct
+  - grammar-check.dto.ts (deleted, -54 LOC)
+  - grammar-check-prompt.md (deleted, -26 LOC)
+  - checkGrammar() method from learning-agent.service.ts (removed, -26 LOC)
+  - Grammar check route from ai.controller.ts
+- **Grammar Check DTO Exports:** Removed from dto/index.ts
+
+### Changed
+- **Correction Check Prompt:** Simplified correction-check-prompt.md
+  - Now ignores punctuation and capitalization differences
+  - Bolds only grammar fixes and language replacements (e.g., **went** for **go**)
+  - Handles gibberish/emoji-only input (returns null)
+- **Endpoint Access:** POST /ai/chat/correct and POST /ai/translate now use `@RequirePremium(false)` decorator
+  - Fully public endpoints (work for anonymous users and free accounts)
+  - Support optional premium features
+- **AI Require-Premium Decorator:** Changed from manual @OptionalAuth() to declarative `@RequirePremium(false)`
+
+### Fixed
+- **Langfuse Output Tracing:** Fixed missing traces in all 3 LLM providers
+  - OpenAI provider: Fresh CallbackHandler per invocation with await handler.flushAsync()
+  - Anthropic provider: Same pattern, explicit flush in finally block
+  - Gemini provider: Same pattern, ensures handler lifecycle management
+  - Root cause: Shared handler instances not flushed before response returned
+
+### Updated Documentation
+- API docs: Removed grammar check section, updated auth for correction and translate endpoints
+- Codebase summary: Updated endpoint list, changed prompt count (10→9), updated Langfuse description
+- System architecture: Removed grammar check from AI module flow, updated Langfuse section with handler lifecycle
+- Code standards: Updated prompt management example, replaced OptionalAuth pattern with RequirePremium(false), added Langfuse tracing pattern
+
+---
+
+## [1.2.1] - 2026-03-14 (Subscription Payment Features)
 
 ### Added
 - **WebhookEvent Entity:** Database-based webhook idempotency for RevenueCat

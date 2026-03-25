@@ -1,7 +1,7 @@
 # Project Overview & PDR
 
-**Last Updated:** 2026-03-11
-**Version:** 1.2
+**Last Updated:** 2026-03-24
+**Version:** 1.2.2
 **Status:** Active Development
 
 ## Executive Summary
@@ -74,7 +74,7 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 | Module | Endpoints | Key Features |
 |--------|-----------|--------------|
 | **auth/** (24 files) | POST /auth/register, /login, /google, /apple, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | JWT, OAuth auto-linking, password reset |
-| **ai/** (~32 files) | POST /ai/chat, /grammar/check, /exercises/generate, /pronunciation/assess, /chat/correct, /translate, /conversations | LangChain, multi-provider, translation, correction, rate limiting (100/hr free, 1000/hr premium) |
+| **ai/** (~28 files) | POST /ai/chat, /exercises/generate, /pronunciation/assess, /chat/correct, /translate, /conversations | LangChain, multi-provider, translation, correction, rate limiting (100/hr free, 1000/hr premium) |
 | **onboarding/** (11 files) | POST /onboarding/start, /chat, /complete | Anonymous chat, session-based (10-turn max, 7d TTL) |
 | **language/** (10 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags |
 | **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
