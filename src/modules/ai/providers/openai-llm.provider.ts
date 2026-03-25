@@ -19,7 +19,11 @@ export class OpenAILLMProvider implements LLMProvider {
     private langfuseService: LangfuseService,
   ) {}
 
-  private createModel(modelName: string, options?: LLMOptions): ChatOpenAI {
+  private createModel(
+    modelName: string,
+    options?: LLMOptions,
+    handler?: ReturnType<LangfuseService['getHandler']>,
+  ): ChatOpenAI {
     const apiKey = this.configService.get('ai.openaiApiKey', { infer: true });
     if (!apiKey) {
       throw new ServiceUnavailableException('OpenAI API key not configured');
@@ -30,13 +34,14 @@ export class OpenAILLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0.7,
       maxTokens: options?.maxTokens,
       streaming: true,
-      callbacks: [this.langfuseService.getHandler()],
+      callbacks: [handler ?? this.langfuseService.getHandler()],
     });
   }
 
   async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
+    const handler = this.langfuseService.getHandler();
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, handler);
       const response = await model.invoke(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -47,12 +52,15 @@ export class OpenAILLMProvider implements LLMProvider {
     } catch (error) {
       this.logger.error('OpenAI chat failed', error);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
+    } finally {
+      await handler.flushAsync();
     }
   }
 
   async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
+    const handler = this.langfuseService.getHandler();
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, handler);
       const stream = await model.stream(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -65,6 +73,8 @@ export class OpenAILLMProvider implements LLMProvider {
     } catch (error) {
       this.logger.error('OpenAI stream failed', error);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
+    } finally {
+      await handler.flushAsync();
     }
   }
 }

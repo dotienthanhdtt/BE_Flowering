@@ -19,7 +19,11 @@ export class AnthropicLLMProvider implements LLMProvider {
     private langfuseService: LangfuseService,
   ) {}
 
-  private createModel(modelName: string, options?: LLMOptions): ChatAnthropic {
+  private createModel(
+    modelName: string,
+    options?: LLMOptions,
+    handler?: ReturnType<LangfuseService['getHandler']>,
+  ): ChatAnthropic {
     const apiKey = this.configService.get('ai.anthropicApiKey', { infer: true });
     if (!apiKey) {
       throw new ServiceUnavailableException('Anthropic API key not configured');
@@ -30,13 +34,14 @@ export class AnthropicLLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0.7,
       maxTokens: options?.maxTokens ?? 4096,
       streaming: true,
-      callbacks: [this.langfuseService.getHandler()],
+      callbacks: [handler ?? this.langfuseService.getHandler()],
     });
   }
 
   async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
+    const handler = this.langfuseService.getHandler();
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, handler);
       const response = await model.invoke(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -47,12 +52,15 @@ export class AnthropicLLMProvider implements LLMProvider {
     } catch (error) {
       this.logger.error('Anthropic chat failed', error);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
+    } finally {
+      await handler.flushAsync();
     }
   }
 
   async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
+    const handler = this.langfuseService.getHandler();
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, handler);
       const stream = await model.stream(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -65,6 +73,8 @@ export class AnthropicLLMProvider implements LLMProvider {
     } catch (error) {
       this.logger.error('Anthropic stream failed', error);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
+    } finally {
+      await handler.flushAsync();
     }
   }
 }

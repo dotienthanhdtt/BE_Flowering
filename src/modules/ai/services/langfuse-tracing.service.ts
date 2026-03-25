@@ -1,33 +1,24 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CallbackHandler } from 'langfuse-langchain';
 import { AppConfiguration } from '../../../config/app-configuration';
 
 /**
  * Service for Langfuse LLM observability and tracing.
- * Provides callback handlers for LangChain integration.
+ * Creates a fresh CallbackHandler per invocation so each LLM call
+ * gets its own trace context and output is always captured.
  */
 @Injectable()
-export class LangfuseService implements OnModuleDestroy {
-  private handler: CallbackHandler | null = null;
-
+export class LangfuseService {
   constructor(private configService: ConfigService<AppConfiguration>) {}
 
-  async onModuleDestroy(): Promise<void> {
-    if (this.handler) {
-      await this.handler.flushAsync();
-    }
-  }
-
   /**
-   * Get the default callback handler for LangChain.
-   * Lazily initializes the handler on first use.
+   * Create a new callback handler per LLM invocation.
+   * Each handler gets its own trace context to ensure output is captured.
+   * flushAt: 1 ensures traces are sent immediately after the call.
    */
   getHandler(): CallbackHandler {
-    if (!this.handler) {
-      this.handler = this.createHandler();
-    }
-    return this.handler;
+    return this.createHandler();
   }
 
   /**
@@ -40,6 +31,8 @@ export class LangfuseService implements OnModuleDestroy {
       baseUrl: this.configService.get('ai.langfuseHost', { infer: true }),
       userId,
       sessionId,
+      flushAt: 1,
+      flushInterval: 1000,
     });
   }
 
