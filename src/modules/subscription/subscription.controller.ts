@@ -1,5 +1,5 @@
-import { Controller, Get, Post } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
+import { Controller, Get } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionDto } from './dto/subscription.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -18,12 +18,5 @@ export class SubscriptionController {
   @ApiOperation({ summary: 'Get current user subscription' })
   async getSubscription(@CurrentUser() user: User): Promise<SubscriptionDto | null> {
     return this.subscriptionService.getUserSubscription(user.id);
-  }
-
-  @Post('sync')
-  @ApiOperation({ summary: 'Sync subscription with RevenueCat' })
-  @ApiOkResponse({ type: SubscriptionDto })
-  async syncSubscription(@CurrentUser() user: User): Promise<SubscriptionDto> {
-    return this.subscriptionService.syncSubscription(user.id);
   }
 }

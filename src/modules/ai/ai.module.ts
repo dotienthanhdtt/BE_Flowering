@@ -17,7 +17,6 @@ import { GeminiLLMProvider } from './providers/gemini-llm.provider';
 import { LangfuseService } from './services/langfuse-tracing.service';
 import { PromptLoaderService } from './services/prompt-loader.service';
 import { UnifiedLLMService } from './services/unified-llm.service';
-import { WhisperTranscriptionService } from './services/whisper-transcription.service';
 import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
 
@@ -57,7 +56,6 @@ import { AiController } from './ai.controller';
     // Services
     PromptLoaderService,
     UnifiedLLMService,
-    WhisperTranscriptionService,
     LearningAgentService,
     TranslationService,
   ],

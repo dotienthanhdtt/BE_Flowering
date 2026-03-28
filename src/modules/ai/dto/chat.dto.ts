@@ -4,7 +4,6 @@ import {
   IsOptional,
   IsUUID,
   IsEnum,
-  IsObject,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -79,26 +78,3 @@ export class ChatResponseDto {
   conversationId!: string;
 }
 
-/**
- * DTO for creating a new conversation.
- */
-export class CreateConversationDto {
-  @ApiProperty({ description: 'Language being learned' })
-  @IsUUID()
-  languageId!: string;
-
-  @ApiPropertyOptional({ description: 'Conversation title' })
-  @IsOptional()
-  @IsString()
-  title?: string;
-
-  @ApiPropertyOptional({ description: 'Conversation topic' })
-  @IsOptional()
-  @IsString()
-  topic?: string;
-
-  @ApiPropertyOptional({ description: 'Additional metadata' })
-  @IsOptional()
-  @IsObject()
-  metadata?: Record<string, unknown>;
-}
