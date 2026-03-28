@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
@@ -6,23 +6,15 @@ import { UnifiedLLMService } from './unified-llm.service';
 import { PromptLoaderService } from './prompt-loader.service';
 import { LLMModel } from '../providers/llm-models.enum';
 import { AiConversation, AiConversationMessage, MessageRole } from '../../../database/entities';
-import {
-  ConversationContext,
-  ExerciseResult,
-  PronunciationResult,
-  CreateConversationDto,
-} from '../dto';
+import { ConversationContext } from '../dto';
 
 /**
  * Main AI learning agent service providing tutoring features:
  * - Context-aware chat with AI tutor
  * - Grammar checking
- * - Exercise generation
- * - Pronunciation assessment
  */
 @Injectable()
 export class LearningAgentService {
-  private readonly logger = new Logger(LearningAgentService.name);
   private readonly defaultModel = LLMModel.GEMINI_2_0_FLASH;
 
   constructor(
@@ -33,20 +25,6 @@ export class LearningAgentService {
     @InjectRepository(AiConversationMessage)
     private messageRepo: Repository<AiConversationMessage>,
   ) {}
-
-  /**
-   * Create a new conversation session.
-   */
-  async createConversation(userId: string, dto: CreateConversationDto): Promise<AiConversation> {
-    const conversation = this.conversationRepo.create({
-      userId,
-      languageId: dto.languageId,
-      title: dto.title,
-      topic: dto.topic,
-      metadata: dto.metadata,
-    });
-    return this.conversationRepo.save(conversation);
-  }
 
   /**
    * Chat with the AI tutor. Returns full response.
@@ -160,64 +138,6 @@ export class LearningAgentService {
   }
 
   /**
-   * Generate language learning exercise.
-   */
-  async generateExercise(
-    exerciseType: string,
-    targetLanguage: string,
-    proficiencyLevel: string,
-    topic: string,
-    model?: LLMModel,
-  ): Promise<ExerciseResult> {
-    const prompt = this.promptLoader.loadPrompt('exercise-generator-prompt', {
-      exerciseType,
-      targetLanguage,
-      proficiencyLevel,
-      topic,
-    });
-
-    const response = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: model || this.defaultModel,
-      metadata: { feature: 'exercise-generation' },
-    });
-
-    return this.parseJsonResponse<ExerciseResult>(response, {
-      type: exerciseType,
-      question: '',
-      options: [],
-      correctAnswer: '',
-      explanation: '',
-    });
-  }
-
-  /**
-   * Assess pronunciation by comparing transcribed text to expected text.
-   */
-  async assessPronunciation(
-    transcribedText: string,
-    expectedText: string,
-    targetLanguage: string,
-    model?: LLMModel,
-  ): Promise<PronunciationResult> {
-    const prompt = this.promptLoader.loadPrompt('pronunciation-assessment-prompt', {
-      transcribedText,
-      expectedText,
-      targetLanguage,
-    });
-
-    const response = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: model || LLMModel.GEMINI_1_5_FLASH,
-      metadata: { feature: 'pronunciation-assessment' },
-    });
-
-    return this.parseJsonResponse<PronunciationResult>(response, {
-      score: 0,
-      feedback: '',
-      errors: [],
-    });
-  }
-
-  /**
    * Get conversation history for a session.
    */
   async getConversationHistory(conversationId: string): Promise<BaseMessage[]> {
@@ -232,16 +152,6 @@ export class LearningAgentService {
     );
   }
 
-  /**
-   * Get raw conversation messages for API response.
-   */
-  async getConversationMessages(conversationId: string): Promise<AiConversationMessage[]> {
-    return this.messageRepo.find({
-      where: { conversationId },
-      order: { createdAt: 'ASC' },
-    });
-  }
-
   private async saveMessage(
     conversationId: string,
     role: MessageRole,
@@ -254,15 +164,4 @@ export class LearningAgentService {
     });
   }
 
-  private parseJsonResponse<T>(response: string, fallback: T): T {
-    try {
-      // Extract JSON from markdown code blocks if present
-      const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-      const jsonStr = jsonMatch ? jsonMatch[1].trim() : response.trim();
-      return JSON.parse(jsonStr) as T;
-    } catch (error) {
-      this.logger.warn('Failed to parse LLM JSON response', { response, error });
-      return fallback;
-    }
-  }
 }
