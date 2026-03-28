@@ -1,10 +1,10 @@
 # System Architecture
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-28
 
 ## Architecture Overview
 
-AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 8 feature modules and clear separation of concerns.
+AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 7 feature modules and clear separation of concerns.
 
 ## Architecture Layers
 
@@ -26,14 +26,14 @@ AI-powered language learning backend following Clean Architecture principles wit
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │                 Infrastructure Layer                     │
-│  (Database, External APIs, Firebase, RevenueCat, AI)   │
+│  (Database, External APIs, RevenueCat, AI, Langfuse)   │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## Core Architecture Patterns
 
 ### 1. Modular Architecture
-8 feature modules (auth, ai, user, language, subscription, notification, onboarding, email) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
+7 feature modules (auth, ai, user, language, subscription, onboarding, email) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
 
 **Module Structure:**
 ```
@@ -231,7 +231,6 @@ AI client factory dynamically selects provider based on configuration.
 ```
 User (1) ──< (N) UserLanguage
 User (1) ──< (1) Subscription
-User (1) ──< (N) DeviceToken
 User (1) ──< (N) AiConversation
 User (1) ──< (N) RefreshToken
 User (1) ──< (N) PasswordReset
@@ -417,6 +416,14 @@ All responses follow consistent format:
   "data": null
 }
 ```
+
+### JSON Key Naming Convention
+All HTTP API JSON keys (request body params and response data fields) use `snake_case`:
+- Example: `user_id`, `access_token`, `created_at`, `session_id`, `language_id`
+- Exception: Wrapper keys `code`, `message`, `data` remain unchanged (single-word, no transformation)
+- Internal TypeScript code remains `camelCase` — the naming convention only applies to JSON serialization/deserialization
+
+This standardization ensures consistent mobile app development experience across all API endpoints.
 
 ## Scalability Considerations
 

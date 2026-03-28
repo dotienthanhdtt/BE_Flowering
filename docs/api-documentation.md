@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-03-28
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.3.1
+**API Version:** 1.3.0
 
 ## Overview
 
@@ -99,9 +99,9 @@ Google ID token authentication.
 **Auth:** Not required | **Request:**
 ```json
 {
-  "idToken": "google_id_token",
-  "displayName": "John Doe",
-  "sessionToken": "optional_session_id"
+  "id_token": "google_id_token",
+  "display_name": "John Doe",
+  "session_token": "optional_session_id"
 }
 ```
 
@@ -113,7 +113,7 @@ Google ID token authentication.
 - Creates new account if email not found
 - Stores googleProviderId
 
-**Errors:** 401 (invalid token), 400 (missing idToken)
+**Errors:** 401 (invalid token), 400 (missing id_token)
 
 ---
 
@@ -123,7 +123,7 @@ Apple Sign-In authentication.
 **Auth:** Not required | **Request:**
 ```json
 {
-  "identityToken": "apple_identity_token",
+  "identity_token": "apple_identity_token",
   "user": {
     "email": "user@privaterelay.appleid.com",
     "name": "John Doe"
@@ -143,11 +143,11 @@ Refresh access token.
 **Auth:** Not required | **Request:**
 ```json
 {
-  "refreshToken": "uuid:hex"
+  "refresh_token": "uuid:hex"
 }
 ```
 
-**Response (200):** `{code: 1, message: "Token refreshed", data: {access_token, refreshToken}}`
+**Response (200):** `{code: 1, message: "Token refreshed", data: {access_token, refresh_token}}`
 
 **Errors:** 401 (invalid/expired token)
 
@@ -185,7 +185,7 @@ Verify OTP code.
 }
 ```
 
-**Response (200):** `{code: 1, message: "OTP verified", data: {resetToken}}`
+**Response (200):** `{code: 1, message: "OTP verified", data: {reset_token}}`
 
 **Errors:** 400 (invalid/expired OTP), 429 (too many attempts)
 
@@ -198,8 +198,8 @@ Reset password with reset token.
 ```json
 {
   "email": "user@example.com",
-  "resetToken": "token_from_verify_otp",
-  "newPassword": "NewPassword123!"
+  "reset_token": "token_from_verify_otp",
+  "new_password": "NewPassword123!"
 }
 ```
 
@@ -214,7 +214,7 @@ Reset password with reset token.
 #### GET /users/me
 Get current user profile.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "User found", data: {id, email, name, profilePicture, emailVerified, createdAt, updatedAt}}`
+**Auth:** Required | **Response (200):** `{code: 1, message: "User found", data: {id, email, name, profile_picture, email_verified, created_at, updated_at}}`
 
 ---
 
@@ -225,7 +225,7 @@ Update user profile.
 ```json
 {
   "name": "Jane Doe",
-  "profilePicture": "https://example.com/avatar.jpg"
+  "profile_picture": "https://example.com/avatar.jpg"
 }
 ```
 
@@ -238,23 +238,10 @@ Update user profile.
 #### GET /subscriptions/me
 Get subscription status.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "Subscription found", data: {id, plan, status, isActive, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd}}`
+**Auth:** Required | **Response (200):** `{code: 1, message: "Subscription found", data: {id, plan, status, is_active, current_period_start, current_period_end, cancel_at_period_end}}`
 
 **Plan types:** free, monthly, yearly, lifetime
 **Status types:** active, trial, expired, cancelled
-
----
-
-#### POST /subscriptions/sync
-Sync subscription with RevenueCat (mobile-initiated sync).
-
-**Auth:** Required | **Request:** Empty body
-
-**Response (200):** `{code: 1, message: "Subscription synced", data: {id, plan, status, isActive, currentPeriodStart, currentPeriodEnd}}`
-
-**Purpose:** Called by mobile after purchase and on app open. Queries RevenueCat API for current entitlements.
-
-**Errors:** 500 (RevenueCat API unavailable, returns current subscription)
 
 ---
 
@@ -280,31 +267,6 @@ RevenueCat webhook endpoint (idempotency via WebhookEvent table).
 
 ---
 
-### Push Notifications
-
-#### POST /notifications/devices
-Register FCM device token.
-
-**Auth:** Required | **Request:**
-```json
-{
-  "token": "firebase_fcm_token",
-  "platform": "ios|android|web",
-  "deviceName": "iPhone 15 Pro"
-}
-```
-
-**Response (200):** `{code: 1, message: "Device registered", data: null}`
-
----
-
-#### DELETE /notifications/devices/:token
-Unregister device.
-
-**Auth:** Required | **Response (200):** `{code: 1, message: "Device unregistered", data: null}`
-
----
-
 ### Languages
 
 #### GET /languages
@@ -312,7 +274,7 @@ List available languages (public).
 
 **Auth:** Not required | **Query params:** type=native|learning
 
-**Response (200):** `{code: 1, message: "Languages found", data: [{id, code, name, nativeName, flagUrl, isActive}]}`
+**Response (200):** `{code: 1, message: "Languages found", data: [{id, code, name, native_name, flag_url, is_active}]}`
 
 ---
 
@@ -329,8 +291,8 @@ Add language to learning list.
 **Auth:** Required | **Request:**
 ```json
 {
-  "languageId": "uuid",
-  "proficiencyLevel": "beginner|intermediate|advanced|native"
+  "language_id": "uuid",
+  "proficiency_level": "beginner|intermediate|advanced|native"
 }
 ```
 
@@ -344,7 +306,7 @@ Update language proficiency.
 **Auth:** Required | **Request:**
 ```json
 {
-  "proficiencyLevel": "intermediate"
+  "proficiency_level": "intermediate"
 }
 ```
 
@@ -358,7 +320,7 @@ Set native language.
 **Auth:** Required | **Request:**
 ```json
 {
-  "languageId": "uuid"
+  "language_id": "uuid"
 }
 ```
 
@@ -375,7 +337,7 @@ Remove language.
 
 ### AI Features
 
-Core AI endpoints (chat, exercises, pronunciation, conversations) require active premium subscription. Translation and correction endpoints are public but support optional premium. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
+Chat endpoint requires active premium subscription. Translation and correction endpoints are public but support optional premium. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
 
 #### POST /ai/chat
 Chat with AI tutor.
@@ -384,14 +346,14 @@ Chat with AI tutor.
 ```json
 {
   "message": "How do I use the past tense in Spanish?",
-  "conversationId": "uuid",
+  "conversation_id": "uuid",
   "language": "spanish",
   "level": "beginner",
   "model": "gpt-4o"
 }
 ```
 
-**Response (200):** `{code: 1, message: "Response generated", data: {conversationId, response, aiProvider, tokensUsed}}`
+**Response (200):** `{code: 1, message: "Response generated", data: {conversation_id, response, ai_provider, tokens_used}}`
 
 ---
 
@@ -410,21 +372,21 @@ Check grammar/vocabulary of user's chat reply in context of previous AI message.
 **Auth:** Public (optional premium) | **Request:**
 ```json
 {
-  "previousAiMessage": "How was your weekend?",
-  "userMessage": "I go to park yesterday",
-  "targetLanguage": "en"
+  "previous_ai_message": "How was your weekend?",
+  "user_message": "I go to park yesterday",
+  "target_language": "en"
 }
 ```
 
 | Field | Type | Required | Limit | Description |
 |-------|------|----------|-------|-------------|
-| previousAiMessage | string | Yes | 4000 chars | AI tutor's previous message (context) |
-| userMessage | string | Yes | 4000 chars | User's reply to check |
-| targetLanguage | string | Yes | 10 chars | Target language code (e.g., "en", "ja", "vi") |
+| previous_ai_message | string | Yes | 4000 chars | AI tutor's previous message (context) |
+| user_message | string | Yes | 4000 chars | User's reply to check |
+| target_language | string | Yes | 10 chars | Target language code (e.g., "en", "ja", "vi") |
 
-**Response (200) — errors found:** `{code: 1, message: "Success", data: {correctedText: "I went to the park yesterday."}}`
+**Response (200) — errors found:** `{code: 1, message: "Success", data: {corrected_text: "I went to the park yesterday."}}`
 
-**Response (200) — no errors:** `{code: 1, message: "Success", data: {correctedText: null}}`
+**Response (200) — no errors:** `{code: 1, message: "Success", data: {corrected_text: null}}`
 
 **Errors:** 400 (missing/empty fields), 429 (rate limit)
 
@@ -438,8 +400,8 @@ Translate words or sentences with vocabulary persistence for words.
 {
   "type": "WORD",
   "text": "beautiful",
-  "sourceLang": "en",
-  "targetLang": "es"
+  "source_lang": "en",
+  "target_lang": "es"
 }
 ```
 
@@ -447,10 +409,10 @@ Translate words or sentences with vocabulary persistence for words.
 ```json
 {
   "type": "SENTENCE",
-  "messageId": "uuid",
-  "sourceLang": "en",
-  "targetLang": "es",
-  "sessionToken": "optional_session_id"
+  "message_id": "uuid",
+  "source_lang": "en",
+  "target_lang": "es",
+  "session_token": "optional_session_id"
 }
 ```
 
@@ -458,63 +420,16 @@ Translate words or sentences with vocabulary persistence for words.
 |-------|------|----------|-------|-------------|
 | type | enum | Yes | - | WORD or SENTENCE |
 | text | string | No | 255 chars | Word/phrase to translate (WORD only) |
-| messageId | UUID | No | - | Conversation message ID (SENTENCE only) |
-| sourceLang | string | Yes | 10 chars | Source language code (e.g., "en", "ja") |
-| targetLang | string | Yes | 10 chars | Target language code (e.g., "es", "vi") |
-| sessionToken | string | No | - | Optional session token for anonymous users |
+| message_id | UUID | No | - | Conversation message ID (SENTENCE only) |
+| source_lang | string | Yes | 10 chars | Source language code (e.g., "en", "ja") |
+| target_lang | string | Yes | 10 chars | Target language code (e.g., "es", "vi") |
+| session_token | string | No | - | Optional session token for anonymous users |
 
 **Response (200) — word translation:** `{code: 1, message: "Success", data: {translation: "hermoso", word: "beautiful", pronunciation: "er-MO-so"}}`
 
-**Response (200) — sentence translation:** `{code: 1, message: "Success", data: {translatedContent: "Eso es hermoso."}}`
+**Response (200) — sentence translation:** `{code: 1, message: "Success", data: {translated_content: "Eso es hermoso."}}`
 
 **Errors:** 400 (invalid type/missing fields), 404 (message not found), 429 (rate limit)
-
----
-
-#### POST /ai/exercises/generate
-Generate language exercises.
-
-**Auth:** Required (Premium) | **Request:**
-```json
-{
-  "language": "spanish",
-  "level": "beginner",
-  "type": "vocabulary|grammar|conversation"
-}
-```
-
-**Response (200):** `{code: 1, message: "Exercises generated", data: [{type, prompt, expectedAnswer, difficulty}]}`
-
----
-
-#### POST /ai/pronunciation/assess
-Assess pronunciation from audio.
-
-**Auth:** Required (Premium) | **Request:** Multipart form with audio file
-
-**Response (200):** `{code: 1, message: "Pronunciation assessed", data: {score, feedback, suggestions}}`
-
----
-
-#### POST /ai/conversations
-Start new conversation session.
-
-**Auth:** Required (Premium) | **Request:**
-```json
-{
-  "language": "spanish",
-  "topic": "daily_life"
-}
-```
-
-**Response (201):** `{code: 1, message: "Conversation started", data: {conversationId}}`
-
----
-
-#### GET /ai/conversations/:id/messages
-Get conversation history.
-
-**Auth:** Required (Premium) | **Response (200):** `{code: 1, message: "Messages found", data: [{role, content, model, tokensUsed, createdAt}]}`
 
 ---
 
@@ -526,11 +441,11 @@ Start anonymous onboarding session.
 **Auth:** Not required | **Request:**
 ```json
 {
-  "nativeLanguage": "english"
+  "native_language": "english"
 }
 ```
 
-**Response (200):** `{code: 1, message: "Session started", data: {sessionId, expiresAt}}`
+**Response (200):** `{code: 1, message: "Session started", data: {session_id, expires_at}}`
 
 ---
 
@@ -540,12 +455,12 @@ Chat in onboarding session.
 **Auth:** Not required | **Request:**
 ```json
 {
-  "sessionId": "session_token",
+  "session_id": "session_token",
   "message": "I want to learn Spanish"
 }
 ```
 
-**Response (200):** `{code: 1, message: "Response generated", data: {response, turnCount, maxTurns}}`
+**Response (200):** `{code: 1, message: "Response generated", data: {response, turn_count, max_turns}}`
 
 ---
 
@@ -555,11 +470,11 @@ Complete onboarding and extract profile.
 **Auth:** Not required | **Request:**
 ```json
 {
-  "sessionId": "session_token"
+  "session_id": "session_token"
 }
 ```
 
-**Response (200):** `{code: 1, message: "Onboarding completed", data: {extractedProfile: {languages, interests, level}}}`
+**Response (200):** `{code: 1, message: "Onboarding completed", data: {extracted_profile: {languages, interests, level}}}`
 
 ---
 

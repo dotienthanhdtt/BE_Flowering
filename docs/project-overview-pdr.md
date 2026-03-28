@@ -1,7 +1,7 @@
 # Project Overview & PDR
 
-**Last Updated:** 2026-03-24
-**Version:** 1.2.2
+**Last Updated:** 2026-03-28
+**Version:** 1.3.0
 **Status:** Active Development
 
 ## Executive Summary
@@ -39,11 +39,6 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - Webhook-based lifecycle management
 - Multiple plan types (free, monthly, yearly, lifetime)
 
-### 5. Push Notifications
-- Firebase Cloud Messaging (FCM)
-- Multi-device support per user
-- Cross-platform tokens (iOS, Android, Web)
-
 ## Technical Stack
 
 ### Backend Framework
@@ -64,7 +59,6 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 
 ### External Integrations
 - **RevenueCat** - Subscriptions
-- **Firebase Admin SDK** - Push notifications
 - **OpenAI/Anthropic/Google AI** - LLM providers
 - **Langfuse** - AI observability
 - **Sentry** - Error tracking (5xx exceptions)
@@ -73,22 +67,21 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 
 | Module | Endpoints | Key Features |
 |--------|-----------|--------------|
-| **auth/** (24 files) | POST /auth/register, /login, /google, /apple, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | JWT, OAuth auto-linking, password reset |
-| **ai/** (~28 files) | POST /ai/chat, /exercises/generate, /pronunciation/assess, /chat/correct, /translate, /conversations | LangChain, multi-provider, translation, correction, rate limiting (100/hr free, 1000/hr premium) |
+| **auth/** (27 files) | POST /auth/register, /login, /google, /apple, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | JWT, OAuth auto-linking, password reset |
+| **ai/** (~25 files) | POST /ai/chat, /chat/correct, /translate; SSE /ai/chat/stream | LangChain, multi-provider, translation, correction, rate limiting |
 | **onboarding/** (11 files) | POST /onboarding/start, /chat, /complete | Anonymous chat, session-based (10-turn max, 7d TTL) |
 | **language/** (10 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags |
 | **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
 | **subscription/** (6 files) | GET /subscriptions/me, POST /webhooks/revenuecat | RevenueCat webhook, status checks |
-| **notification/** (6 files) | POST /notifications/devices, DELETE /notifications/devices/:token | FCM token management |
 | **email/** (2 files) | Internal service | Nodemailer SMTP for OTP delivery |
 
-## Database Schema (14 Entities)
+## Database Schema (13 Entities)
 
 **Core:** User, Language, UserLanguage
 **Content:** Lesson, Exercise
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation (anonymous/authenticated), AiConversationMessage, Vocabulary
-**Infrastructure:** Subscription, DeviceToken, RefreshToken, PasswordReset
+**Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent
 
 **Recent Updates:**
 - Language: `isNativeAvailable`, `isLearningAvailable`, `flagUrl`
@@ -109,7 +102,7 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - Password reset via OTP (10min) + reset token (15min)
 
 **FR-2: AI Learning Features** (Critical)
-- Chat practice, vocabulary, grammar, translation
+- Chat practice, grammar correction, translation
 - Multi-provider support with fallback
 - Rate limiting: 20 req/min, 100 req/hr per user
 - Request tracking via Langfuse
@@ -119,12 +112,7 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - Status tracking (active, expired, cancelled, trial)
 - Webhook processing <60s
 
-**FR-4: Push Notifications** (Medium)
-- Firebase FCM registration
-- Multi-device support per user
-- Automatic token cleanup
-
-**FR-5: Onboarding** (High)
+**FR-4: Onboarding** (High)
 - Anonymous session-based chat
 - No authentication required
 - Max 10 turns, 7-day TTL

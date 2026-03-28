@@ -1,20 +1,20 @@
 # Codebase Summary
 
-**Last Updated:** 2026-03-24
-**Generated from:** repomix-output.xml (updated 2026-03-24)
+**Last Updated:** 2026-03-28
+**Generated from:** repomix-output.xml (updated 2026-03-28)
 
 ## Overview
 
-AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 8 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, and push notifications.
+AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 7 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, and language management.
 
 ## Metrics
 
-- **Total TypeScript Files:** 138 files in src/
-- **Code Lines:** ~8,330 LOC in src/
-- **Modules:** 8 feature modules
-- **Database Entities:** 14 TypeORM entities (registered in database.module.ts)
-- **API Endpoints:** 35 REST endpoints (34 + /subscriptions/sync)
-- **External Integrations:** 8 (Supabase, RevenueCat, Firebase, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
+- **Total TypeScript Files:** ~130 files in src/
+- **Code Lines:** ~8,000 LOC in src/
+- **Modules:** 7 feature modules
+- **Database Entities:** 13 TypeORM entities (registered in database.module.ts)
+- **API Endpoints:** 31 REST endpoints (reduced from 35 after removing unused endpoints)
+- **External Integrations:** 7 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
 
 ## Tech Stack
 
@@ -28,10 +28,13 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 | Auth | JWT, Passport.js, bcrypt |
 | AI | LangChain, multi-provider LLM |
 | Subscriptions | RevenueCat |
-| Notifications | Firebase Admin SDK |
 | Observability | Langfuse, Sentry |
 | Validation | class-validator, class-transformer, Joi |
 | Monitoring | HTTP logger middleware |
+
+## API Conventions
+
+**JSON Key Naming:** All HTTP request/response JSON keys use `snake_case` for serialization. Internal TypeScript code remains `camelCase`. Exception: Wrapper keys `code`, `message`, `data` are single-word and unchanged.
 
 ## Module Structure
 
@@ -54,16 +57,15 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - JWT HS256 (7d expiry)
 - Google Auth Library for ID token verification
 
-### 2. AI Module (28 files, ~2,234 LOC)
+### 2. AI Module (~25 files, ~1,900 LOC)
 
 **Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing
 
 **Endpoints:**
-- POST /ai/chat, /exercises/generate, /pronunciation/assess
+- POST /ai/chat (premium-only)
+- SSE /ai/chat/stream (Server-Sent Events, premium-only)
 - POST /ai/chat/correct (grammar correction with context, public + optional premium)
 - POST /ai/translate (word/sentence translation, public + optional premium)
-- POST /ai/conversations, GET /ai/conversations/:id/messages
-- SSE /ai/chat/stream (Server-Sent Events)
 
 **Supported Models:** GPT-4o, GPT-4o-mini, GPT-4.1-nano, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash
 
@@ -138,23 +140,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Security:** Timing-safe Bearer token validation
 
-### 7. Notification Module (6 files, 424 LOC)
-
-**Purpose:** Firebase FCM push notifications
-
-**Endpoints:**
-- POST /notifications/devices
-- DELETE /notifications/devices/:token
-
-**Platforms:** ios, android, web
-
-**Features:**
-- Multi-device support per user
-- Automatic token deduplication
-- Device name tracking
-- Last used timestamp for cleanup
-
-### 8. Email Module (2 files, 43 LOC)
+### 7. Email Module (2 files, 43 LOC)
 
 **Purpose:** Nodemailer SMTP for OTP delivery
 
@@ -162,13 +148,13 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - OTP email sending for password reset
 - Configured via SMTP environment variables
 
-## Database Schema (15 Entities)
+## Database Schema (13 Entities)
 
 **Core:** User, Language, UserLanguage
 **Content:** Lesson, Exercise
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation, AiConversationMessage, Vocabulary
-**Infrastructure:** Subscription, DeviceToken, RefreshToken, PasswordReset, WebhookEvent
+**Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent
 
 ### Vocabulary Entity (New)
 - `id` - UUID primary key
@@ -290,11 +276,10 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Endpoints covered:**
 - Auth (registration, login, OAuth, refresh, password reset)
 - User profile management
-- AI features (chat, grammar, exercises, pronunciation, translation, correction)
+- AI features (chat, translation, correction)
 - Onboarding chat
 - Languages (CRUD, user preferences)
 - Subscriptions (status, webhooks)
-- Notifications (device registration)
 
 ## Testing
 

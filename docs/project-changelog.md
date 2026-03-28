@@ -1,6 +1,6 @@
 # Project Changelog
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-28
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
@@ -8,12 +8,44 @@ All notable changes documented here. Format follows [Keep a Changelog](https://k
 ## [Unreleased]
 
 ### In Progress
-- Grammar correction consolidation into single endpoint
-- Langfuse tracing stability improvements
+- Unit test coverage expansion
+- E2E test suite development
 
 ---
 
-## [1.2.2] - 2026-03-24 (Current - Grammar Consolidation & Langfuse Stability)
+## [1.3.0] - 2026-03-28 (Codebase Cleanup & API Standardization)
+
+### Removed
+- **POST /ai/exercises/generate Endpoint:** Exercise generation (not called by mobile app)
+- **POST /ai/pronunciation/assess Endpoint:** Pronunciation assessment from audio (not called by mobile app)
+- **POST /ai/conversations + GET /ai/conversations/:id/messages Endpoints:** Conversation CRUD operations (superseded by chat endpoint)
+- **POST /subscriptions/sync Endpoint:** Subscription sync (redundant with RevenueCat webhooks)
+- **Entire Notification Module:** FCM device token management (not used by mobile app)
+  - POST /notifications/devices (register FCM token)
+  - DELETE /notifications/devices/:token (unregister device)
+  - DeviceToken entity and related services
+
+### Changed
+- **API JSON Key Naming Convention:** All HTTP request/response JSON keys now use `snake_case`
+  - Example: `idToken` → `id_token`, `displayName` → `display_name`, `sessionToken` → `session_token`
+  - Exception: Wrapper keys `code`, `message`, `data` remain unchanged
+  - Internal TypeScript code remains `camelCase` (only JSON serialization affected)
+- **API Endpoint Count:** 35 → 31 active endpoints (4 removed)
+- **Database Entities:** 14 → 13 (DeviceToken removed)
+
+### Added
+- **docs/mobile-api-reference.md:** New concise mobile-focused API reference guide
+
+### Documentation Updates
+- api-documentation.md: Converted all field names to snake_case, removed unused endpoints, updated version to 1.3.0
+- codebase-summary.md: Updated endpoint count and entity count
+- project-overview-pdr.md: Removed notification module, updated counts
+- system-architecture.md: Removed notification module diagrams
+- project-roadmap.md: Updated Phase 2 completion status
+
+---
+
+## [1.2.2] - 2026-03-24 (Grammar Consolidation & Langfuse Stability)
 
 ### Removed
 - **POST /ai/grammar/check Endpoint:** Consolidated grammar checking into /ai/chat/correct
