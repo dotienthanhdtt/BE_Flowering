@@ -19,11 +19,7 @@ export class GeminiLLMProvider implements LLMProvider {
     private langfuseService: LangfuseService,
   ) {}
 
-  private createModel(
-    modelName: string,
-    options?: LLMOptions,
-    handler?: ReturnType<LangfuseService['getHandler']>,
-  ): ChatGoogleGenerativeAI {
+  private createModel(modelName: string, options?: LLMOptions): ChatGoogleGenerativeAI {
     const apiKey = this.configService.get('ai.googleAiApiKey', { infer: true });
     if (!apiKey) {
       throw new ServiceUnavailableException('Google AI API key not configured');
@@ -34,14 +30,13 @@ export class GeminiLLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0.7,
       maxOutputTokens: options?.maxTokens,
       streaming: true,
-      callbacks: [handler ?? this.langfuseService.getHandler()],
+      callbacks: [this.langfuseService.getHandler()],
     });
   }
 
   async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
-    const handler = this.langfuseService.getHandler();
     try {
-      const model = this.createModel(options.model, options, handler);
+      const model = this.createModel(options.model, options);
       const response = await model.invoke(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -52,15 +47,12 @@ export class GeminiLLMProvider implements LLMProvider {
     } catch (error) {
       this.logger.error('Gemini chat failed', (error as Error)?.message);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
-    } finally {
-      await handler.flushAsync();
     }
   }
 
   async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
-    const handler = this.langfuseService.getHandler();
     try {
-      const model = this.createModel(options.model, options, handler);
+      const model = this.createModel(options.model, options);
       const stream = await model.stream(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -73,8 +65,6 @@ export class GeminiLLMProvider implements LLMProvider {
     } catch (error) {
       this.logger.error('Gemini stream failed', error);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
-    } finally {
-      await handler.flushAsync();
     }
   }
 }

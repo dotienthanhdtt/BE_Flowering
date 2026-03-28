@@ -36,6 +36,7 @@ export const environmentValidationSchema = Joi.object({
     .description('Langfuse public key for monitoring'),
   LANGFUSE_SECRET_KEY: Joi.string().allow('').optional().description('Langfuse secret key'),
   LANGFUSE_HOST: Joi.string().allow('').optional().default('https://cloud.langfuse.com'),
+  LANGFUSE_BASE_URL: Joi.string().allow('').optional(),
 
   // Monitoring
   SENTRY_DSN: Joi.string().allow('').optional().description('Sentry DSN for error tracking'),

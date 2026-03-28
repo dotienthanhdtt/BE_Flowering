@@ -78,7 +78,7 @@ describe('LearningAgentService - checkCorrection', () => {
     );
   });
 
-  it('should use GPT-4.1 Nano model with temperature 0.3', async () => {
+  it('should use GPT-4o model with temperature 0', async () => {
     llmService.chat.mockResolvedValue('null');
 
     await service.checkCorrection('Hi', 'Hi', 'en');
@@ -86,8 +86,9 @@ describe('LearningAgentService - checkCorrection', () => {
     expect(llmService.chat).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({
-        model: LLMModel.OPENAI_GPT4_1_NANO,
-        temperature: 0.3,
+        model: LLMModel.OPENAI_GPT4O,
+        temperature: 0,
+        maxTokens: 200,
         metadata: { feature: 'correction-check' },
       }),
     );
