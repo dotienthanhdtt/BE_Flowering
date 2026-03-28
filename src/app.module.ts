@@ -12,7 +12,6 @@ import { AiModule } from './modules/ai/ai.module';
 import { UserModule } from './modules/user/user.module';
 import { LanguageModule } from './modules/language/language.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
-import { NotificationModule } from './modules/notification/notification.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware';
@@ -33,7 +32,6 @@ import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware'
     UserModule,
     LanguageModule,
     SubscriptionModule,
-    NotificationModule,
     OnboardingModule,
   ],
   controllers: [AppController],

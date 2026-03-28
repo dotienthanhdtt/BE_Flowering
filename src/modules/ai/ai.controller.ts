@@ -1,29 +1,8 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  Param,
-  Sse,
-  UseInterceptors,
-  UseGuards,
-  UploadedFile,
-  ParseUUIDPipe,
-  BadRequestException,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Controller, Post, Sse, Body, UseGuards } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiBody,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Observable, Subject } from 'rxjs';
 import { LearningAgentService } from './services/learning-agent.service';
-import { WhisperTranscriptionService } from './services/whisper-transcription.service';
 import { TranslationService } from './services/translation.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public-route.decorator';
@@ -33,19 +12,11 @@ import { User } from '../../database/entities';
 import {
   ChatRequestDto,
   ChatResponseDto,
-  CreateConversationDto,
   CorrectionCheckRequestDto,
   CorrectionCheckResponseDto,
-  GenerateExerciseRequestDto,
-  ExerciseResult,
-  PronunciationAssessmentRequestDto,
-  PronunciationResult,
   TranslateRequestDto,
   TranslateType,
 } from './dto';
-
-// Max audio file size: 10MB
-const MAX_AUDIO_SIZE = 10 * 1024 * 1024;
 
 /**
  * AI Controller for language learning features.
@@ -60,7 +31,6 @@ const MAX_AUDIO_SIZE = 10 * 1024 * 1024;
 export class AiController {
   constructor(
     private learningAgent: LearningAgentService,
-    private whisperService: WhisperTranscriptionService,
     private translationService: TranslationService,
   ) {}
 
@@ -108,64 +78,6 @@ export class AiController {
     );
   }
 
-  @Post('exercises/generate')
-  @ApiOperation({ summary: 'Generate a language exercise' })
-  @ApiResponse({ status: 200, type: ExerciseResult })
-  async generateExercise(@Body() dto: GenerateExerciseRequestDto): Promise<ExerciseResult> {
-    return this.learningAgent.generateExercise(
-      dto.exerciseType,
-      dto.targetLanguage,
-      dto.proficiencyLevel,
-      dto.topic,
-      dto.model,
-    );
-  }
-
-  @Post('pronunciation/assess')
-  @ApiOperation({ summary: 'Assess pronunciation from audio' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        audio: { type: 'string', format: 'binary' },
-        expectedText: { type: 'string' },
-        targetLanguage: { type: 'string' },
-      },
-    },
-  })
-  @ApiResponse({ status: 200, type: PronunciationResult })
-  @UseInterceptors(FileInterceptor('audio'))
-  async assessPronunciation(
-    @UploadedFile() audio: Express.Multer.File,
-    @Body() dto: PronunciationAssessmentRequestDto,
-  ): Promise<PronunciationResult> {
-    // Validate audio file
-    if (!audio) {
-      throw new BadRequestException('Audio file is required');
-    }
-    if (audio.size > MAX_AUDIO_SIZE) {
-      throw new BadRequestException('Audio file exceeds maximum size of 10MB');
-    }
-    if (!audio.mimetype.startsWith('audio/')) {
-      throw new BadRequestException('Invalid audio file type');
-    }
-
-    // Transcribe audio using Whisper
-    const transcribedText = await this.whisperService.transcribe(audio.buffer, dto.targetLanguage);
-
-    // Assess pronunciation using LLM
-    const result = await this.learningAgent.assessPronunciation(
-      transcribedText,
-      dto.expectedText,
-      dto.targetLanguage,
-      dto.model,
-    );
-
-    // Include transcribed text in response
-    return { ...result, transcribedText };
-  }
-
   @Public()
   @RequirePremium(false)
   @Post('translate')
@@ -190,24 +102,5 @@ export class AiController {
       userId,
       dto.sessionToken,
     );
-  }
-
-  @Post('conversations')
-  @ApiOperation({ summary: 'Start a new conversation session' })
-  async createConversation(
-    @CurrentUser() user: User,
-    @Body() dto: CreateConversationDto,
-  ): Promise<{ id: string }> {
-    const conversation = await this.learningAgent.createConversation(user.id, dto);
-    return { id: conversation.id };
-  }
-
-  @Get('conversations/:id/messages')
-  @ApiOperation({ summary: 'Get conversation message history' })
-  async getConversationMessages(
-    @Param('id', ParseUUIDPipe) conversationId: string,
-  ): Promise<{ messages: unknown[] }> {
-    const messages = await this.learningAgent.getConversationMessages(conversationId);
-    return { messages };
   }
 }
