@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
 import { UnifiedLLMService } from './unified-llm.service';
 import { PromptLoaderService } from './prompt-loader.service';
-import { LLMModel } from '../providers/llm-models.enum';
+import { LLMModel, ThinkingLevel } from '../providers/llm-models.enum';
 import { AiConversation, AiConversationMessage, MessageRole } from '../../../database/entities';
 import { ConversationContext } from '../dto';
 
@@ -126,9 +126,10 @@ export class LearningAgentService {
     });
 
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: LLMModel.OPENAI_GPT4O,
+      model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
       temperature: 0.0,
-      maxTokens:200,
+      maxTokens: 10000,
+      thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
       metadata: { feature: 'correction-check' },
     });
 
