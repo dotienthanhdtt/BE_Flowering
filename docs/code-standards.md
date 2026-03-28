@@ -1,6 +1,6 @@
 # Code Standards
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-28
 
 ## Project Structure
 
@@ -31,6 +31,22 @@ src/
     ├── notification/         # Firebase push notifications
     └── email/                # Nodemailer SMTP service
 ```
+
+## API JSON Key Convention
+
+**All JSON keys in HTTP requests and responses use `snake_case`** — both request body params and response data fields.
+
+```json
+// Request body
+{ "first_name": "John", "target_language": "vi" }
+
+// Response data
+{ "user_id": "abc", "created_at": "2026-03-28T..." }
+```
+
+- DTOs define properties in `camelCase` (TypeScript convention) with `@Transform` or `@Expose` decorators as needed
+- Database column names also use `snake_case` (TypeORM `name` option)
+- Internal TypeScript code stays `camelCase`; only the HTTP wire format is `snake_case`
 
 ## Naming Conventions
 
