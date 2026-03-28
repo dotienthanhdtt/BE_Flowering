@@ -1,6 +1,6 @@
 # API Documentation
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-28
 **Base URL:** `http://localhost:3000` (development)
 **API Version:** 1.3.1
 
@@ -27,6 +27,20 @@ RESTful API for AI-powered language learning application. All endpoints except w
   "data": null
 }
 ```
+
+### JSON Key Naming
+
+**All JSON keys (request body params and response data fields) use `snake_case`.**
+
+```json
+// Request
+{ "target_language": "vi", "proficiency_level": "beginner" }
+
+// Response data
+{ "user_id": "abc", "access_token": "...", "created_at": "2026-03-28T..." }
+```
+
+The wrapper keys `code`, `message`, `data` are single-word and unchanged.
 
 ## Authentication
 
