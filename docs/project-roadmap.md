@@ -1,8 +1,8 @@
 # Project Roadmap
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-28
 **Project:** AI Language Learning Backend
-**Status:** Phase 1 Complete, Phase 2 In Progress (75%)
+**Status:** Phase 1 Complete, Phase 2 In Progress (90%)
 
 ## Vision
 
@@ -40,8 +40,8 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 **Duration:** 6 weeks
 **Status:** 🔄 In Progress
-**Progress:** 75% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, premium features, grammar consolidation, Langfuse fixes, documentation done)
-**Target Completion:** 2026-03-27
+**Progress:** 90% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, premium features, grammar consolidation, Langfuse fixes, code cleanup, API standardization, documentation done)
+**Target Completion:** 2026-03-31
 
 **Completed:**
 - ✅ HTTP logger middleware (2026-03-07)
@@ -63,6 +63,11 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ Fixed Langfuse output tracing (per-invocation handler with flushAsync) across all 3 LLM providers (2026-03-24)
 - ✅ Made correction & translate endpoints public with @RequirePremium(false) (2026-03-24)
 - ✅ Updated documentation for grammar consolidation & Langfuse fixes (2026-03-24)
+- ✅ Removed unused AI endpoints: exercises/generate, pronunciation/assess, conversations CRUD (2026-03-28)
+- ✅ Removed subscriptions/sync endpoint (redundant with RevenueCat webhooks) (2026-03-28)
+- ✅ Removed entire notification module (FCM device management) (2026-03-28)
+- ✅ Standardized API JSON keys to snake_case (all HTTP payloads) (2026-03-28)
+- ✅ Updated all documentation for code cleanup & API standardization (2026-03-28)
 
 **In Progress:**
 | Feature | Priority | Status | Target Date |
