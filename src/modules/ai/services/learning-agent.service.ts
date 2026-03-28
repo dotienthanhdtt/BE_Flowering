@@ -148,8 +148,9 @@ export class LearningAgentService {
     });
 
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: LLMModel.OPENAI_GPT4_1_NANO,
-      temperature: 0.3,
+      model: LLMModel.OPENAI_GPT4O,
+      temperature: 0.0,
+      maxTokens:200,
       metadata: { feature: 'correction-check' },
     });
 
