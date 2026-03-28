@@ -1,24 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { CallbackHandler } from 'langfuse-langchain';
-import { AppConfiguration } from '../../../config/app-configuration';
+import { CallbackHandler } from '@langfuse/langchain';
 
 /**
- * Service for Langfuse LLM observability and tracing.
+ * Service for Langfuse LLM observability and tracing (v5).
+ * Auth credentials are read from env vars by the OTel span processor.
  * Creates a fresh CallbackHandler per invocation so each LLM call
  * gets its own trace context and output is always captured.
  */
 @Injectable()
 export class LangfuseService {
-  constructor(private configService: ConfigService<AppConfiguration>) {}
-
   /**
    * Create a new callback handler per LLM invocation.
    * Each handler gets its own trace context to ensure output is captured.
-   * flushAt: 1 ensures traces are sent immediately after the call.
    */
   getHandler(): CallbackHandler {
-    return this.createHandler();
+    return new CallbackHandler();
   }
 
   /**
@@ -26,23 +22,8 @@ export class LangfuseService {
    */
   createUserHandler(userId: string, sessionId: string): CallbackHandler {
     return new CallbackHandler({
-      secretKey: this.configService.get('ai.langfuseSecretKey', { infer: true }),
-      publicKey: this.configService.get('ai.langfusePublicKey', { infer: true }),
-      baseUrl: this.configService.get('ai.langfuseHost', { infer: true }),
       userId,
       sessionId,
-      flushAt: 1,
-      flushInterval: 1000,
-    });
-  }
-
-  private createHandler(): CallbackHandler {
-    return new CallbackHandler({
-      secretKey: this.configService.get('ai.langfuseSecretKey', { infer: true }),
-      publicKey: this.configService.get('ai.langfusePublicKey', { infer: true }),
-      baseUrl: this.configService.get('ai.langfuseHost', { infer: true }),
-      flushAt: 1,
-      flushInterval: 1000,
     });
   }
 }

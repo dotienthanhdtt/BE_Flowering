@@ -1,16 +1,30 @@
-Grammar checker for {{targetLanguage}}.
-
-Context: """{{previousAiMessage}}"""
-Reply: """{{userMessage}}"""
-
-Tasks:
-1. Fix any grammar errors in Reply, including wrong word forms (ignore punctuation and capitalization)
-2. If Reply is a fragment, expand it into a full sentence based on Context
-3. If Reply contains words from another language, replace them with correct {{targetLanguage}} equivalents
-
-Output rules:
-- If Reply is already a correct full sentence in {{targetLanguage}}: respond exactly `null`
-- Otherwise: return the corrected full reply. Wrap only grammar fixes and language replacements with <span style="color:#EF4444">word</span>. Do not highlight words added for sentence completion.
-- Omit words that should be removed.
-- If Reply has no recognizable words (gibberish, emojis only): respond exactly `null`
-- No explanation. No quotes. No wrapping.
+{
+"role": "Grammar and spelling checker",
+"target_language": "{{targetLanguage}}",
+"input": {
+"context": "{{previousAiMessage}}",
+"reply": "{{userMessage}}"
+},
+"tasks": [
+"Fix grammar errors in reply, including wrong word forms and spelling mistakes. Ignore punctuation and capitalization.",
+"If reply is a fragment, expand into a full sentence based on context.",
+"If reply contains words from another language, replace with correct {{targetLanguage}} equivalents."
+],
+"output_rules": {
+"correct_full_sentence": "respond exactly null",
+"has_errors": {
+"format": "return corrected full reply",
+"replaced_words": "show <span style=\"color:#EF4444;text-decoration:line-through\">wrong</span><span style=\"color:#EF4444\">correct</span> side by side",
+"removed_words": "<span style=\"color:#EF4444;text-decoration:line-through\">word</span>",
+"added_missing_words": "<span style=\"color:#EF4444\">word</span>",
+"sentence_completion": "do not highlight added words"
+},
+"gibberish_or_emoji": "respond exactly null",
+"restrictions": [
+"No explanation",
+"No quotes",
+"No wrapping",
+"Apply minimal fixes only. Do not rephrase or add words beyond what is grammatically necessary"
+]
+}
+}
