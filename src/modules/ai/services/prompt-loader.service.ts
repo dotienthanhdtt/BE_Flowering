@@ -21,7 +21,9 @@ export class PromptLoaderService {
     let template = this.cache.get(name);
 
     if (!template) {
-      const filePath = join(this.promptsDir, `${name}.md`);
+      const jsonPath = join(this.promptsDir, `${name}.json`);
+      const mdPath = join(this.promptsDir, `${name}.md`);
+      const filePath = existsSync(jsonPath) ? jsonPath : mdPath;
       if (!existsSync(filePath)) {
         this.logger.error(`Prompt file not found: ${filePath}`);
         throw new Error(`Prompt template not found: ${name}`);

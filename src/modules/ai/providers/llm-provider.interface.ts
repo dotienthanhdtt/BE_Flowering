@@ -1,11 +1,12 @@
 import { BaseMessage } from '@langchain/core/messages';
-import { LLMModel } from './llm-models.enum';
+import { LLMModel, ThinkingLevel } from './llm-models.enum';
 
 export interface LLMOptions {
   model: LLMModel;
   temperature?: number;
   maxTokens?: number;
   metadata?: Record<string, unknown>;
+  thinkingConfig?: { thinkingLevel: ThinkingLevel };
 }
 
 export interface LLMProvider {
