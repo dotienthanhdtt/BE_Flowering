@@ -30,7 +30,7 @@ export class OpenAILLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0.7,
       maxTokens: options?.maxTokens,
       streaming: true,
-      callbacks: [this.langfuseService.getHandler()],
+      callbacks: [this.langfuseService.getHandler(options?.metadata)],
     });
   }
 

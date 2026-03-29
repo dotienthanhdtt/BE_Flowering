@@ -30,7 +30,7 @@ export class GeminiLLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0.7,
       maxOutputTokens: options?.maxTokens,
       streaming: true,
-      callbacks: [this.langfuseService.getHandler()],
+      callbacks: [this.langfuseService.getHandler(options?.metadata)],
     });
   }
 

@@ -30,7 +30,7 @@ export class AnthropicLLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0.7,
       maxTokens: options?.maxTokens ?? 4096,
       streaming: true,
-      callbacks: [this.langfuseService.getHandler()],
+      callbacks: [this.langfuseService.getHandler(options?.metadata)],
     });
   }
 
