@@ -1,18 +1,7 @@
 // Load .env before any SDK reads process.env
 import 'dotenv/config';
 
-// Sentry must be initialized before other app imports
-import * as Sentry from '@sentry/node';
-
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.NODE_ENV || 'development',
-  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
-  enabled: !!process.env.SENTRY_DSN,
-  sendDefaultPii: true,
-});
-
-// Langfuse v5 OTel tracing via NodeSDK — must init before NestJS bootstrap
+// Langfuse v5 OTel tracing — must init BEFORE Sentry (Sentry also registers OTel globals)
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { LangfuseSpanProcessor } from '@langfuse/otel';
 
@@ -35,6 +24,18 @@ if (langfuseEnabled) {
   console.log(`Langfuse tracing enabled → ${process.env.LANGFUSE_BASE_URL}`);
 } else {
   console.log('Langfuse tracing disabled (missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY)');
+}
+
+// Sentry — only init when DSN is provided (Sentry.init registers OTel globals even when disabled)
+import * as Sentry from '@sentry/node';
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
+    sendDefaultPii: true,
+  });
 }
 
 export { langfuseSdk };
