@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import appConfiguration from './config/app-configuration';
@@ -15,6 +15,7 @@ import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware';
+import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-case.middleware';
 
 @Module({
   imports: [
@@ -48,5 +49,9 @@ import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware'
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(HttpLoggerMiddleware).forRoutes('*');
+    consumer
+      .apply(SnakeToCamelCaseMiddleware)
+      .exclude({ path: 'subscription/webhook', method: RequestMethod.ALL })
+      .forRoutes('*');
   }
 }

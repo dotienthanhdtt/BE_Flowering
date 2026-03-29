@@ -5,7 +5,6 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { setupSwaggerDocumentation } from './swagger/swagger-documentation-setup';
 import { ResponseTransformInterceptor, AllExceptionsFilter } from './common';
-import { toCamelCase } from './common/utils/case-converter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -13,15 +12,6 @@ async function bootstrap(): Promise<void> {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port', 3000);
   const nodeEnv = configService.get<string>('nodeEnv', 'development');
-
-  // Convert incoming snake_case request body keys to camelCase so existing DTO validation works.
-  // Exclude RevenueCat webhook — it sends raw snake_case that its DTO handles internally.
-  app.use((req: { path: string; body: unknown }, _res: unknown, next: () => void) => {
-    if (!req.path.startsWith('/subscription/webhook') && req.body && typeof req.body === 'object') {
-      req.body = toCamelCase(req.body);
-    }
-    next();
-  });
 
   // Global validation pipe
   app.useGlobalPipes(
