@@ -16,10 +16,13 @@ Sentry.init({
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { LangfuseSpanProcessor } from '@langfuse/otel';
 
-const langfuseBaseUrl =
-  process.env.LANGFUSE_BASE_URL ||
-  process.env.LANGFUSE_HOST ||
-  'https://cloud.langfuse.com';
+// Ensure LANGFUSE_BASE_URL is set for all Langfuse packages (CallbackHandler reads env vars)
+if (!process.env.LANGFUSE_BASE_URL) {
+  process.env.LANGFUSE_BASE_URL =
+    process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com';
+}
+
+const langfuseBaseUrl = process.env.LANGFUSE_BASE_URL;
 
 const langfuseEnabled =
   !!process.env.LANGFUSE_PUBLIC_KEY && !!process.env.LANGFUSE_SECRET_KEY;
@@ -31,6 +34,8 @@ if (langfuseEnabled) {
     publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
     secretKey: process.env.LANGFUSE_SECRET_KEY!,
     baseUrl: langfuseBaseUrl,
+    // v5 default filter drops non-LLM scopes; export all to capture CallbackHandler spans
+    shouldExportSpan: () => true,
   });
   const provider = new NodeTracerProvider({
     spanProcessors: [langfuseSpanProcessor],
