@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsOptional, IsUUID } from 'class-validator';
-
 export class AppleAuthDto {
   @ApiProperty({ description: 'Apple ID token from Sign in with Apple' })
   @IsString()
