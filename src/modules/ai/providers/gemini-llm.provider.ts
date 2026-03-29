@@ -33,7 +33,7 @@ export class GeminiLLMProvider implements LLMProvider {
         thinkingConfig: { thinkingBudget: options.thinkingConfig.thinkingLevel },
       }),
       streaming: true,
-      callbacks: [this.langfuseService.getHandler()],
+      callbacks: [this.langfuseService.getHandler(options?.metadata)],
     });
   }
 

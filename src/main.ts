@@ -1,4 +1,4 @@
-import './instrument';
+import { langfuseSpanProcessor } from './instrument';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -44,6 +44,15 @@ async function bootstrap(): Promise<void> {
   if (nodeEnv !== 'production') {
     setupSwaggerDocumentation(app);
     console.log(`Swagger docs available at http://localhost:${port}/api/docs`);
+  }
+
+  // Flush Langfuse traces on shutdown
+  if (langfuseSpanProcessor) {
+    app.enableShutdownHooks();
+    const processor = langfuseSpanProcessor;
+    process.on('SIGTERM', async () => {
+      await processor.forceFlush();
+    });
   }
 
   // Bind to 0.0.0.0 explicitly for Railway/Docker compatibility (IPv4)

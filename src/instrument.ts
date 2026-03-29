@@ -1,12 +1,13 @@
-// Sentry must be initialized before any other imports
+// Load .env before any SDK reads process.env
+import 'dotenv/config';
+
+// Sentry must be initialized before other app imports
 import * as Sentry from '@sentry/node';
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.NODE_ENV || 'development',
-  // Performance monitoring
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
-  // Only enable if DSN is configured
   enabled: !!process.env.SENTRY_DSN,
   sendDefaultPii: true,
 });
@@ -15,17 +16,29 @@ Sentry.init({
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { LangfuseSpanProcessor } from '@langfuse/otel';
 
-// Map LANGFUSE_HOST → LANGFUSE_BASE_URL for backward compatibility
-if (process.env.LANGFUSE_HOST && !process.env.LANGFUSE_BASE_URL) {
-  process.env.LANGFUSE_BASE_URL = process.env.LANGFUSE_HOST;
-}
+const langfuseBaseUrl =
+  process.env.LANGFUSE_BASE_URL ||
+  process.env.LANGFUSE_HOST ||
+  'https://cloud.langfuse.com';
 
 const langfuseEnabled =
   !!process.env.LANGFUSE_PUBLIC_KEY && !!process.env.LANGFUSE_SECRET_KEY;
 
+let langfuseSpanProcessor: LangfuseSpanProcessor | undefined;
+
 if (langfuseEnabled) {
+  langfuseSpanProcessor = new LangfuseSpanProcessor({
+    publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
+    secretKey: process.env.LANGFUSE_SECRET_KEY!,
+    baseUrl: langfuseBaseUrl,
+  });
   const provider = new NodeTracerProvider({
-    spanProcessors: [new LangfuseSpanProcessor()],
+    spanProcessors: [langfuseSpanProcessor],
   });
   provider.register();
+  console.log(`Langfuse tracing enabled → ${langfuseBaseUrl}`);
+} else {
+  console.log('Langfuse tracing disabled (missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY)');
 }
+
+export { langfuseSpanProcessor };
