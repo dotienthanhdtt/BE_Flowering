@@ -12,8 +12,8 @@ Sentry.init({
   sendDefaultPii: true,
 });
 
-// Langfuse v5 OTel tracing — must init before NestJS bootstrap
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+// Langfuse v5 OTel tracing via NodeSDK — must init before NestJS bootstrap
+import { NodeSDK } from '@opentelemetry/sdk-node';
 import { LangfuseSpanProcessor } from '@langfuse/otel';
 
 // Ensure LANGFUSE_BASE_URL is set for all Langfuse packages (CallbackHandler reads env vars)
@@ -22,28 +22,19 @@ if (!process.env.LANGFUSE_BASE_URL) {
     process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com';
 }
 
-const langfuseBaseUrl = process.env.LANGFUSE_BASE_URL;
-
 const langfuseEnabled =
   !!process.env.LANGFUSE_PUBLIC_KEY && !!process.env.LANGFUSE_SECRET_KEY;
 
-let langfuseSpanProcessor: LangfuseSpanProcessor | undefined;
+let langfuseSdk: NodeSDK | undefined;
 
 if (langfuseEnabled) {
-  langfuseSpanProcessor = new LangfuseSpanProcessor({
-    publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
-    secretKey: process.env.LANGFUSE_SECRET_KEY!,
-    baseUrl: langfuseBaseUrl,
-    // v5 default filter drops non-LLM scopes; export all to capture CallbackHandler spans
-    shouldExportSpan: () => true,
+  langfuseSdk = new NodeSDK({
+    spanProcessors: [new LangfuseSpanProcessor()],
   });
-  const provider = new NodeTracerProvider({
-    spanProcessors: [langfuseSpanProcessor],
-  });
-  provider.register();
-  console.log(`Langfuse tracing enabled → ${langfuseBaseUrl}`);
+  langfuseSdk.start();
+  console.log(`Langfuse tracing enabled → ${process.env.LANGFUSE_BASE_URL}`);
 } else {
   console.log('Langfuse tracing disabled (missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY)');
 }
 
-export { langfuseSpanProcessor };
+export { langfuseSdk };
