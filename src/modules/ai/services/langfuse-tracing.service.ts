@@ -3,9 +3,9 @@ import { CallbackHandler } from '@langfuse/langchain';
 
 /**
  * Service for Langfuse LLM observability and tracing (v5).
- * Creates a fresh CallbackHandler per invocation so each LLM call
- * gets its own trace context. Passes userId and sessionId (conversationId)
- * to group traces in the Langfuse dashboard.
+ * v5 CallbackHandler creates OTel spans internally which are exported
+ * by the LangfuseSpanProcessor registered in instrument.ts.
+ * Passes userId and sessionId (conversationId) for grouping in dashboard.
  */
 @Injectable()
 export class LangfuseService {
