@@ -19,6 +19,15 @@ export enum LLMModel {
   GEMINI_2_0_FLASH = 'gemini-2.0-flash',
   GEMINI_1_5_PRO = 'gemini-1.5-pro',
   GEMINI_1_5_FLASH = 'gemini-1.5-flash',
+  GEMINI_3_1_FLASH_LITE_PREVIEW  = 'gemini-3.1-flash-lite-preview',
+}
+
+/** Gemini thinking levels for models that support extended thinking. */
+export enum ThinkingLevel {
+  MINIMAL = 'MINIMAL',
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
 }
 
 export type LLMProviderType = 'openai' | 'anthropic' | 'gemini';

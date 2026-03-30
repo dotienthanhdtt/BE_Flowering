@@ -31,6 +31,7 @@ export class GeminiLLMProvider implements LLMProvider {
       maxOutputTokens: options?.maxTokens,
       streaming: true,
       callbacks: [this.langfuseService.getHandler(options?.metadata)],
+      ...(options?.thinkingConfig && { thinkingConfig: options.thinkingConfig }),
     });
   }
 
