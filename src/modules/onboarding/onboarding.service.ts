@@ -50,20 +50,13 @@ export class OnboardingService {
       throw new BadRequestException('Maximum turns reached. Call /onboarding/complete.');
     }
 
-    const { nativeLanguage, targetLanguage } = conversation.metadata as Record<string, string>;
+    const { targetLanguage } = conversation.metadata as Record<string, string>;
     const isLastTurn = currentTurn >= onboardingConfig.maxTurns;
 
-    let systemPrompt = this.promptLoader.loadPrompt('onboarding-chat-prompt.md', {
-      nativeLanguage,
+    const systemPrompt = this.promptLoader.loadPrompt('onboarding-chat-prompt.json', {
       targetLanguage,
-      currentTurn: String(currentTurn),
-      maxTurns: String(onboardingConfig.maxTurns),
+      isLastTurn: String(isLastTurn),
     });
-
-    if (isLastTurn) {
-      systemPrompt +=
-        '\n\nIMPORTANT: This is the FINAL turn. Warmly summarize everything you have learned about the user and encourage them to start learning.';
-    }
 
     const history = await this.getHistory(conversation.id);
     const messages: BaseMessage[] = [
