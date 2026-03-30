@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
 
 export enum TranslateType {
@@ -8,6 +9,7 @@ export enum TranslateType {
 
 export class TranslateRequestDto {
   @ApiProperty({ enum: TranslateType })
+  @Transform(({ value }) => typeof value === 'string' ? value.toLowerCase() : value)
   @IsEnum(TranslateType)
   type!: TranslateType;
 
