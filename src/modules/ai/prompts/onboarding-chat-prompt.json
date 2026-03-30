@@ -16,11 +16,10 @@
     "Gift accepted: respond warmly, set isLastTurn true"
   ],
   "turn": "{{currentTurn}}/{{maxTurns}}",
-  "response": {
-    "format": "Always return JSON with full param. No markdown, no backticks.",
-    "schema": {
-      "reply": "string",
-      "isLastTurn": "boolean — true ONLY when user accepts the gift"
-    }
+  "responseFormat": {
+    "instruction": "You MUST respond with a raw JSON object. No plain text. No markdown. No code fences. No explanation outside the JSON. Every single response must be exactly this structure:",
+    "schema": "{\"reply\": \"your message here\", \"isLastTurn\": false}",
+    "isLastTurn": "Set to true ONLY when user accepts the gift. false for everything else.",
+    "violation": "Any response that is not valid JSON is a failure."
   }
 }
