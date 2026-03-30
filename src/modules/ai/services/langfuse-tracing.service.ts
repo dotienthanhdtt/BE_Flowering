@@ -32,7 +32,7 @@ const MAX_CACHED_CONVERSATIONS = 5_000;
  */
 @Injectable()
 export class LangfuseService implements OnModuleDestroy {
-  private readonly tracer = trace.getTracer('langfuse-conversation');
+  private readonly tracer = trace.getTracer('langfuse-sdk');
   private readonly conversations = new Map<string, ConversationSpanEntry>();
   private readonly evictionTimer: ReturnType<typeof setInterval>;
 

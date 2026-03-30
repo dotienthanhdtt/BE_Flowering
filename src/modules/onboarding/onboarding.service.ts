@@ -78,7 +78,7 @@ export class OnboardingService {
       model: onboardingConfig.llmModel,
       temperature: onboardingConfig.temperature,
       maxTokens: onboardingConfig.maxTokens,
-      metadata: { feature: 'onboarding', conversationId: conversation.id, turn: currentTurn },
+      metadata: { feature: 'onboarding-chat', conversationId: conversation.id, turn: currentTurn },
     });
 
     await this.saveMessage(conversation.id, MessageRole.USER, dto.message);
