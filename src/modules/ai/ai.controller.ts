@@ -86,7 +86,7 @@ export class AiController {
   async translate(@CurrentUser() user: User | null, @Body() dto: TranslateRequestDto) {
     const userId = user?.id ?? null;
 
-    if (dto.type === TranslateType.WORD) {
+    if (dto.type.toLowerCase() === TranslateType.WORD) {
       return this.translationService.translateWord(
         dto.text!,
         dto.sourceLang,
