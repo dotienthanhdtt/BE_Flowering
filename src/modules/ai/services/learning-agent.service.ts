@@ -35,7 +35,7 @@ export class LearningAgentService {
     context: ConversationContext,
     model?: LLMModel,
   ): Promise<{ message: string; conversationId: string }> {
-    const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt', {
+    const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt.md', {
       targetLanguage: context.targetLanguage,
       nativeLanguage: context.nativeLanguage,
       proficiencyLevel: context.proficiencyLevel,
@@ -77,7 +77,7 @@ export class LearningAgentService {
     context: ConversationContext,
     model?: LLMModel,
   ): AsyncIterable<string> {
-    const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt', {
+    const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt.md', {
       targetLanguage: context.targetLanguage,
       nativeLanguage: context.nativeLanguage,
       proficiencyLevel: context.proficiencyLevel,
@@ -119,7 +119,7 @@ export class LearningAgentService {
     userMessage: string,
     targetLanguage: string,
   ): Promise<{ correctedText: string | null }> {
-    const prompt = this.promptLoader.loadPrompt('correction-check-prompt', {
+    const prompt = this.promptLoader.loadPrompt('correction-check-prompt.md', {
       previousAiMessage,
       userMessage,
       targetLanguage,

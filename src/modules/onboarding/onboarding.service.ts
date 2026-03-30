@@ -55,7 +55,7 @@ export class OnboardingService {
     const { nativeLanguage, targetLanguage } = conversation.metadata as Record<string, string>;
     const isLastTurn = currentTurn >= onboardingConfig.maxTurns;
 
-    let systemPrompt = this.promptLoader.loadPrompt('onboarding-chat-prompt', {
+    let systemPrompt = this.promptLoader.loadPrompt('onboarding-chat-prompt.md', {
       nativeLanguage,
       targetLanguage,
       currentTurn: String(currentTurn),
@@ -97,7 +97,7 @@ export class OnboardingService {
 
     const transcript = messages.map((m) => `${m.role}: ${m.content}`).join('\n');
 
-    const extractionPrompt = this.promptLoader.loadPrompt('onboarding-extraction-prompt', {
+    const extractionPrompt = this.promptLoader.loadPrompt('onboarding-extraction-prompt.md', {
       transcript,
     });
 
@@ -119,7 +119,7 @@ export class OnboardingService {
     conversationId: string,
   ): Promise<OnboardingScenarioDto[]> {
     try {
-      const scenariosPrompt = this.promptLoader.loadPrompt('onboarding-scenarios-prompt', {
+      const scenariosPrompt = this.promptLoader.loadPrompt('onboarding-scenarios-prompt.md', {
         nativeLanguage: String(profile.nativeLanguage ?? ''),
         targetLanguage: String(profile.targetLanguage ?? ''),
         currentLevel: String(profile.currentLevel ?? ''),
