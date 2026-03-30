@@ -725,7 +725,7 @@ Load and render:
 
 ```typescript
 async checkCorrection(dto: CorrectionCheckRequestDto): Promise<string | null> {
-  const prompt = await this.promptLoader.load('correction-check-prompt.md');
+  const prompt = await this.promptLoader.load('correction-check-prompt.json');
   const rendered = prompt
     .replace('{userMessage}', dto.userMessage)
     .replace('{targetLanguage}', dto.targetLanguage);

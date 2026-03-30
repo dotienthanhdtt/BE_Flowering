@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SubscriptionService } from '@/modules/subscription/subscription.service';
 import { User } from '@/database/entities/user.entity';
@@ -21,10 +16,10 @@ export class PremiumGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requirePremium = this.reflector.getAllAndOverride<boolean>(
-      REQUIRE_PREMIUM_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const requirePremium = this.reflector.getAllAndOverride<boolean>(REQUIRE_PREMIUM_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
     if (!requirePremium) return true;
 

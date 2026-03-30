@@ -118,8 +118,9 @@ export class LearningAgentService {
     previousAiMessage: string,
     userMessage: string,
     targetLanguage: string,
+    conversationId?: string,
   ): Promise<{ correctedText: string | null }> {
-    const prompt = this.promptLoader.loadPrompt('correction-check-prompt.md', {
+    const prompt = this.promptLoader.loadPrompt('correction-check-prompt.json', {
       previousAiMessage,
       userMessage,
       targetLanguage,
@@ -128,8 +129,8 @@ export class LearningAgentService {
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
       model: LLMModel.OPENAI_GPT4O,
       temperature: 0.0,
-      maxTokens:200,
-      metadata: { feature: 'correction-check' },
+      maxTokens: 200,
+      metadata: { feature: 'correction-check', conversationId },
     });
 
     const trimmed = response.trim().replace(/^["']|["']$/g, '');
@@ -163,5 +164,4 @@ export class LearningAgentService {
       content,
     });
   }
-
 }

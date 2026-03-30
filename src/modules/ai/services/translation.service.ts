@@ -1,10 +1,19 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage } from '@langchain/core/messages';
 import { Vocabulary } from '../../../database/entities/vocabulary.entity';
 import { AiConversationMessage } from '../../../database/entities/ai-conversation-message.entity';
-import { AiConversation, AiConversationType } from '../../../database/entities/ai-conversation.entity';
+import {
+  AiConversation,
+  AiConversationType,
+} from '../../../database/entities/ai-conversation.entity';
 import { UnifiedLLMService } from './unified-llm.service';
 import { PromptLoaderService } from './prompt-loader.service';
 import { LLMModel } from '../providers/llm-models.enum';
@@ -44,19 +53,28 @@ export class TranslationService {
     targetLang: string,
     userId: string | null,
     sessionToken?: string,
+    conversationId?: string,
   ): Promise<WordTranslationResult> {
     if (!userId && !sessionToken) {
       throw new BadRequestException('Authentication or sessionToken required');
     }
 
     const prompt = this.promptLoader.loadPrompt('translate-word.md', {
-      word: text, sourceLang, targetLang,
+      word: text,
+      sourceLang,
+      targetLang,
     });
 
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
       model: LLMModel.OPENAI_GPT4_1_NANO,
       temperature: 0.1,
-      metadata: { feature: 'translate-word', userId: userId ?? sessionToken, sourceLang, targetLang },
+      metadata: {
+        feature: 'translate-word',
+        userId: userId ?? sessionToken,
+        conversationId,
+        sourceLang,
+        targetLang,
+      },
     });
 
     const parsed = this.parseWordResponse(response);
@@ -72,19 +90,26 @@ export class TranslationService {
       .insert()
       .into(Vocabulary)
       .values({
-        userId, word: text, translation: parsed.translation,
-        sourceLang, targetLang, partOfSpeech: parsed.partOfSpeech,
-        pronunciation: parsed.pronunciation, definition: parsed.definition,
+        userId,
+        word: text,
+        translation: parsed.translation,
+        sourceLang,
+        targetLang,
+        partOfSpeech: parsed.partOfSpeech,
+        pronunciation: parsed.pronunciation,
+        definition: parsed.definition,
         examples: parsed.examples,
       })
-      .orUpdate(['translation', 'part_of_speech', 'pronunciation', 'definition', 'examples'], [
-        'user_id', 'word', 'source_lang', 'target_lang',
-      ])
+      .orUpdate(
+        ['translation', 'part_of_speech', 'pronunciation', 'definition', 'examples'],
+        ['user_id', 'word', 'source_lang', 'target_lang'],
+      )
       .returning('id')
       .execute();
 
     return {
-      original: text, ...parsed,
+      original: text,
+      ...parsed,
       vocabularyId: result.generatedMaps[0]?.id ?? result.raw[0]?.id,
     };
   }
@@ -121,13 +146,22 @@ export class TranslationService {
     }
 
     const prompt = this.promptLoader.loadPrompt('translate-sentence.md', {
-      sentence: message.content, sourceLang, targetLang,
+      sentence: message.content,
+      sourceLang,
+      targetLang,
     });
 
     const translation = await this.llmService.chat([new HumanMessage(prompt)], {
       model: LLMModel.OPENAI_GPT4_1_NANO,
       temperature: 0.1,
-      metadata: { feature: 'translate-sentence', userId: userId ?? sessionToken, messageId, sourceLang, targetLang },
+      metadata: {
+        feature: 'translate-sentence',
+        userId: userId ?? sessionToken,
+        conversationId: message.conversationId,
+        messageId,
+        sourceLang,
+        targetLang,
+      },
     });
 
     // Cache translation on message
@@ -153,7 +187,8 @@ export class TranslationService {
       sessionToken &&
       message.conversation.sessionToken === sessionToken &&
       message.conversation.type === AiConversationType.ANONYMOUS
-    ) return;
+    )
+      return;
     throw new ForbiddenException('You do not own this conversation');
   }
 

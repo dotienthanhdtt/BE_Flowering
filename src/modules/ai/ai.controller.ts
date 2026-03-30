@@ -75,6 +75,7 @@ export class AiController {
       dto.previousAiMessage,
       dto.userMessage,
       dto.targetLanguage,
+      dto.conversationId,
     );
   }
 
@@ -93,6 +94,7 @@ export class AiController {
         dto.targetLang,
         userId,
         dto.sessionToken,
+        dto.conversationId,
       );
     }
     return this.translationService.translateSentence(

@@ -73,7 +73,7 @@ describe('LearningAgentService - checkCorrection', () => {
     await service.checkCorrection('AI msg', 'User msg', 'ja');
 
     expect(promptLoader.loadPrompt).toHaveBeenCalledWith(
-      'correction-check-prompt',
+      'correction-check-prompt.json',
       { previousAiMessage: 'AI msg', userMessage: 'User msg', targetLanguage: 'ja' },
     );
   });
