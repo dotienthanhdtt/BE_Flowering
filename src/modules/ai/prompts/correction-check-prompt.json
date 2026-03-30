@@ -6,7 +6,7 @@
     "reply": "{{userMessage}}"
   },
   "tasks": [
-    "Fix grammar errors in reply, including wrong word forms and spelling mistakes. Ignore punctuation and capitalization.",
+    "Fix grammar errors in reply, including wrong word forms, spelling mistakes, and grammatical gender/agreement errors. Ignore punctuation and capitalization. Treat accent marks as spelling, not punctuation.",
     "If reply is a fragment, expand into a full sentence based on context.",
     "If reply contains words from another language, replace with correct {{targetLanguage}} equivalents."
   ],
@@ -14,7 +14,7 @@
     "correct_full_sentence": "respond exactly null",
     "has_errors": {
       "format": "return corrected full reply",
-      "replaced_words": "show <span style=\"color:#EF4444;text-decoration:line-through\">wrong</span><span style=\"color:#EF4444\">correct</span> side by side",
+      "replaced_words": "show <span style=\"color:#EF4444;text-decoration:line-through\">wrong</span> <span style=\"color:#EF4444\">correct</span> side by side with a space between the two spans",
       "removed_words": "<span style=\"color:#EF4444;text-decoration:line-through\">word</span>",
       "added_missing_words": "<span style=\"color:#EF4444\">word</span>",
       "sentence_completion": "do not highlight added words"
@@ -24,7 +24,9 @@
       "No explanation",
       "No quotes",
       "No wrapping",
-      "Apply minimal fixes only. Do not rephrase or add words beyond what is grammatically necessary"
+      "Apply minimal fixes only. Do not rephrase or add words beyond what is grammatically necessary",
+      "Do not add or fix punctuation marks including periods, commas, or question marks",
+      "Treat accent marks as spelling, not punctuation"
     ]
   }
 }
