@@ -44,7 +44,9 @@ export class OnboardingService {
 
   async chat(dto: OnboardingChatDto) {
     const conversation = await this.findValidSession(dto.conversationId);
-    const currentTurn = Math.floor(conversation.messageCount / 2) + 1;
+    // First turn saves 1 msg (assistant only), subsequent turns save 2 (user + assistant)
+    const msgCount = conversation.messageCount;
+    const currentTurn = msgCount === 0 ? 1 : Math.floor((msgCount - 1) / 2) + 2;
 
     if (currentTurn > onboardingConfig.maxTurns) {
       throw new BadRequestException('Maximum turns reached. Call /onboarding/complete.');
@@ -60,10 +62,11 @@ export class OnboardingService {
     });
 
     const history = await this.getHistory(conversation.id);
+    const isFirstTurn = !dto.message && history.length === 0;
     const messages: BaseMessage[] = [
       new SystemMessage(systemPrompt),
       ...history,
-      new HumanMessage(dto.message),
+      ...(isFirstTurn ? [new HumanMessage('Start')] : [new HumanMessage(dto.message)]),
     ];
 
     const rawReply = await this.llmService.chat(messages, {
@@ -75,9 +78,11 @@ export class OnboardingService {
 
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn);
 
-    await this.saveMessage(conversation.id, MessageRole.USER, dto.message);
+    if (!isFirstTurn) {
+      await this.saveMessage(conversation.id, MessageRole.USER, dto.message);
+    }
     const messageId = await this.saveMessage(conversation.id, MessageRole.ASSISTANT, reply);
-    await this.conversationRepo.increment({ id: conversation.id }, 'messageCount', 2);
+    await this.conversationRepo.increment({ id: conversation.id }, 'messageCount', isFirstTurn ? 1 : 2);
 
     return { reply, messageId, turnNumber: currentTurn, isLastTurn };
   }
