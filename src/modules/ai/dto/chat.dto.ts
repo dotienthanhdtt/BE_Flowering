@@ -1,12 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsString,
-  IsOptional,
-  IsUUID,
-  IsEnum,
-  MaxLength,
-  ValidateNested,
-} from 'class-validator';
+import { IsString, IsOptional, IsUUID, IsEnum, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { LLMModel } from '../providers/llm-models.enum';
 
@@ -77,4 +70,3 @@ export class ChatResponseDto {
   @ApiProperty({ description: 'Conversation session ID' })
   conversationId!: string;
 }
-

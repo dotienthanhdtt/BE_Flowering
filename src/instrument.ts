@@ -7,12 +7,10 @@ import { LangfuseSpanProcessor } from '@langfuse/otel';
 
 // Ensure LANGFUSE_BASE_URL is set for all Langfuse packages (CallbackHandler reads env vars)
 if (!process.env.LANGFUSE_BASE_URL) {
-  process.env.LANGFUSE_BASE_URL =
-    process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com';
+  process.env.LANGFUSE_BASE_URL = process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com';
 }
 
-const langfuseEnabled =
-  !!process.env.LANGFUSE_PUBLIC_KEY && !!process.env.LANGFUSE_SECRET_KEY;
+const langfuseEnabled = !!process.env.LANGFUSE_PUBLIC_KEY && !!process.env.LANGFUSE_SECRET_KEY;
 
 let langfuseSdk: NodeSDK | undefined;
 
