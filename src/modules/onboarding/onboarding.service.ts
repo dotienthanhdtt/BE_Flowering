@@ -51,11 +51,11 @@ export class OnboardingService {
     }
 
     const { targetLanguage } = conversation.metadata as Record<string, string>;
-    const isLastTurn = currentTurn >= onboardingConfig.maxTurns;
 
     const systemPrompt = this.promptLoader.loadPrompt('onboarding-chat-prompt.json', {
       targetLanguage,
-      isLastTurn: String(isLastTurn),
+      currentTurn: String(currentTurn),
+      maxTurns: String(onboardingConfig.maxTurns),
     });
 
     const history = await this.getHistory(conversation.id);
@@ -76,6 +76,7 @@ export class OnboardingService {
     const messageId = await this.saveMessage(conversation.id, MessageRole.ASSISTANT, reply);
     await this.conversationRepo.increment({ id: conversation.id }, 'messageCount', 2);
 
+    const isLastTurn = currentTurn >= onboardingConfig.maxTurns;
     return { reply, messageId, turnNumber: currentTurn, isLastTurn };
   }
 
