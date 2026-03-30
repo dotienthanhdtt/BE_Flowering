@@ -8,6 +8,7 @@ Extract structured user profile data from the following onboarding conversation 
 {
   "name": "string or null",
   "age": "number or null",
+  "job": "string or null",
   "region": "string or null (country or region name)",
   "learningMotivation": "string or null (brief 1-sentence summary)",
   "suggestedProficiency": "beginner | intermediate | advanced (infer from conversation)"

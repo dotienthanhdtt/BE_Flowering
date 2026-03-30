@@ -50,20 +50,13 @@ export class OnboardingService {
       throw new BadRequestException('Maximum turns reached. Call /onboarding/complete.');
     }
 
-    const { nativeLanguage, targetLanguage } = conversation.metadata as Record<string, string>;
+    const { targetLanguage } = conversation.metadata as Record<string, string>;
     const isLastTurn = currentTurn >= onboardingConfig.maxTurns;
 
-    let systemPrompt = this.promptLoader.loadPrompt('onboarding-chat-prompt.md', {
-      nativeLanguage,
+    const systemPrompt = this.promptLoader.loadPrompt('onboarding-chat-prompt.json', {
       targetLanguage,
-      currentTurn: String(currentTurn),
-      maxTurns: String(onboardingConfig.maxTurns),
+      isLastTurn: String(isLastTurn),
     });
-
-    if (isLastTurn) {
-      systemPrompt +=
-        '\n\nIMPORTANT: This is the FINAL turn. Warmly summarize everything you have learned about the user and encourage them to start learning.';
-    }
 
     const history = await this.getHistory(conversation.id);
     const messages: BaseMessage[] = [
@@ -118,15 +111,7 @@ export class OnboardingService {
   ): Promise<OnboardingScenarioDto[]> {
     try {
       const scenariosPrompt = this.promptLoader.loadPrompt('onboarding-scenarios-prompt.md', {
-        nativeLanguage: String(profile.nativeLanguage ?? ''),
-        targetLanguage: String(profile.targetLanguage ?? ''),
-        currentLevel: String(profile.currentLevel ?? ''),
-        learningGoals: Array.isArray(profile.learningGoals)
-          ? profile.learningGoals.join(', ')
-          : String(profile.learningGoals ?? ''),
-        preferredTopics: Array.isArray(profile.preferredTopics)
-          ? profile.preferredTopics.join(', ')
-          : String(profile.preferredTopics ?? ''),
+        learnerProfile: JSON.stringify(profile),
       });
 
       const response = await this.llmService.chat([new HumanMessage(scenariosPrompt)], {
