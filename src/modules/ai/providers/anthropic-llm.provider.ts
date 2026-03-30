@@ -2,8 +2,8 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { BaseMessage } from '@langchain/core/messages';
-import { LLMProvider, LLMOptions } from '@/modules/ai';
-import { LangfuseService } from '@/modules/ai';
+import { LLMProvider, LLMOptions } from './llm-provider.interface';
+import { LangfuseService } from '../services/langfuse-tracing.service';
 import { AppConfiguration } from '@config/app-configuration';
 
 /**

@@ -1,5 +1,5 @@
 import { BaseMessage } from '@langchain/core/messages';
-import { LLMModel, ThinkingLevel } from '@/modules/ai';
+import { LLMModel, ThinkingLevel } from './llm-models.enum';
 
 export interface LLMOptions {
   model: LLMModel;
