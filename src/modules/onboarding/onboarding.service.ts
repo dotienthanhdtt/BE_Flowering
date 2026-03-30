@@ -65,18 +65,19 @@ export class OnboardingService {
       new HumanMessage(dto.message),
     ];
 
-    const reply = await this.llmService.chat(messages, {
+    const rawReply = await this.llmService.chat(messages, {
       model: onboardingConfig.llmModel,
       temperature: onboardingConfig.temperature,
       maxTokens: onboardingConfig.maxTokens,
       metadata: { feature: 'onboarding-chat', conversationId: conversation.id, turn: currentTurn },
     });
 
+    const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn);
+
     await this.saveMessage(conversation.id, MessageRole.USER, dto.message);
     const messageId = await this.saveMessage(conversation.id, MessageRole.ASSISTANT, reply);
     await this.conversationRepo.increment({ id: conversation.id }, 'messageCount', 2);
 
-    const isLastTurn = currentTurn >= onboardingConfig.maxTurns;
     return { reply, messageId, turnNumber: currentTurn, isLastTurn };
   }
 
@@ -111,7 +112,7 @@ export class OnboardingService {
     conversationId: string,
   ): Promise<OnboardingScenarioDto[]> {
     try {
-      const scenariosPrompt = this.promptLoader.loadPrompt('onboarding-scenarios-prompt.md', {
+      const scenariosPrompt = this.promptLoader.loadPrompt('onboarding-scenarios-prompt.json', {
         learnerProfile: JSON.stringify(profile),
       });
 
@@ -182,6 +183,27 @@ export class OnboardingService {
   ): Promise<string> {
     const saved = await this.messageRepo.save({ conversationId, role, content });
     return saved.id;
+  }
+
+  private parseChatReply(
+    raw: string,
+    currentTurn: number,
+  ): { reply: string; isLastTurn: boolean } {
+    try {
+      const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+      const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
+      const parsed = JSON.parse(jsonStr);
+      return {
+        reply: String(parsed.reply ?? ''),
+        isLastTurn: parsed.isLastTurn === true || currentTurn >= onboardingConfig.maxTurns,
+      };
+    } catch {
+      this.logger.warn('Failed to parse chat reply JSON, using raw response');
+      return {
+        reply: raw,
+        isLastTurn: currentTurn >= onboardingConfig.maxTurns,
+      };
+    }
   }
 
   private parseExtraction(response: string): Record<string, unknown> {
