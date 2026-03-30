@@ -11,8 +11,8 @@ export class GoogleAuthDto {
   @IsOptional()
   displayName?: string;
 
-  @ApiProperty({ required: false, description: 'Onboarding session token to link conversation' })
+  @ApiProperty({ required: false, description: 'Onboarding conversation ID to link' })
   @IsUUID()
   @IsOptional()
-  sessionToken?: string;
+  conversationId?: string;
 }

@@ -93,7 +93,6 @@ export class AiController {
         dto.sourceLang,
         dto.targetLang,
         userId,
-        dto.sessionToken,
         dto.conversationId,
       );
     }
@@ -102,7 +101,7 @@ export class AiController {
       dto.sourceLang,
       dto.targetLang,
       userId,
-      dto.sessionToken,
+      dto.conversationId,
     );
   }
 }

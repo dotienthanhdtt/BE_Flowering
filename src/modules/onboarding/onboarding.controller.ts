@@ -12,7 +12,7 @@ export class OnboardingController {
   @Public()
   @Post('start')
   @ApiOperation({ summary: 'Start anonymous onboarding chat session' })
-  @ApiResponse({ status: 201, description: 'Session created with session_token' })
+  @ApiResponse({ status: 201, description: 'Session created with conversation_id' })
   async start(@Body() dto: StartOnboardingDto) {
     return this.onboardingService.startSession(dto);
   }

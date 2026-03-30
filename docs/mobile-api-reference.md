@@ -41,7 +41,7 @@ All responses follow this format:
 ### POST /auth/google
 ```json
 // Request
-{ "id_token": "google_id_token", "display_name": "John", "session_token": "optional" }
+{ "id_token": "google_id_token", "display_name": "John", "conversation_id": "optional" }
 
 // Response data
 { "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
@@ -260,7 +260,7 @@ Call after purchase and on app open. Empty body.
 { "translation": "hermoso", "word": "beautiful", "pronunciation": "er-MO-so" }
 
 // Sentence translation
-{ "type": "SENTENCE", "message_id": "uuid", "source_lang": "en", "target_lang": "es", "session_token": "optional" }
+{ "type": "SENTENCE", "message_id": "uuid", "source_lang": "en", "target_lang": "es", "conversation_id": "optional" }
 // Response data
 { "translated_content": "Eso es hermoso." }
 ```
@@ -307,13 +307,13 @@ Call after purchase and on app open. Empty body.
 { "native_language": "english" }
 
 // Response data
-{ "session_id": "token", "expires_at": "2026-03-28T01:00:00Z" }
+{ "conversation_id": "uuid", "expires_at": "2026-03-28T01:00:00Z" }
 ```
 
 ### POST /onboarding/chat
 ```json
 // Request
-{ "session_id": "token", "message": "I want to learn Spanish" }
+{ "conversation_id": "uuid", "message": "I want to learn Spanish" }
 
 // Response data
 { "response": "...", "turn_count": 2, "max_turns": 10 }
@@ -322,7 +322,7 @@ Call after purchase and on app open. Empty body.
 ### POST /onboarding/complete
 ```json
 // Request
-{ "session_id": "token" }
+{ "conversation_id": "uuid" }
 
 // Response data
 {

@@ -13,6 +13,38 @@ All notable changes documented here. Format follows [Keep a Changelog](https://k
 
 ---
 
+## [1.3.1] - 2026-03-30 (Breaking Change: Session Token Removal)
+
+### Removed
+- **`session_token` Column:** Removed from `ai_conversations` table
+- **`sessionToken` API Field:** All endpoints no longer accept or return sessionToken
+
+### Changed
+- **Breaking Change:** All onboarding and anonymous auth endpoints now use `conversationId` instead of `sessionToken`
+  - POST /onboarding/start returns `conversationId` instead of `sessionToken`
+  - POST /onboarding/chat accepts `conversationId` instead of `sessionToken`
+  - POST /onboarding/complete accepts `conversationId` instead of `sessionToken`
+  - POST /ai/translate accepts `conversationId` instead of `sessionToken` for anonymous users
+  - All auth endpoints (register, login, google, apple) accept `conversationId` instead of `sessionToken` for linking
+- **Conversation Identifier:** UUID primary key (`conversation.id`) now serves as the session identifier
+- **Database Migration:** Existing `session_token` column removed; backward compatibility break
+
+### Migration Path (Required)
+- Mobile apps and clients must immediately update all API calls to use `conversationId` instead of `sessionToken`
+- All stored references to sessionToken must be updated to use the conversation UUID
+- No automatic migration of existing onboarding sessions
+
+### Updated Documentation
+- docs/api/onboarding-api.md: Updated all sessionToken refs to conversationId
+- docs/api/auth-api.md: Updated onboarding linking to use conversationId
+- docs/api/translate-api.md: Updated anonymous user identification to conversationId
+- docs/api-documentation.md: Updated all endpoint examples
+- docs/mobile-api-reference.md: Updated request/response examples
+- docs/project-overview-pdr.md: Clarified AiConversation identifier as UUID primary key
+- docs/codebase-summary.md: Updated entity documentation
+
+---
+
 ## [1.3.0] - 2026-03-28 (Codebase Cleanup & API Standardization)
 
 ### Removed

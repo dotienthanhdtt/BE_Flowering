@@ -15,7 +15,7 @@ Register a new user with email and password.
   "email": "user@example.com",
   "password": "SecurePass123!",
   "displayName": "John Doe",
-  "sessionToken": "uuid-onboarding-session-token"
+  "conversationId": "uuid-onboarding-conversation-id"
 }
 ```
 
@@ -24,7 +24,7 @@ Register a new user with email and password.
 | `email` | string | yes | Valid email address |
 | `password` | string | yes | Min 8 characters |
 | `displayName` | string | no | User display name |
-| `sessionToken` | UUID | no | Onboarding session to link to this account |
+| `conversationId` | UUID | no | Onboarding conversation to link to this account |
 
 **Response 201**
 ```json
@@ -65,7 +65,7 @@ Login with email and password.
 {
   "email": "user@example.com",
   "password": "SecurePass123!",
-  "sessionToken": "uuid-onboarding-session-token"
+  "conversationId": "uuid-onboarding-conversation-id"
 }
 ```
 
@@ -73,7 +73,7 @@ Login with email and password.
 |---|---|---|---|
 | `email` | string | yes | Registered email |
 | `password` | string | yes | Account password |
-| `sessionToken` | UUID | no | Onboarding session to link to this account |
+| `conversationId` | UUID | no | Onboarding conversation to link to this account |
 
 **Response 200** — Same as `/auth/register` response
 
@@ -98,7 +98,7 @@ Sign in with Google ID token (mobile-compatible, no redirect flow).
 {
   "idToken": "google-id-token-from-sdk",
   "displayName": "John Doe",
-  "sessionToken": "uuid-onboarding-session-token"
+  "conversationId": "uuid-onboarding-conversation-id"
 }
 ```
 
@@ -106,7 +106,7 @@ Sign in with Google ID token (mobile-compatible, no redirect flow).
 |---|---|---|---|
 | `idToken` | string | yes | Google ID token from Sign in with Google SDK |
 | `displayName` | string | no | Override display name |
-| `sessionToken` | UUID | no | Onboarding session to link to this account |
+| `conversationId` | UUID | no | Onboarding conversation to link to this account |
 
 **Behavior**
 - Validates Google ID token server-side
@@ -137,7 +137,7 @@ Sign in with Apple ID token.
 {
   "idToken": "apple-id-token-from-sdk",
   "displayName": "John Doe",
-  "sessionToken": "uuid-onboarding-session-token"
+  "conversationId": "uuid-onboarding-conversation-id"
 }
 ```
 
@@ -145,7 +145,7 @@ Sign in with Apple ID token.
 |---|---|---|---|
 | `idToken` | string | yes | Apple ID token from Sign in with Apple |
 | `displayName` | string | no | Only available on first Apple sign-in |
-| `sessionToken` | UUID | no | Onboarding session to link to this account |
+| `conversationId` | UUID | no | Onboarding conversation to link to this account |
 
 **Behavior** — Same as Google: auto-links on email match, creates if new.
 
@@ -292,9 +292,9 @@ curl -X PATCH https://api.example.com/users/me \
 
 ---
 
-## Onboarding Session Linking
+## Onboarding Conversation Linking
 
-When `sessionToken` is passed to any auth endpoint (register, login, google, apple), the anonymous onboarding conversation is linked to the new/existing user account. The session is converted from `ANONYMOUS` to `AUTHENTICATED` type. This is best-effort — failure does not block authentication.
+When `conversationId` is passed to any auth endpoint (register, login, google, apple), the anonymous onboarding conversation is linked to the new/existing user account. The session is converted from `ANONYMOUS` to `AUTHENTICATED` type. This is best-effort — failure does not block authentication.
 
 ---
 

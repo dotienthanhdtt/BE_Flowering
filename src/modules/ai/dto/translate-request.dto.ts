@@ -44,13 +44,8 @@ export class TranslateRequestDto {
   targetLang!: string;
 
   @ApiPropertyOptional({
-    description: 'Session token for anonymous onboarding users (required when no JWT)',
+    description: 'Conversation ID for anonymous users or to group trace with chat session',
   })
-  @IsOptional()
-  @IsString()
-  sessionToken?: string;
-
-  @ApiPropertyOptional({ description: 'Conversation ID to group trace with chat session' })
   @IsOptional()
   @IsUUID()
   conversationId?: string;

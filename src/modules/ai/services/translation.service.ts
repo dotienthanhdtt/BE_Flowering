@@ -52,11 +52,10 @@ export class TranslationService {
     sourceLang: string,
     targetLang: string,
     userId: string | null,
-    sessionToken?: string,
     conversationId?: string,
   ): Promise<WordTranslationResult> {
-    if (!userId && !sessionToken) {
-      throw new BadRequestException('Authentication or sessionToken required');
+    if (!userId && !conversationId) {
+      throw new BadRequestException('Authentication or conversationId required');
     }
 
     const prompt = this.promptLoader.loadPrompt('translate-word.md', {
@@ -70,7 +69,7 @@ export class TranslationService {
       temperature: 0.1,
       metadata: {
         feature: 'translate-word',
-        userId: userId ?? sessionToken,
+        userId: userId ?? conversationId,
         conversationId,
         sourceLang,
         targetLang,
@@ -119,10 +118,10 @@ export class TranslationService {
     sourceLang: string,
     targetLang: string,
     userId: string | null,
-    sessionToken?: string,
+    conversationId?: string,
   ): Promise<SentenceTranslationResult> {
-    if (!userId && !sessionToken) {
-      throw new BadRequestException('Authentication or sessionToken required');
+    if (!userId && !conversationId) {
+      throw new BadRequestException('Authentication or conversationId required');
     }
 
     const message = await this.messageRepo.findOne({
@@ -134,7 +133,7 @@ export class TranslationService {
       throw new NotFoundException('Message not found');
     }
 
-    this.verifyMessageOwnership(message, userId, sessionToken);
+    this.verifyMessageOwnership(message, userId, conversationId);
 
     // Return cached translation if available
     if (message.translatedContent && message.translatedLang === targetLang) {
@@ -156,7 +155,7 @@ export class TranslationService {
       temperature: 0.1,
       metadata: {
         feature: 'translate-sentence',
-        userId: userId ?? sessionToken,
+        userId: userId ?? conversationId,
         conversationId: message.conversationId,
         messageId,
         sourceLang,
@@ -176,16 +175,16 @@ export class TranslationService {
     };
   }
 
-  /** Verify the caller owns the message's conversation via userId or sessionToken */
+  /** Verify the caller owns the message's conversation via userId or conversationId */
   private verifyMessageOwnership(
     message: AiConversationMessage & { conversation: AiConversation },
     userId: string | null,
-    sessionToken?: string,
+    conversationId?: string,
   ): void {
     if (userId && message.conversation.userId === userId) return;
     if (
-      sessionToken &&
-      message.conversation.sessionToken === sessionToken &&
+      conversationId &&
+      message.conversation.id === conversationId &&
       message.conversation.type === AiConversationType.ANONYMOUS
     )
       return;

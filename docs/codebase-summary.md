@@ -175,7 +175,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ### AiConversation Entity Updates
 - `type` - ANONYMOUS or AUTHENTICATED
-- `sessionToken` - Session identifier for anonymous users
+- `id` - UUID primary key (conversation identifier for all sessions)
 - `expiresAt` - Session expiration (7 days)
 - `messageCount` - Turn counter
 - `metadata` - JSONB for flexible data storage

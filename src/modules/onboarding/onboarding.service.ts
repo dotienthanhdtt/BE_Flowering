@@ -25,12 +25,10 @@ export class OnboardingService {
   ) {}
 
   async startSession(dto: StartOnboardingDto) {
-    const sessionToken = randomUUID();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + onboardingConfig.sessionTtlDays);
 
     const conversation = this.conversationRepo.create({
-      sessionToken,
       type: AiConversationType.ANONYMOUS,
       expiresAt,
       title: 'Onboarding Chat',
@@ -41,11 +39,11 @@ export class OnboardingService {
     });
     const saved = await this.conversationRepo.save(conversation);
 
-    return { sessionToken, conversationId: saved.id };
+    return { conversationId: saved.id };
   }
 
   async chat(dto: OnboardingChatDto) {
-    const conversation = await this.findValidSession(dto.sessionToken);
+    const conversation = await this.findValidSession(dto.conversationId);
     const currentTurn = Math.floor(conversation.messageCount / 2) + 1;
 
     if (currentTurn > onboardingConfig.maxTurns) {
@@ -89,7 +87,7 @@ export class OnboardingService {
   }
 
   async complete(dto: OnboardingCompleteDto) {
-    const conversation = await this.findValidSession(dto.sessionToken);
+    const conversation = await this.findValidSession(dto.conversationId);
     const messages = await this.messageRepo.find({
       where: { conversationId: conversation.id },
       order: { createdAt: 'ASC' },
@@ -167,9 +165,9 @@ export class OnboardingService {
     }));
   }
 
-  private async findValidSession(sessionToken: string): Promise<AiConversation> {
+  private async findValidSession(conversationId: string): Promise<AiConversation> {
     const conversation = await this.conversationRepo.findOne({
-      where: { sessionToken, type: AiConversationType.ANONYMOUS },
+      where: { id: conversationId, type: AiConversationType.ANONYMOUS },
     });
     if (!conversation) {
       throw new NotFoundException('Session not found');

@@ -74,8 +74,8 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
-    if (dto.sessionToken) {
-      await this.linkOnboardingSession(user.id, dto.sessionToken);
+    if (dto.conversationId) {
+      await this.linkOnboardingSession(user.id, dto.conversationId);
     }
 
     return this.generateTokens(user);
@@ -96,8 +96,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (dto.sessionToken) {
-      await this.linkOnboardingSession(user.id, dto.sessionToken);
+    if (dto.conversationId) {
+      await this.linkOnboardingSession(user.id, dto.conversationId);
     }
 
     return this.generateTokens(user);
@@ -106,7 +106,7 @@ export class AuthService {
   async googleLogin(
     idToken: string,
     displayName?: string,
-    sessionToken?: string,
+    conversationId?: string,
   ): Promise<AuthResponseDto> {
     const googleUser = await this.googleIdTokenStrategy.validate(idToken);
     const providerUser: OAuthProviderUser = {
@@ -115,13 +115,13 @@ export class AuthService {
       displayName: displayName ?? googleUser.displayName,
       avatarUrl: googleUser.avatarUrl,
     };
-    return this.oauthLogin('google', providerUser, sessionToken);
+    return this.oauthLogin('google', providerUser, conversationId);
   }
 
   async appleLogin(
     idToken: string,
     displayName?: string,
-    sessionToken?: string,
+    conversationId?: string,
   ): Promise<AuthResponseDto> {
     const appleUser = await this.appleStrategy.validate(idToken);
     const providerUser: OAuthProviderUser = {
@@ -129,7 +129,7 @@ export class AuthService {
       providerId: appleUser.providerId,
       displayName,
     };
-    return this.oauthLogin('apple', providerUser, sessionToken);
+    return this.oauthLogin('apple', providerUser, conversationId);
   }
 
   /**
@@ -139,7 +139,7 @@ export class AuthService {
   private async oauthLogin(
     provider: OAuthProvider,
     providerUser: OAuthProviderUser,
-    sessionToken?: string,
+    conversationId?: string,
   ): Promise<AuthResponseDto> {
     const providerColumn = provider === 'google' ? 'googleProviderId' : 'appleProviderId';
 
@@ -176,8 +176,8 @@ export class AuthService {
       }
     }
 
-    if (sessionToken) {
-      await this.linkOnboardingSession(user.id, sessionToken);
+    if (conversationId) {
+      await this.linkOnboardingSession(user.id, conversationId);
     }
 
     return this.generateTokens(user);
@@ -323,17 +323,17 @@ export class AuthService {
    * Link anonymous onboarding conversation to a user account.
    * Best-effort: logs warning on failure, never throws.
    */
-  private async linkOnboardingSession(userId: string, sessionToken: string): Promise<void> {
+  private async linkOnboardingSession(userId: string, conversationId: string): Promise<void> {
     try {
       const result = await this.conversationRepository.update(
-        { sessionToken, type: AiConversationType.ANONYMOUS },
-        { userId, sessionToken: null, type: AiConversationType.AUTHENTICATED },
+        { id: conversationId, type: AiConversationType.ANONYMOUS },
+        { userId, type: AiConversationType.AUTHENTICATED },
       );
       if (result.affected === 0) {
-        this.logger.warn(`No anonymous onboarding session found for token: ${sessionToken}`);
+        this.logger.warn(`No anonymous onboarding session found for id: ${conversationId}`);
       }
     } catch (error) {
-      this.logger.warn('Failed to link onboarding session', { sessionToken, error });
+      this.logger.warn('Failed to link onboarding session', { conversationId, error });
     }
   }
 

@@ -47,7 +47,7 @@ export class AuthController {
   @ApiResponse({ status: 200, type: AuthResponseDto })
   @ApiResponse({ status: 401, description: 'Invalid Google ID token' })
   async googleAuth(@Body() dto: GoogleAuthDto): Promise<AuthResponseDto> {
-    return this.authService.googleLogin(dto.idToken, dto.displayName, dto.sessionToken);
+    return this.authService.googleLogin(dto.idToken, dto.displayName, dto.conversationId);
   }
 
   @Public()
@@ -57,7 +57,7 @@ export class AuthController {
   @ApiResponse({ status: 200, type: AuthResponseDto })
   @ApiResponse({ status: 401, description: 'Invalid Apple ID token' })
   async appleAuth(@Body() dto: AppleAuthDto): Promise<AuthResponseDto> {
-    return this.authService.appleLogin(dto.idToken, dto.displayName, dto.sessionToken);
+    return this.authService.appleLogin(dto.idToken, dto.displayName, dto.conversationId);
   }
 
   @Public()

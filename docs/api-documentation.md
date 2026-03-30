@@ -101,7 +101,7 @@ Google ID token authentication.
 {
   "id_token": "google_id_token",
   "display_name": "John Doe",
-  "session_token": "optional_session_id"
+  "conversation_id": "optional_conversation_id"
 }
 ```
 
@@ -412,7 +412,7 @@ Translate words or sentences with vocabulary persistence for words.
   "message_id": "uuid",
   "source_lang": "en",
   "target_lang": "es",
-  "session_token": "optional_session_id"
+  "conversation_id": "optional_conversation_id"
 }
 ```
 
@@ -423,7 +423,7 @@ Translate words or sentences with vocabulary persistence for words.
 | message_id | UUID | No | - | Conversation message ID (SENTENCE only) |
 | source_lang | string | Yes | 10 chars | Source language code (e.g., "en", "ja") |
 | target_lang | string | Yes | 10 chars | Target language code (e.g., "es", "vi") |
-| session_token | string | No | - | Optional session token for anonymous users |
+| conversation_id | string | No | - | Optional conversation ID for anonymous users |
 
 **Response (200) — word translation:** `{code: 1, message: "Success", data: {translation: "hermoso", word: "beautiful", pronunciation: "er-MO-so"}}`
 
@@ -445,7 +445,7 @@ Start anonymous onboarding session.
 }
 ```
 
-**Response (200):** `{code: 1, message: "Session started", data: {session_id, expires_at}}`
+**Response (200):** `{code: 1, message: "Session started", data: {conversation_id, expires_at}}`
 
 ---
 
@@ -455,7 +455,7 @@ Chat in onboarding session.
 **Auth:** Not required | **Request:**
 ```json
 {
-  "session_id": "session_token",
+  "conversation_id": "conversation_id",
   "message": "I want to learn Spanish"
 }
 ```
@@ -470,7 +470,7 @@ Complete onboarding and extract profile.
 **Auth:** Not required | **Request:**
 ```json
 {
-  "session_id": "session_token"
+  "conversation_id": "conversation_id"
 }
 ```
 

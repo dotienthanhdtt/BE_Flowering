@@ -34,9 +34,6 @@ export class AiConversation {
   @Column({ type: 'uuid', name: 'language_id', nullable: true })
   languageId?: string | null;
 
-  @Column({ type: 'varchar', length: 255, name: 'session_token', nullable: true, unique: true })
-  sessionToken?: string | null;
-
   @Column({
     type: 'enum',
     enum: AiConversationType,

@@ -135,7 +135,7 @@ describe('AuthController', () => {
       expect(authService.googleLogin).toHaveBeenCalledWith(
         googleAuthDto.idToken,
         googleAuthDto.displayName,
-        googleAuthDto.sessionToken,
+        googleAuthDto.conversationId,
       );
       expect(result).toEqual(mockAuthResponse);
     });
@@ -152,10 +152,10 @@ describe('AuthController', () => {
       await expect(controller.googleAuth(googleAuthDto)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should pass sessionToken to googleLogin for onboarding linking', async () => {
+    it('should pass conversationId to googleLogin for onboarding linking', async () => {
       const googleAuthDto: GoogleAuthDto = {
         idToken: 'google-id-token',
-        sessionToken: 'onboard-sess-uuid',
+        conversationId: 'onboard-conv-uuid',
       };
 
       authService.googleLogin.mockResolvedValue(mockAuthResponse);
@@ -165,7 +165,7 @@ describe('AuthController', () => {
       expect(authService.googleLogin).toHaveBeenCalledWith(
         'google-id-token',
         undefined,
-        'onboard-sess-uuid',
+        'onboard-conv-uuid',
       );
     });
   });
@@ -184,7 +184,7 @@ describe('AuthController', () => {
       expect(authService.appleLogin).toHaveBeenCalledWith(
         appleAuthDto.idToken,
         appleAuthDto.displayName,
-        appleAuthDto.sessionToken,
+        appleAuthDto.conversationId,
       );
       expect(result).toEqual(mockAuthResponse);
     });

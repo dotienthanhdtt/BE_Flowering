@@ -30,7 +30,7 @@ describe('OnboardingController', () => {
   describe('start', () => {
     it('delegates to service.startSession with DTO', async () => {
       const dto = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
-      const expected = { sessionToken: 'tok', conversationId: 'c1' };
+      const expected = { conversationId: 'c1' };
       service.startSession.mockResolvedValue(expected);
 
       const result = await controller.start(dto as any);
@@ -42,7 +42,7 @@ describe('OnboardingController', () => {
 
   describe('chat', () => {
     it('delegates to service.chat with DTO', async () => {
-      const dto = { sessionToken: 'tok', message: 'Hello' };
+      const dto = { conversationId: 'c1', message: 'Hello' };
       const expected = { reply: 'Hi!', turnNumber: 1, isLastTurn: false };
       service.chat.mockResolvedValue(expected);
 
@@ -55,7 +55,7 @@ describe('OnboardingController', () => {
 
   describe('complete', () => {
     it('delegates to service.complete with DTO', async () => {
-      const dto = { sessionToken: 'tok' };
+      const dto = { conversationId: 'c1' };
       const expected = { nativeLanguage: 'English', level: 'beginner' };
       service.complete.mockResolvedValue(expected);
 

@@ -2,9 +2,9 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class OnboardingChatDto {
-  @ApiProperty({ description: 'Session token from POST /onboarding/start' })
+  @ApiProperty({ description: 'Conversation ID from POST /onboarding/start' })
   @IsUUID()
-  sessionToken!: string;
+  conversationId!: string;
 
   @ApiProperty({ example: 'Hi! My name is Thanh', description: 'User message' })
   @IsString()

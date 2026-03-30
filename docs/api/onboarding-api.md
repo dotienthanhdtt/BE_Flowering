@@ -1,7 +1,7 @@
 # Onboarding API
 
 Base path: `/onboarding`
-Auth: All endpoints are **public** (no JWT required). Sessions are identified by `sessionToken`.
+Auth: All endpoints are **public** (no JWT required). Sessions are identified by `conversationId`.
 
 ---
 
@@ -9,7 +9,7 @@ Auth: All endpoints are **public** (no JWT required). Sessions are identified by
 
 ```
 POST /onboarding/start
-  → returns sessionToken
+  → returns conversationId
 
 POST /onboarding/chat  (repeat up to 10 turns)
   → send user message, receive AI reply
@@ -17,7 +17,7 @@ POST /onboarding/chat  (repeat up to 10 turns)
 POST /onboarding/complete
   → extract structured profile from conversation
 
-POST /auth/register|login|google|apple  (with sessionToken)
+POST /auth/register|login|google|apple  (with conversationId)
   → link onboarding session to user account
 ```
 
@@ -46,16 +46,14 @@ Create a new anonymous onboarding chat session.
   "code": 1,
   "message": "Success",
   "data": {
-    "sessionToken": "550e8400-e29b-41d4-a716-446655440000",
-    "conversationId": "uuid"
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000"
   }
 }
 ```
 
 | Field | Description |
 |---|---|
-| `sessionToken` | UUID to use in subsequent chat/complete calls. Valid for 7 days. |
-| `conversationId` | Internal conversation ID |
+| `conversationId` | UUID to use in subsequent chat/complete calls. Valid for 7 days. |
 
 **curl**
 ```bash
@@ -73,14 +71,14 @@ Send a user message and receive an AI response. Up to 10 turns per session.
 **Request Body**
 ```json
 {
-  "sessionToken": "550e8400-e29b-41d4-a716-446655440000",
+  "conversationId": "550e8400-e29b-41d4-a716-446655440000",
   "message": "Hi! My name is Thanh"
 }
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `sessionToken` | UUID | yes | Session token from `/onboarding/start` |
+| `conversationId` | UUID | yes | Conversation ID from `/onboarding/start` |
 | `message` | string | yes | User message (max 2000 chars) |
 
 **Response 200**
@@ -110,7 +108,7 @@ Send a user message and receive an AI response. Up to 10 turns per session.
 ```bash
 curl -X POST https://api.example.com/onboarding/chat \
   -H "Content-Type: application/json" \
-  -d '{"sessionToken":"550e8400-e29b-41d4-a716-446655440000","message":"Hi! My name is Thanh"}'
+  -d '{"conversationId":"550e8400-e29b-41d4-a716-446655440000","message":"Hi! My name is Thanh"}'
 ```
 
 ---
@@ -122,13 +120,13 @@ Extract a structured user profile from the onboarding conversation. Call after c
 **Request Body**
 ```json
 {
-  "sessionToken": "550e8400-e29b-41d4-a716-446655440000"
+  "conversationId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `sessionToken` | UUID | yes | Session token from `/onboarding/start` |
+| `conversationId` | UUID | yes | Conversation ID from `/onboarding/start` |
 
 **Response 200**
 
@@ -178,7 +176,7 @@ If profile extraction fails, returns `{ "raw": "<ai response text>", "scenarios"
 ```bash
 curl -X POST https://api.example.com/onboarding/complete \
   -H "Content-Type: application/json" \
-  -d '{"sessionToken":"550e8400-e29b-41d4-a716-446655440000"}'
+  -d '{"conversationId":"550e8400-e29b-41d4-a716-446655440000"}'
 ```
 
 ---
@@ -188,7 +186,7 @@ curl -X POST https://api.example.com/onboarding/complete \
 | State | Description |
 |---|---|
 | `ANONYMOUS` | Active session not yet linked to a user account |
-| `AUTHENTICATED` | Linked after user registers/logs in with `sessionToken` |
+| `AUTHENTICATED` | Linked after user registers/logs in with `conversationId` |
 
 - Session TTL: **7 days**
 - Max turns: **10** (5 exchanges)

@@ -85,7 +85,7 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 
 **Recent Updates:**
 - Language: `isNativeAvailable`, `isLearningAvailable`, `flagUrl`
-- AiConversation: `type` (ANONYMOUS/AUTHENTICATED), `sessionToken`, `expiresAt`, `messageCount`
+- AiConversation: `type` (ANONYMOUS/AUTHENTICATED), UUID primary key as conversation identifier, `expiresAt`, `messageCount`
 - AiConversationMessage: `translatedContent`, `translatedLang` (sentence translation caching)
 - User: `googleProviderId`, `appleProviderId`
 - PasswordReset: OTP flow support

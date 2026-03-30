@@ -65,14 +65,14 @@ describe('TranslationService', () => {
       llmService.chat.mockResolvedValue(llmJson);
       mockQueryBuilder.insert.mockClear();
 
-      const result = await service.translateWord('hello', 'en', 'es', null, 'session-abc');
+      const result = await service.translateWord('hello', 'en', 'es', null, 'conv-abc');
 
       expect(result.translation).toBe('hola');
       expect(result.vocabularyId).toBeUndefined();
       expect(mockQueryBuilder.insert).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException when no userId and no sessionToken', async () => {
+    it('should throw BadRequestException when no userId and no conversationId', async () => {
       await expect(service.translateWord('hello', 'en', 'es', null)).rejects.toThrow(
         BadRequestException,
       );
@@ -81,7 +81,7 @@ describe('TranslationService', () => {
     it('should fallback to raw response when JSON parse fails', async () => {
       llmService.chat.mockResolvedValue('just a raw translation');
 
-      const result = await service.translateWord('hello', 'en', 'es', null, 'session-abc');
+      const result = await service.translateWord('hello', 'en', 'es', null, 'conv-abc');
 
       expect(result.translation).toBe('just a raw translation');
     });
@@ -89,7 +89,7 @@ describe('TranslationService', () => {
     it('should extract JSON from mixed LLM response', async () => {
       llmService.chat.mockResolvedValue('Here: {"translation": "hola", "partOfSpeech": "noun"}');
 
-      const result = await service.translateWord('hello', 'en', 'es', null, 'session-abc');
+      const result = await service.translateWord('hello', 'en', 'es', null, 'conv-abc');
 
       expect(result.translation).toBe('hola');
       expect(result.partOfSpeech).toBe('noun');
@@ -98,7 +98,7 @@ describe('TranslationService', () => {
     it('should trim whitespace from LLM JSON response', async () => {
       llmService.chat.mockResolvedValue(`\n  {"translation": "hola"}  \n`);
 
-      const result = await service.translateWord('hello', 'en', 'es', null, 'session-abc');
+      const result = await service.translateWord('hello', 'en', 'es', null, 'conv-abc');
 
       expect(result.translation).toBe('hola');
     });
@@ -112,7 +112,7 @@ describe('TranslationService', () => {
       translatedLang: null,
       conversation: {
         id: 'conv-1', userId: 'user-1',
-        sessionToken: null, type: AiConversationType.AUTHENTICATED,
+        type: AiConversationType.AUTHENTICATED,
       },
       ...overrides,
     });
@@ -139,35 +139,35 @@ describe('TranslationService', () => {
       expect(llmService.chat).not.toHaveBeenCalled();
     });
 
-    it('should translate for anonymous user with valid sessionToken', async () => {
+    it('should translate for anonymous user with valid conversationId', async () => {
       messageRepo.findOne.mockResolvedValue(
         mockMessage({
           conversation: {
             id: 'conv-1', userId: null,
-            sessionToken: 'session-abc', type: AiConversationType.ANONYMOUS,
+            type: AiConversationType.ANONYMOUS,
           },
         }),
       );
       llmService.chat.mockResolvedValue('¿Cómo estás?');
       messageRepo.save.mockImplementation((m: any) => Promise.resolve(m));
 
-      const result = await service.translateSentence('msg-1', 'en', 'es', null, 'session-abc');
+      const result = await service.translateSentence('msg-1', 'en', 'es', null, 'conv-1');
 
       expect(result.translation).toBe('¿Cómo estás?');
     });
 
-    it('should throw ForbiddenException when sessionToken does not match', async () => {
+    it('should throw ForbiddenException when conversationId does not match', async () => {
       messageRepo.findOne.mockResolvedValue(
         mockMessage({
           conversation: {
             id: 'conv-1', userId: null,
-            sessionToken: 'real-token', type: AiConversationType.ANONYMOUS,
+            type: AiConversationType.ANONYMOUS,
           },
         }),
       );
 
       await expect(
-        service.translateSentence('msg-1', 'en', 'es', null, 'wrong-token'),
+        service.translateSentence('msg-1', 'en', 'es', null, 'wrong-conv-id'),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -187,7 +187,7 @@ describe('TranslationService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException when no userId and no sessionToken', async () => {
+    it('should throw BadRequestException when no userId and no conversationId', async () => {
       await expect(
         service.translateSentence('msg-1', 'en', 'es', null),
       ).rejects.toThrow(BadRequestException);

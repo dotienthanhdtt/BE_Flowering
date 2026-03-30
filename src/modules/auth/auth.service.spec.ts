@@ -287,7 +287,7 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('accessToken');
     });
 
-    it('should pass sessionToken to onboarding linking', async () => {
+    it('should pass conversationId to onboarding linking', async () => {
       googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
       userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       userRepository.create.mockReturnValue(mockUser);
@@ -297,10 +297,10 @@ describe('AuthService', () => {
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
       conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
 
-      await service.googleLogin('google-id-token', undefined, 'session-tok');
+      await service.googleLogin('google-id-token', undefined, 'conv-tok');
 
       expect(conversationRepository.update).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionToken: 'session-tok' }),
+        expect.objectContaining({ id: 'conv-tok' }),
         expect.objectContaining({ userId: mockUser.id }),
       );
     });
@@ -501,13 +501,13 @@ describe('AuthService', () => {
     });
   });
 
-  describe('register with sessionToken (onboarding linking)', () => {
-    it('calls linkOnboardingSession after user creation when sessionToken provided', async () => {
+  describe('register with conversationId (onboarding linking)', () => {
+    it('calls linkOnboardingSession after user creation when conversationId provided', async () => {
       const registerDto: RegisterDto = {
         email: 'new@example.com',
         password: 'SecurePass123!',
         displayName: 'New User',
-        sessionToken: 'session-tok-123',
+        conversationId: 'conv-tok-123',
       };
 
       userRepository.findOne.mockResolvedValue(null);
@@ -521,12 +521,12 @@ describe('AuthService', () => {
       await service.register(registerDto);
 
       expect(conversationRepository.update).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionToken: 'session-tok-123' }),
-        expect.objectContaining({ userId: mockUser.id, sessionToken: null }),
+        expect.objectContaining({ id: 'conv-tok-123' }),
+        expect.objectContaining({ userId: mockUser.id }),
       );
     });
 
-    it('does not call linkOnboardingSession when no sessionToken provided', async () => {
+    it('does not call linkOnboardingSession when no conversationId provided', async () => {
       const registerDto: RegisterDto = {
         email: 'new@example.com',
         password: 'SecurePass123!',
@@ -738,7 +738,7 @@ describe('AuthService', () => {
       await service.register({
         email: 'a@b.com',
         password: 'Pass123!',
-        sessionToken: 'unknown-token',
+        conversationId: 'unknown-conv-id',
       });
 
       expect(loggerSpy).toHaveBeenCalledWith(
@@ -754,13 +754,13 @@ describe('AuthService', () => {
         service.register({
           email: 'a@b.com',
           password: 'Pass123!',
-          sessionToken: 'tok',
+          conversationId: 'conv-id',
         }),
       ).resolves.not.toThrow();
 
       expect(loggerSpy).toHaveBeenCalledWith(
         'Failed to link onboarding session',
-        expect.objectContaining({ sessionToken: 'tok' }),
+        expect.objectContaining({ conversationId: 'conv-id' }),
       );
     });
   });

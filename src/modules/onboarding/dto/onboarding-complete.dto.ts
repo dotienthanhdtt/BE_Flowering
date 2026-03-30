@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsUUID } from 'class-validator';
 
 export class OnboardingCompleteDto {
-  @ApiProperty({ description: 'Session token from POST /onboarding/start' })
+  @ApiProperty({ description: 'Conversation ID from POST /onboarding/start' })
   @IsUUID()
-  sessionToken!: string;
+  conversationId!: string;
 }

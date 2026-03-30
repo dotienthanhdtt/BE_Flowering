@@ -35,7 +35,6 @@ const mockPromptLoader = () => ({
 const makeConversation = (overrides: Partial<AiConversation> = {}): AiConversation =>
   ({
     id: 'conv-1',
-    sessionToken: 'token-abc',
     type: AiConversationType.ANONYMOUS,
     messageCount: 0,
     expiresAt: new Date(Date.now() + 86400000), // 1 day in future
@@ -69,7 +68,7 @@ describe('OnboardingService', () => {
   afterEach(() => jest.clearAllMocks());
 
   describe('startSession', () => {
-    it('creates conversation with correct fields and returns token + conversationId', async () => {
+    it('creates conversation with correct fields and returns conversationId', async () => {
       const conversation = makeConversation({ id: 'conv-123' });
       conversationRepo.create.mockReturnValue(conversation);
       conversationRepo.save.mockResolvedValue(conversation);
@@ -86,7 +85,6 @@ describe('OnboardingService', () => {
           metadata: { nativeLanguage: 'English', targetLanguage: 'Spanish' },
         }),
       );
-      expect(result.sessionToken).toBeDefined();
       expect(result.conversationId).toBe('conv-123');
     });
   });
@@ -100,18 +98,18 @@ describe('OnboardingService', () => {
       conversationRepo.increment.mockResolvedValue({});
       llmService.chat.mockResolvedValue('Hello! Tell me about yourself.');
 
-      const result = await service.chat({ sessionToken: 'token-abc', message: 'Hi' });
+      const result = await service.chat({ conversationId: 'conv-1', message: 'Hi' });
 
       expect(result.reply).toBe('Hello! Tell me about yourself.');
       expect(result.turnNumber).toBe(1);
       expect(result.isLastTurn).toBe(false);
     });
 
-    it('throws NotFoundException for invalid session token', async () => {
+    it('throws NotFoundException for invalid conversationId', async () => {
       conversationRepo.findOne.mockResolvedValue(null);
 
       await expect(
-        service.chat({ sessionToken: 'bad-token', message: 'Hi' }),
+        service.chat({ conversationId: 'bad-id', message: 'Hi' }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -120,7 +118,7 @@ describe('OnboardingService', () => {
       conversationRepo.findOne.mockResolvedValue(expired);
 
       await expect(
-        service.chat({ sessionToken: 'token-abc', message: 'Hi' }),
+        service.chat({ conversationId: 'conv-1', message: 'Hi' }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -130,7 +128,7 @@ describe('OnboardingService', () => {
       conversationRepo.findOne.mockResolvedValue(conversation);
 
       await expect(
-        service.chat({ sessionToken: 'token-abc', message: 'Hi' }),
+        service.chat({ conversationId: 'conv-1', message: 'Hi' }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -142,7 +140,7 @@ describe('OnboardingService', () => {
       conversationRepo.increment.mockResolvedValue({});
       llmService.chat.mockResolvedValue('Reply');
 
-      await service.chat({ sessionToken: 'token-abc', message: 'Hi' });
+      await service.chat({ conversationId: 'conv-1', message: 'Hi' });
 
       expect(conversationRepo.increment).toHaveBeenCalledWith(
         { id: 'conv-1' },
@@ -160,7 +158,7 @@ describe('OnboardingService', () => {
       conversationRepo.increment.mockResolvedValue({});
       llmService.chat.mockResolvedValue('Final reply');
 
-      const result = await service.chat({ sessionToken: 'token-abc', message: 'Hi' });
+      const result = await service.chat({ conversationId: 'conv-1', message: 'Hi' });
 
       expect(result.isLastTurn).toBe(true);
       expect(result.turnNumber).toBe(onboardingConfig.maxTurns);
@@ -191,7 +189,7 @@ describe('OnboardingService', () => {
         .mockResolvedValueOnce(`\`\`\`json\n${JSON.stringify(profile)}\n\`\`\``)
         .mockResolvedValueOnce(makeValidScenariosJson());
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      const result = await service.complete({ conversationId: 'conv-1' });
 
       expect(result).toMatchObject(profile);
       expect(result.scenarios).toHaveLength(5);
@@ -207,7 +205,7 @@ describe('OnboardingService', () => {
         .mockResolvedValueOnce(JSON.stringify(profile))
         .mockRejectedValueOnce(new Error('LLM timeout'));
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      const result = await service.complete({ conversationId: 'conv-1' });
 
       expect(result).toMatchObject(profile);
       expect(result.scenarios).toEqual([]);
@@ -227,7 +225,7 @@ describe('OnboardingService', () => {
         .mockResolvedValueOnce(JSON.stringify(profile))
         .mockResolvedValueOnce(badScenarios);
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      const result = await service.complete({ conversationId: 'conv-1' });
 
       expect(result.scenarios).toEqual([]);
     });
@@ -242,7 +240,7 @@ describe('OnboardingService', () => {
         .mockResolvedValueOnce(JSON.stringify(profile))
         .mockResolvedValueOnce(makeValidScenariosJson());
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      const result = await service.complete({ conversationId: 'conv-1' });
 
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
       result.scenarios.forEach((s: { id: string }) => {
@@ -267,7 +265,7 @@ describe('OnboardingService', () => {
         .mockResolvedValueOnce(JSON.stringify(profile))
         .mockResolvedValueOnce(scenariosWithBadColor);
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      const result = await service.complete({ conversationId: 'conv-1' });
 
       expect(result.scenarios[0].accentColor).toBe('primary');
       expect(result.scenarios[1].accentColor).toBe('blue');
