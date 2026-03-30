@@ -17,7 +17,7 @@
   ],
   "turn": "{{currentTurn}}/{{maxTurns}}",
   "response": {
-    "format": "JSON only. No markdown, no backticks.",
+    "format": "Always return JSON with full param. No markdown, no backticks.",
     "schema": {
       "reply": "string",
       "isLastTurn": "boolean — true ONLY when user accepts the gift"
