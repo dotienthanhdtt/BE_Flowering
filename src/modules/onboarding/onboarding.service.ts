@@ -111,15 +111,7 @@ export class OnboardingService {
   ): Promise<OnboardingScenarioDto[]> {
     try {
       const scenariosPrompt = this.promptLoader.loadPrompt('onboarding-scenarios-prompt.md', {
-        nativeLanguage: String(profile.nativeLanguage ?? ''),
-        targetLanguage: String(profile.targetLanguage ?? ''),
-        currentLevel: String(profile.currentLevel ?? ''),
-        learningGoals: Array.isArray(profile.learningGoals)
-          ? profile.learningGoals.join(', ')
-          : String(profile.learningGoals ?? ''),
-        preferredTopics: Array.isArray(profile.preferredTopics)
-          ? profile.preferredTopics.join(', ')
-          : String(profile.preferredTopics ?? ''),
+        learnerProfile: JSON.stringify(profile),
       });
 
       const response = await this.llmService.chat([new HumanMessage(scenariosPrompt)], {
