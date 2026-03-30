@@ -12,14 +12,14 @@ export class TranslateRequestDto {
   type!: TranslateType;
 
   @ApiPropertyOptional({ description: 'Word to translate (required for type=word)' })
-  @ValidateIf((o) => o.type === TranslateType.WORD)
+  @ValidateIf((o) => o.type.toLowerCase() === TranslateType.WORD)
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
   text?: string;
 
   @ApiPropertyOptional({ description: 'Message ID (required for type=sentence)' })
-  @ValidateIf((o) => o.type === TranslateType.SENTENCE)
+  @ValidateIf((o) => o.type.toLowerCase() === TranslateType.SENTENCE)
   @IsUUID()
   messageId?: string;
 
