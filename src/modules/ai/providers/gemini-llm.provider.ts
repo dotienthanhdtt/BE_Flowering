@@ -29,11 +29,11 @@ export class GeminiLLMProvider implements LLMProvider {
       apiKey,
       temperature: options?.temperature ?? 0.7,
       maxOutputTokens: options?.maxTokens,
-      ...(options?.thinkingConfig && {
-        thinkingConfig: { thinkingBudget: options.thinkingConfig.thinkingLevel },
-      }),
       streaming: true,
       callbacks: [this.langfuseService.getHandler(options?.metadata)],
+      ...(options?.thinkingConfig && {
+        thinkingConfig: options.thinkingConfig as Record<string, unknown>,
+      }),
     });
   }
 

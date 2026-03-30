@@ -5,8 +5,9 @@ export interface LLMOptions {
   model: LLMModel;
   temperature?: number;
   maxTokens?: number;
-  metadata?: Record<string, unknown>;
+  /** Gemini thinking config for models that support extended thinking. */
   thinkingConfig?: { thinkingLevel: ThinkingLevel };
+  metadata?: Record<string, unknown>;
 }
 
 export interface LLMProvider {

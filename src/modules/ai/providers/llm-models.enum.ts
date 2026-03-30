@@ -19,21 +19,17 @@ export enum LLMModel {
   GEMINI_2_0_FLASH = 'gemini-2.0-flash',
   GEMINI_1_5_PRO = 'gemini-1.5-pro',
   GEMINI_1_5_FLASH = 'gemini-1.5-flash',
-  GEMINI_3_1_FLASH_LITE_PREVIEW = 'gemini-3.1-flash-lite-preview'
+  GEMINI_3_1_FLASH_LITE_PREVIEW = 'gemini-3.1-flash-lite-preview',
+}
+
+/** Gemini thinking levels for models that support extended thinking. */
+export enum ThinkingLevel {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
 }
 
 export type LLMProviderType = 'openai' | 'anthropic' | 'gemini';
-
-/**
- * Thinking budget levels for Gemini 2.5+ models.
- * Maps to thinkingBudget token counts.
- */
-export enum ThinkingLevel {
-  NONE = 0,
-  LOW = 1024,
-  MEDIUM = 8192,
-  HIGH = 24576,
-}
 
 /**
  * Determines the provider from the model enum value.
