@@ -4,6 +4,7 @@ import { LLMModel, ThinkingLevel } from './llm-models.enum';
 export interface LLMOptions {
   model: LLMModel;
   temperature?: number;
+  topP?: number;
   maxTokens?: number;
   /** Gemini thinking config for models that support extended thinking. */
   thinkingConfig?: { thinkingLevel: ThinkingLevel };

@@ -27,7 +27,8 @@ export class GeminiLLMProvider implements LLMProvider {
     return new ChatGoogleGenerativeAI({
       model: modelName,
       apiKey,
-      temperature: options?.temperature ?? 0.7,
+      temperature: options?.temperature ?? 0,
+      topP: options?.topP,
       maxOutputTokens: options?.maxTokens,
       streaming: true,
       callbacks: [this.langfuseService.getHandler(options?.metadata)],

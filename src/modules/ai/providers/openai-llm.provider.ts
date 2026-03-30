@@ -27,7 +27,8 @@ export class OpenAILLMProvider implements LLMProvider {
     return new ChatOpenAI({
       modelName,
       openAIApiKey: apiKey,
-      temperature: options?.temperature ?? 0.7,
+      temperature: options?.temperature ?? 0,
+      topP: options?.topP,
       maxTokens: options?.maxTokens,
       streaming: true,
       callbacks: [this.langfuseService.getHandler(options?.metadata)],
