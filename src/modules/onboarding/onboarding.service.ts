@@ -50,10 +50,11 @@ export class OnboardingService {
       throw new BadRequestException('Maximum turns reached. Call /onboarding/complete.');
     }
 
-    const { targetLanguage } = conversation.metadata as Record<string, string>;
+    const { targetLanguage, nativeLanguage } = conversation.metadata as Record<string, string>;
 
     const systemPrompt = this.promptLoader.loadPrompt('onboarding-chat-prompt.json', {
       targetLanguage,
+      nativeLanguage,
       currentTurn: String(currentTurn),
       maxTurns: String(onboardingConfig.maxTurns),
     });
@@ -68,7 +69,6 @@ export class OnboardingService {
     const rawReply = await this.llmService.chat(messages, {
       model: onboardingConfig.llmModel,
       temperature: onboardingConfig.temperature,
-      topP: onboardingConfig.topP,
       maxTokens: onboardingConfig.maxTokens,
       metadata: { feature: 'onboarding-chat', conversationId: conversation.id, turn: currentTurn },
     });
