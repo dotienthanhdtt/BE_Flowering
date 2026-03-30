@@ -13,21 +13,21 @@ export class PromptLoaderService {
   private cache = new Map<string, string>();
 
   /**
-   * Load a prompt template by name and substitute variables.
-   * @param name - The prompt file name without .md extension
+   * Load a prompt template by filename and substitute variables.
+   * @param filename - The prompt file name with extension (e.g. 'correction.md')
    * @param variables - Key-value pairs to substitute in the template
    */
-  loadPrompt(name: string, variables: Record<string, string> = {}): string {
-    let template = this.cache.get(name);
+  loadPrompt(filename: string, variables: Record<string, string> = {}): string {
+    let template = this.cache.get(filename);
 
     if (!template) {
-      const filePath = join(this.promptsDir, `${name}.md`);
+      const filePath = join(this.promptsDir, filename);
       if (!existsSync(filePath)) {
         this.logger.error(`Prompt file not found: ${filePath}`);
-        throw new Error(`Prompt template not found: ${name}`);
+        throw new Error(`Prompt template not found: ${filename}`);
       }
       template = readFileSync(filePath, 'utf-8');
-      this.cache.set(name, template);
+      this.cache.set(filename, template);
     }
 
     // Replace {{variable}} placeholders

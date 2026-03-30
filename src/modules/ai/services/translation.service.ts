@@ -49,7 +49,7 @@ export class TranslationService {
       throw new BadRequestException('Authentication or sessionToken required');
     }
 
-    const prompt = this.promptLoader.loadPrompt('translate-word', {
+    const prompt = this.promptLoader.loadPrompt('translate-word.md', {
       word: text, sourceLang, targetLang,
     });
 
@@ -120,7 +120,7 @@ export class TranslationService {
       };
     }
 
-    const prompt = this.promptLoader.loadPrompt('translate-sentence', {
+    const prompt = this.promptLoader.loadPrompt('translate-sentence.md', {
       sentence: message.content, sourceLang, targetLang,
     });
 
