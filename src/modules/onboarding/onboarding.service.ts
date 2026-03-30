@@ -68,6 +68,7 @@ export class OnboardingService {
     const rawReply = await this.llmService.chat(messages, {
       model: onboardingConfig.llmModel,
       temperature: onboardingConfig.temperature,
+      topP: onboardingConfig.topP,
       maxTokens: onboardingConfig.maxTokens,
       metadata: { feature: 'onboarding-chat', conversationId: conversation.id, turn: currentTurn },
     });

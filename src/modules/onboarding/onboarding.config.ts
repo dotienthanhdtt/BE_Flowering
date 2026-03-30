@@ -2,9 +2,10 @@ import { LLMModel } from '../ai/providers/llm-models.enum';
 
 /** Static configuration for the anonymous onboarding chat feature. */
 export const onboardingConfig = {
-  maxTurns: 10,
+  maxTurns: 8,
   sessionTtlDays: 7,
-  llmModel: LLMModel.OPENAI_GPT4O_MINI,
+  llmModel: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
   maxTokens: 1024,
-  temperature: 0.7,
+  temperature: 0.0,
+  topP: 0.0,
 };
