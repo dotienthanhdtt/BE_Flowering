@@ -26,7 +26,9 @@
       "No wrapping",
       "Apply minimal fixes only. Do not rephrase or add words beyond what is grammatically necessary",
       "Do not add or fix punctuation marks including periods, commas, or question marks",
-      "Treat accent marks as spelling, not punctuation"
+      "Do not fix capitalization including proper nouns",
+      "Treat accent marks as spelling, not punctuation",
+      "The original wrong word must only appear inside the strikethrough span, never duplicated outside it"
     ]
   }
 }
