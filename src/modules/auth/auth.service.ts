@@ -18,15 +18,12 @@ import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation, AiConversationType } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto } from './dto';
-import { AppleStrategy } from './strategies/apple.strategy';
-import { GoogleIdTokenStrategy } from './strategies/google-id-token-validator.strategy';
+import { FirebaseTokenStrategy, OAuthProvider } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_EXPIRY = '30d';
 const REFRESH_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-
-type OAuthProvider = 'google' | 'apple';
 
 interface OAuthProviderUser {
   email: string;
@@ -41,8 +38,7 @@ export class AuthService {
 
   constructor(
     private jwtService: JwtService,
-    private appleStrategy: AppleStrategy,
-    private googleIdTokenStrategy: GoogleIdTokenStrategy,
+    private firebaseTokenStrategy: FirebaseTokenStrategy,
     private emailService: EmailService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -103,33 +99,19 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  async googleLogin(
+  async firebaseLogin(
     idToken: string,
     displayName?: string,
     conversationId?: string,
   ): Promise<AuthResponseDto> {
-    const googleUser = await this.googleIdTokenStrategy.validate(idToken);
+    const firebaseUser = await this.firebaseTokenStrategy.validate(idToken);
     const providerUser: OAuthProviderUser = {
-      email: googleUser.email,
-      providerId: googleUser.providerId,
-      displayName: displayName ?? googleUser.displayName,
-      avatarUrl: googleUser.avatarUrl,
+      email: firebaseUser.email,
+      providerId: firebaseUser.providerId,
+      displayName: displayName ?? firebaseUser.displayName,
+      avatarUrl: firebaseUser.avatarUrl,
     };
-    return this.oauthLogin('google', providerUser, conversationId);
-  }
-
-  async appleLogin(
-    idToken: string,
-    displayName?: string,
-    conversationId?: string,
-  ): Promise<AuthResponseDto> {
-    const appleUser = await this.appleStrategy.validate(idToken);
-    const providerUser: OAuthProviderUser = {
-      email: appleUser.email,
-      providerId: appleUser.providerId,
-      displayName,
-    };
-    return this.oauthLogin('apple', providerUser, conversationId);
+    return this.oauthLogin(firebaseUser.provider, providerUser, conversationId);
   }
 
   /**

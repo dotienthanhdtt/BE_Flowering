@@ -82,7 +82,11 @@ export class OnboardingService {
       await this.saveMessage(conversation.id, MessageRole.USER, dto.message);
     }
     const messageId = await this.saveMessage(conversation.id, MessageRole.ASSISTANT, reply);
-    await this.conversationRepo.increment({ id: conversation.id }, 'messageCount', isFirstTurn ? 1 : 2);
+    await this.conversationRepo.increment(
+      { id: conversation.id },
+      'messageCount',
+      isFirstTurn ? 1 : 2,
+    );
 
     return { reply, messageId, turnNumber: currentTurn, isLastTurn };
   }
@@ -191,10 +195,7 @@ export class OnboardingService {
     return saved.id;
   }
 
-  private parseChatReply(
-    raw: string,
-    currentTurn: number,
-  ): { reply: string; isLastTurn: boolean } {
+  private parseChatReply(raw: string, currentTurn: number): { reply: string; isLastTurn: boolean } {
     try {
       const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
       const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
