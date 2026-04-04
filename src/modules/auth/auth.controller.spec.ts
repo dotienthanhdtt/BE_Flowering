@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, RefreshTokenDto, AppleAuthDto, GoogleAuthDto, AuthResponseDto } from './dto';
+import { RegisterDto, LoginDto, RefreshTokenDto, FirebaseAuthDto, AuthResponseDto } from './dto';
 import { User } from '../../database/entities/user.entity';
 
 describe('AuthController', () => {
@@ -44,8 +44,7 @@ describe('AuthController', () => {
           useValue: {
             register: jest.fn(),
             login: jest.fn(),
-            googleLogin: jest.fn(),
-            appleLogin: jest.fn(),
+            firebaseLogin: jest.fn(),
             refreshTokens: jest.fn(),
             logout: jest.fn(),
           },
@@ -121,97 +120,52 @@ describe('AuthController', () => {
     });
   });
 
-  describe('googleAuth (POST /auth/google)', () => {
-    it('should sign in with Google ID token successfully', async () => {
-      const googleAuthDto: GoogleAuthDto = {
-        idToken: 'google-id-token',
-        displayName: 'Google User',
+  describe('firebaseAuth (POST /auth/firebase)', () => {
+    it('should sign in with Firebase ID token successfully', async () => {
+      const firebaseAuthDto: FirebaseAuthDto = {
+        idToken: 'firebase-id-token',
+        displayName: 'Firebase User',
       };
 
-      authService.googleLogin.mockResolvedValue(mockAuthResponse);
+      authService.firebaseLogin.mockResolvedValue(mockAuthResponse);
 
-      const result = await controller.googleAuth(googleAuthDto);
+      const result = await controller.firebaseAuth(firebaseAuthDto);
 
-      expect(authService.googleLogin).toHaveBeenCalledWith(
-        googleAuthDto.idToken,
-        googleAuthDto.displayName,
-        googleAuthDto.conversationId,
+      expect(authService.firebaseLogin).toHaveBeenCalledWith(
+        firebaseAuthDto.idToken,
+        firebaseAuthDto.displayName,
+        firebaseAuthDto.conversationId,
       );
       expect(result).toEqual(mockAuthResponse);
     });
 
-    it('should throw UnauthorizedException with invalid Google ID token', async () => {
-      const googleAuthDto: GoogleAuthDto = {
+    it('should throw UnauthorizedException with invalid Firebase ID token', async () => {
+      const firebaseAuthDto: FirebaseAuthDto = {
         idToken: 'invalid-token',
       };
 
-      authService.googleLogin.mockRejectedValue(
-        new UnauthorizedException('Invalid Google ID token'),
+      authService.firebaseLogin.mockRejectedValue(
+        new UnauthorizedException('Invalid Firebase ID token'),
       );
 
-      await expect(controller.googleAuth(googleAuthDto)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.firebaseAuth(firebaseAuthDto)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should pass conversationId to googleLogin for onboarding linking', async () => {
-      const googleAuthDto: GoogleAuthDto = {
-        idToken: 'google-id-token',
+    it('should pass conversationId for onboarding linking', async () => {
+      const firebaseAuthDto: FirebaseAuthDto = {
+        idToken: 'firebase-id-token',
         conversationId: 'onboard-conv-uuid',
       };
 
-      authService.googleLogin.mockResolvedValue(mockAuthResponse);
+      authService.firebaseLogin.mockResolvedValue(mockAuthResponse);
 
-      await controller.googleAuth(googleAuthDto);
+      await controller.firebaseAuth(firebaseAuthDto);
 
-      expect(authService.googleLogin).toHaveBeenCalledWith(
-        'google-id-token',
+      expect(authService.firebaseLogin).toHaveBeenCalledWith(
+        'firebase-id-token',
         undefined,
         'onboard-conv-uuid',
       );
-    });
-  });
-
-  describe('appleAuth', () => {
-    it('should handle Apple Sign In successfully', async () => {
-      const appleAuthDto: AppleAuthDto = {
-        idToken: 'apple-id-token',
-        displayName: 'Apple User',
-      };
-
-      authService.appleLogin.mockResolvedValue(mockAuthResponse);
-
-      const result = await controller.appleAuth(appleAuthDto);
-
-      expect(authService.appleLogin).toHaveBeenCalledWith(
-        appleAuthDto.idToken,
-        appleAuthDto.displayName,
-        appleAuthDto.conversationId,
-      );
-      expect(result).toEqual(mockAuthResponse);
-    });
-
-    it('should handle Apple Sign In without displayName', async () => {
-      const appleAuthDto: AppleAuthDto = {
-        idToken: 'apple-id-token',
-      };
-
-      authService.appleLogin.mockResolvedValue(mockAuthResponse);
-
-      const result = await controller.appleAuth(appleAuthDto);
-
-      expect(authService.appleLogin).toHaveBeenCalledWith(appleAuthDto.idToken, undefined, undefined);
-      expect(result).toEqual(mockAuthResponse);
-    });
-
-    it('should throw UnauthorizedException with invalid Apple ID token', async () => {
-      const appleAuthDto: AppleAuthDto = {
-        idToken: 'invalid-token',
-      };
-
-      authService.appleLogin.mockRejectedValue(
-        new UnauthorizedException('Invalid Apple ID token'),
-      );
-
-      await expect(controller.appleAuth(appleAuthDto)).rejects.toThrow(UnauthorizedException);
     });
   });
 

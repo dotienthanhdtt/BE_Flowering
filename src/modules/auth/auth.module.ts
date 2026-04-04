@@ -6,8 +6,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { AppleStrategy } from './strategies/apple.strategy';
-import { GoogleIdTokenStrategy } from './strategies/google-id-token-validator.strategy';
+import { FirebaseTokenStrategy } from './strategies/firebase-token.strategy';
+import { FirebaseAdminService } from '../../common/services/firebase-admin.service';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
@@ -32,7 +32,7 @@ import { EmailModule } from '../email/email.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, AppleStrategy, GoogleIdTokenStrategy],
+  providers: [AuthService, JwtStrategy, FirebaseAdminService, FirebaseTokenStrategy],
   exports: [AuthService, JwtStrategy],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

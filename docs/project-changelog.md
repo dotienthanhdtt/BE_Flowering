@@ -1,6 +1,6 @@
 # Project Changelog
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-04
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
@@ -10,6 +10,52 @@ All notable changes documented here. Format follows [Keep a Changelog](https://k
 ### In Progress
 - Unit test coverage expansion
 - E2E test suite development
+
+---
+
+## [1.4.0] - 2026-04-04 (Firebase Auth Migration)
+
+### Removed
+- **POST /auth/google Endpoint:** Google ID token endpoint (replaced by unified Firebase endpoint)
+- **POST /auth/apple Endpoint:** Apple Sign-In endpoint (replaced by unified Firebase endpoint)
+- **Packages:** `google-auth-library` and `apple-signin-auth` removed from dependencies
+- **OAuth Configuration:** GOOGLE_CLIENT_ID and related OAuth env vars no longer needed
+
+### Added
+- **POST /auth/firebase Endpoint:** Unified endpoint for both Google and Apple sign-in via Firebase
+  - Accepts Firebase ID token (from either provider)
+  - Auto-detects provider from token claims
+  - Auto-links to existing email or creates new account
+  - Returns same response format as previous OAuth endpoints
+- **FirebaseAdminService:** New service at src/common/services/firebase-admin.service.ts
+  - Handles Firebase ID token verification
+  - Provider detection logic
+  - Token claim extraction
+- **FirebaseTokenStrategy:** New Passport strategy at src/modules/auth/strategies/firebase-token.strategy.ts
+  - Optional Firebase token validation for future extensions
+- **FirebaseAuthDto:** DTO for /auth/firebase endpoint
+
+### Changed
+- **Authentication Flow:** OAuth now exclusively uses Firebase Admin SDK instead of provider-specific libraries
+- **Provider Detection:** Automatic based on token claims (email domain, issuer, etc.)
+- **Configuration Simplified:** Firebase config (already in .env) is now the single source of truth for OAuth
+
+### Migration Path (Required)
+- **Mobile clients:** Update OAuth calls from `POST /auth/google` and `POST /auth/apple` to unified `POST /auth/firebase`
+- **Request format:** Both providers now send Firebase ID token to same endpoint
+- **Response format:** Unchanged (still returns access_token and user data)
+
+### Benefits
+- Single unified endpoint simplifies mobile implementation
+- Firebase SDK handles provider differences automatically
+- Reduces external dependencies (oauth libraries)
+- Cleaner codebase with less provider-specific logic
+- Easier to add future OAuth providers via Firebase
+
+### Updated Documentation
+- docs/api-documentation.md: Updated auth endpoints section
+- docs/codebase-summary.md: Updated Auth module description and dependencies
+- docs/system-architecture.md: Updated Authentication Module Flow diagram
 
 ---
 

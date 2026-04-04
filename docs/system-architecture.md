@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-04
 
 ## Architecture Overview
 
@@ -67,7 +67,7 @@ AI client factory dynamically selects provider based on configuration.
 ```
 ┌──────────────────────────────────────────────────────┐
 │           Auth Controller                            │
-│  POST /auth/register, /login, /google, /apple       │
+│  POST /auth/register, /login, /firebase             │
 │  POST /auth/refresh, /logout                         │
 │  POST /auth/forgot-password, /verify-otp, /reset... │
 └──────────────────────────────────────────────────────┘
@@ -77,15 +77,15 @@ AI client factory dynamically selects provider based on configuration.
 │  - validateUser()                                   │
 │  - createUser()                                     │
 │  - generateJWT()                                    │
-│  - validateOAuth()                                  │
+│  - firebaseLogin() (Google & Apple unified)         │
 │  - processPasswordReset()                           │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
-│        Passport Strategies & Validators             │
+│        Firebase Admin & Passport Strategies         │
+│  - FirebaseAdminService (token verification)        │
 │  - JwtStrategy (JWT validation)                     │
-│  - GoogleIdTokenValidator (Google token verify)     │
-│  - AppleStrategy (Apple OAuth)                      │
+│  - FirebaseTokenStrategy (Firebase token validation)│
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
@@ -96,6 +96,7 @@ AI client factory dynamically selects provider based on configuration.
 ```
 
 **Key Features:**
+- Unified Firebase endpoint: auto-detects Google or Apple provider
 - Composite refresh tokens (uuid:hex) for O(1) validation
 - OAuth auto-linking to existing email
 - Password reset: OTP (10min) + reset token (15min)

@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-03-28
-**Generated from:** repomix-output.xml (updated 2026-03-28)
+**Last Updated:** 2026-04-04
+**Generated from:** repomix-output.xml (updated 2026-04-04)
 
 ## Overview
 
@@ -40,14 +40,15 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ### 1. Auth Module (27 files, ~3,567 LOC)
 
-**Purpose:** User authentication via email/password, Google ID token, Apple Sign-In with account auto-linking
+**Purpose:** User authentication via email/password, Firebase unified sign-in (Google/Apple) with account auto-linking
 
 **Endpoints:**
-- POST /auth/register, /login, /google, /apple, /refresh, /logout
+- POST /auth/register, /login, /firebase, /refresh, /logout
 - POST /auth/forgot-password, /verify-otp, /reset-password
 
 **Key Features:**
 - Composite refresh tokens (uuid:hex format) for O(1) validation
+- Firebase Auth unified endpoint: auto-detects Google or Apple provider from token claims
 - Auto-linking: OAuth accounts merge with existing email matches
 - Provider-specific IDs (`googleProviderId`, `appleProviderId`) prevent duplicates
 - Password reset: OTP (10min) + reset token (15min)
@@ -55,7 +56,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Security:**
 - bcrypt password hashing
 - JWT HS256 (7d expiry)
-- Google Auth Library for ID token verification
+- Firebase Admin SDK for ID token verification
 
 ### 2. AI Module (~25 files, ~1,900 LOC)
 
@@ -322,7 +323,7 @@ npm run build
 
 **Database:** typeorm, pg, @supabase/supabase-js
 
-**Auth:** passport, passport-jwt, google-auth-library, bcrypt, apple-signin-auth
+**Auth:** passport, passport-jwt, firebase-admin, bcrypt
 
 **AI:** langchain, @langchain/core, @langchain/openai, @langchain/anthropic, @langchain/google-genai, openai, langfuse-langchain
 

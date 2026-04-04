@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-04
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.3.0
+**API Version:** 1.4.0
 
 ## Overview
 
@@ -93,13 +93,13 @@ Login with email and password.
 
 ---
 
-#### POST /auth/google
-Google ID token authentication.
+#### POST /auth/firebase
+Firebase sign-in (Google or Apple).
 
 **Auth:** Not required | **Request:**
 ```json
 {
-  "id_token": "google_id_token",
+  "id_token": "firebase_id_token",
   "display_name": "John Doe",
   "conversation_id": "optional_conversation_id"
 }
@@ -108,32 +108,13 @@ Google ID token authentication.
 **Response (200):** `{code: 1, message: "Authenticated", data: {access_token, user: {...}}}`
 
 **Behavior:**
-- Verifies ID token via Google Auth Library
-- Auto-links to existing email
-- Creates new account if email not found
-- Stores googleProviderId
+- Accepts Firebase ID token from either Google or Apple sign-in
+- Auto-detects provider based on token claims
+- Auto-links to existing email or creates new account
+- Stores provider-specific ID (googleProviderId or appleProviderId)
+- Optionally links existing onboarding conversation
 
 **Errors:** 401 (invalid token), 400 (missing id_token)
-
----
-
-#### POST /auth/apple
-Apple Sign-In authentication.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "identity_token": "apple_identity_token",
-  "user": {
-    "email": "user@privaterelay.appleid.com",
-    "name": "John Doe"
-  }
-}
-```
-
-**Response (200):** `{code: 1, message: "Authenticated", data: {access_token, user: {...}}}`
-
-**Errors:** 401 (invalid token)
 
 ---
 

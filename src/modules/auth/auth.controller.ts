@@ -7,8 +7,7 @@ import {
   LoginDto,
   AuthResponseDto,
   RefreshTokenDto,
-  AppleAuthDto,
-  GoogleAuthDto,
+  FirebaseAuthDto,
   ForgotPasswordDto,
   VerifyOtpDto,
   ResetPasswordDto,
@@ -41,23 +40,13 @@ export class AuthController {
   }
 
   @Public()
-  @Post('google')
+  @Post('firebase')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Sign in with Google ID token (mobile-compatible)' })
+  @ApiOperation({ summary: 'Sign in with Firebase (Google or Apple)' })
   @ApiResponse({ status: 200, type: AuthResponseDto })
-  @ApiResponse({ status: 401, description: 'Invalid Google ID token' })
-  async googleAuth(@Body() dto: GoogleAuthDto): Promise<AuthResponseDto> {
-    return this.authService.googleLogin(dto.idToken, dto.displayName, dto.conversationId);
-  }
-
-  @Public()
-  @Post('apple')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Apple Sign In with ID token' })
-  @ApiResponse({ status: 200, type: AuthResponseDto })
-  @ApiResponse({ status: 401, description: 'Invalid Apple ID token' })
-  async appleAuth(@Body() dto: AppleAuthDto): Promise<AuthResponseDto> {
-    return this.authService.appleLogin(dto.idToken, dto.displayName, dto.conversationId);
+  @ApiResponse({ status: 401, description: 'Invalid Firebase ID token' })
+  async firebaseAuth(@Body() dto: FirebaseAuthDto): Promise<AuthResponseDto> {
+    return this.authService.firebaseLogin(dto.idToken, dto.displayName, dto.conversationId);
   }
 
   @Public()

@@ -1,9 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
 
-export class GoogleAuthDto {
-  @ApiProperty({ description: 'Google ID token from Sign in with Google SDK' })
+export class FirebaseAuthDto {
+  @ApiProperty({ description: 'Firebase ID token from Firebase Auth SDK' })
   @IsString()
+  @IsNotEmpty()
   idToken!: string;
 
   @ApiProperty({ required: false, description: 'User display name' })
