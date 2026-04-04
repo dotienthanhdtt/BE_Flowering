@@ -9,6 +9,8 @@ export class FirebaseAdminService implements OnModuleInit {
 
   constructor(private configService: ConfigService<AppConfiguration>) {}
 
+  private initialized = false;
+
   onModuleInit() {
     const projectId = this.configService.get('firebase.projectId', { infer: true });
     const clientEmail = this.configService.get('firebase.clientEmail', { infer: true });
@@ -17,21 +19,27 @@ export class FirebaseAdminService implements OnModuleInit {
       ?.replace(/\\n/g, '\n');
 
     if (!projectId || !clientEmail || !privateKey) {
-      throw new Error(
-        'Firebase credentials missing: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY required',
-      );
+      this.logger.warn('Firebase credentials not configured — POST /auth/firebase will be unavailable');
+      return;
     }
 
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
-      });
+    try {
+      if (!admin.apps.length) {
+        admin.initializeApp({
+          credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+        });
+      }
+      this.initialized = true;
+      this.logger.log('Firebase Admin SDK initialized');
+    } catch (error) {
+      this.logger.error('Firebase Admin SDK initialization failed — check FIREBASE_PRIVATE_KEY format', error);
     }
-
-    this.logger.log('Firebase Admin SDK initialized');
   }
 
   get auth() {
+    if (!this.initialized) {
+      throw new Error('Firebase Admin SDK not initialized — check credentials');
+    }
     return admin.auth();
   }
 }
