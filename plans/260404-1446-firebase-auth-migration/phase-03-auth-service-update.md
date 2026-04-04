@@ -1,147 +1,160 @@
 ---
 phase: 3
-title: "Update Auth Service + Module Wiring"
-status: ready
+title: "Unified Endpoint + Service + DTO"
+status: completed
 priority: high
 effort: 45m
+completed: 2026-04-04
 ---
 
-# Phase 3: Update Auth Service + Module Wiring
+# Phase 3: Unified Endpoint + Service + DTO
 
 ## Context Links
 - [Plan overview](plan.md)
-- [Auth service](../../src/modules/auth/auth.service.ts) — `googleLogin()` line 106, `appleLogin()` line 121
-- [Auth module](../../src/modules/auth/auth.module.ts) — providers line 35
+- [Auth service](../../src/modules/auth/auth.service.ts)
+- [Auth controller](../../src/modules/auth/auth.controller.ts)
+- [Auth module](../../src/modules/auth/auth.module.ts)
+- [Google DTO](../../src/modules/auth/dto/google-auth.dto.ts)
+- [Apple DTO](../../src/modules/auth/dto/apple-auth.dto.ts)
 
 ## Overview
 
-Wire `FirebaseAdminService` and `FirebaseTokenStrategy` into the auth module. Update `googleLogin()` and `appleLogin()` to use the single Firebase verifier instead of separate strategies.
+Replace `POST /auth/google` + `POST /auth/apple` with single `POST /auth/firebase`. Create unified DTO, single service method, single controller endpoint. Provider detection is automatic from Firebase token.
 
 ## Key Insights
 
-- `oauthLogin()` private method (line 139) stays completely unchanged — it already accepts `OAuthProvider` + `OAuthProviderUser`
-- Only `googleLogin()` and `appleLogin()` change: replace strategy calls with `FirebaseTokenStrategy.validate()`
-- Constructor injection changes: remove `AppleStrategy` + `GoogleIdTokenStrategy`, add `FirebaseTokenStrategy`
+- `FirebaseTokenStrategy.validate()` already returns `provider: 'google' | 'apple'` from decoded token
+- No need for caller to specify provider — Firebase token contains this info
+- `oauthLogin()` private method stays unchanged — it already accepts `OAuthProvider`
+- DTOs for Google and Apple are nearly identical — merge into one `FirebaseAuthDto`
 
 ## Requirements
 
-- Register `FirebaseAdminService` and `FirebaseTokenStrategy` as providers in `AuthModule`
-- Remove `AppleStrategy` and `GoogleIdTokenStrategy` from providers
-- Update `AuthService` constructor to inject `FirebaseTokenStrategy`
-- Simplify `googleLogin()` and `appleLogin()` to use single strategy
+- Single `POST /auth/firebase` endpoint accepting `{ idToken, displayName?, conversationId? }`
+- Single `firebaseLogin()` service method replacing `googleLogin()` + `appleLogin()`
+- Provider auto-detected from Firebase token
+- Remove old Google/Apple endpoints and methods
+- Wire `FirebaseAdminService` + `FirebaseTokenStrategy` into `AuthModule`
 
 ## Related Code Files
 
+**Create:**
+- `src/modules/auth/dto/firebase-auth.dto.ts`
+
 **Modify:**
+- `src/modules/auth/auth.controller.ts` — replace 2 endpoints with 1
+- `src/modules/auth/auth.service.ts` — replace 2 methods with 1, update constructor
 - `src/modules/auth/auth.module.ts` — swap providers
-- `src/modules/auth/auth.service.ts` — update constructor + googleLogin/appleLogin methods
+- `src/modules/auth/dto/index.ts` — export new DTO, remove old exports
+
+**Delete (in Phase 4):**
+- `src/modules/auth/dto/google-auth.dto.ts`
+- `src/modules/auth/dto/apple-auth.dto.ts`
 
 ## Implementation Steps
 
-### 1. Update `auth.module.ts`
+### 1. Create `firebase-auth.dto.ts`
 
 ```typescript
-// Remove imports:
-// - AppleStrategy
-// - GoogleIdTokenStrategy
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, IsUUID } from 'class-validator';
 
-// Add imports:
-import { FirebaseAdminService } from '../../common/services/firebase-admin.service';
-import { FirebaseTokenStrategy } from './strategies/firebase-token.strategy';
+export class FirebaseAuthDto {
+  @ApiProperty({ description: 'Firebase ID token from Firebase Auth SDK' })
+  @IsString()
+  idToken!: string;
 
-// Update providers array:
+  @ApiProperty({ required: false, description: 'User display name' })
+  @IsString()
+  @IsOptional()
+  displayName?: string;
+
+  @ApiProperty({ required: false, description: 'Onboarding conversation ID to link' })
+  @IsUUID()
+  @IsOptional()
+  conversationId?: string;
+}
+```
+
+### 2. Update `dto/index.ts`
+
+```typescript
+// Remove: export * from './google-auth.dto';
+// Remove: export * from './apple-auth.dto';
+// Add:
+export * from './firebase-auth.dto';
+```
+
+### 3. Update `auth.module.ts`
+
+```typescript
+// Remove: AppleStrategy, GoogleIdTokenStrategy imports + providers
+// Add: FirebaseAdminService, FirebaseTokenStrategy imports + providers
 providers: [AuthService, JwtStrategy, FirebaseAdminService, FirebaseTokenStrategy],
 ```
 
-### 2. Update `auth.service.ts`
+### 4. Update `auth.service.ts`
 
-**Constructor** — replace two strategy injections with one:
+Replace constructor injections and add single method:
+
 ```typescript
-// Remove:
-private appleStrategy: AppleStrategy,
-private googleIdTokenStrategy: GoogleIdTokenStrategy,
+// Constructor: remove appleStrategy + googleIdTokenStrategy, add firebaseTokenStrategy
 
-// Add:
-private firebaseTokenStrategy: FirebaseTokenStrategy,
-```
-
-**`googleLogin()` method** — simplify:
-```typescript
-async googleLogin(
+async firebaseLogin(
   idToken: string,
   displayName?: string,
   conversationId?: string,
 ): Promise<AuthResponseDto> {
   const firebaseUser = await this.firebaseTokenStrategy.validate(idToken);
-  if (firebaseUser.provider !== 'google') {
-    throw new UnauthorizedException('Expected Google sign-in token');
-  }
   const providerUser: OAuthProviderUser = {
     email: firebaseUser.email,
     providerId: firebaseUser.providerId,
     displayName: displayName ?? firebaseUser.displayName,
     avatarUrl: firebaseUser.avatarUrl,
   };
-  return this.oauthLogin('google', providerUser, conversationId);
+  return this.oauthLogin(firebaseUser.provider, providerUser, conversationId);
 }
 ```
 
-**`appleLogin()` method** — simplify:
+Remove `googleLogin()` and `appleLogin()` methods entirely.
+
+### 5. Update `auth.controller.ts`
+
+Replace two endpoints with one:
+
 ```typescript
-async appleLogin(
-  idToken: string,
-  displayName?: string,
-  conversationId?: string,
-): Promise<AuthResponseDto> {
-  const firebaseUser = await this.firebaseTokenStrategy.validate(idToken);
-  if (firebaseUser.provider !== 'apple') {
-    throw new UnauthorizedException('Expected Apple sign-in token');
-  }
-  const providerUser: OAuthProviderUser = {
-    email: firebaseUser.email,
-    providerId: firebaseUser.providerId,
-    displayName: displayName ?? firebaseUser.displayName,
-  };
-  return this.oauthLogin('apple', providerUser, conversationId);
+@Public()
+@Post('firebase')
+@HttpCode(HttpStatus.OK)
+@ApiOperation({ summary: 'Sign in with Firebase (Google or Apple)' })
+@ApiResponse({ status: 200, type: AuthResponseDto })
+@ApiResponse({ status: 401, description: 'Invalid Firebase ID token' })
+async firebaseAuth(@Body() dto: FirebaseAuthDto): Promise<AuthResponseDto> {
+  return this.authService.firebaseLogin(dto.idToken, dto.displayName, dto.conversationId);
 }
 ```
 
-**Remove imports:**
-```typescript
-// Remove:
-import { AppleStrategy } from './strategies/apple.strategy';
-import { GoogleIdTokenStrategy } from './strategies/google-id-token-validator.strategy';
+Remove `googleAuth()` and `appleAuth()` methods entirely.
 
-// Add:
-import { FirebaseTokenStrategy } from './strategies/firebase-token.strategy';
-```
+### 6. Verify unchanged code
 
-### 3. Verify unchanged code
-
-These must NOT change:
-- `oauthLogin()` — unchanged
-- `register()`, `login()` — unchanged
-- `refreshTokens()`, `logout()` — unchanged
-- `forgotPassword()`, `verifyOtp()`, `resetPassword()` — unchanged
-- Controller endpoints and DTOs — unchanged
+Must NOT change:
+- `oauthLogin()`, `register()`, `login()`, `refreshTokens()`, `logout()`
+- `forgotPassword()`, `verifyOtp()`, `resetPassword()`
+- JWT strategy, guards, decorators
 
 ## Todo List
 
+- [ ] Create `firebase-auth.dto.ts`
+- [ ] Update `dto/index.ts`
 - [ ] Update `auth.module.ts` providers
-- [ ] Update `auth.service.ts` constructor
-- [ ] Update `googleLogin()` method
-- [ ] Update `appleLogin()` method
-- [ ] Remove old strategy imports
+- [ ] Update `auth.service.ts` — single `firebaseLogin()`, remove old methods
+- [ ] Update `auth.controller.ts` — single `POST /auth/firebase`, remove old endpoints
 - [ ] Verify build: `npm run build`
 
 ## Success Criteria
 
-- Auth module compiles with new providers
-- `POST /auth/google` and `POST /auth/apple` use Firebase verification
-- All other auth endpoints completely unaffected
+- Single `POST /auth/firebase` endpoint works for both Google and Apple
+- Provider auto-detected from token — caller doesn't specify
+- All other auth endpoints unaffected
 - Build passes
-
-## Security Considerations
-
-- Provider check (`firebaseUser.provider !== 'google'`) prevents a Google token from being used at the Apple endpoint and vice versa
-- Email verification still enforced via Firebase strategy
