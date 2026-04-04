@@ -10,8 +10,7 @@ import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { RegisterDto, LoginDto } from './dto';
-import { AppleStrategy, AppleUser } from './strategies/apple.strategy';
-import { GoogleIdTokenStrategy, GoogleUser } from './strategies/google-id-token-validator.strategy';
+import { FirebaseTokenStrategy, FirebaseAuthUser } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 
 jest.mock('bcrypt');
@@ -22,8 +21,7 @@ describe('AuthService', () => {
   let refreshTokenRepository: jest.Mocked<Repository<RefreshToken>>;
   let conversationRepository: jest.Mocked<{ update: jest.Mock }>;
   let jwtService: jest.Mocked<JwtService>;
-  let appleStrategy: jest.Mocked<AppleStrategy>;
-  let googleIdTokenStrategy: jest.Mocked<GoogleIdTokenStrategy>;
+  let firebaseTokenStrategy: jest.Mocked<FirebaseTokenStrategy>;
   let passwordResetRepository: jest.Mocked<{ count: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock }>;
   let emailService: jest.Mocked<{ sendOtp: jest.Mock }>;
 
@@ -53,13 +51,7 @@ describe('AuthService', () => {
           },
         },
         {
-          provide: AppleStrategy,
-          useValue: {
-            validate: jest.fn(),
-          },
-        },
-        {
-          provide: GoogleIdTokenStrategy,
+          provide: FirebaseTokenStrategy,
           useValue: {
             validate: jest.fn(),
           },
@@ -111,8 +103,7 @@ describe('AuthService', () => {
     refreshTokenRepository = module.get(getRepositoryToken(RefreshToken));
     conversationRepository = module.get(getRepositoryToken(AiConversation));
     jwtService = module.get(JwtService);
-    appleStrategy = module.get(AppleStrategy);
-    googleIdTokenStrategy = module.get(GoogleIdTokenStrategy);
+    firebaseTokenStrategy = module.get(FirebaseTokenStrategy);
     passwordResetRepository = module.get(getRepositoryToken(PasswordReset));
     emailService = module.get(EmailService);
   });
@@ -224,16 +215,23 @@ describe('AuthService', () => {
     });
   });
 
-  describe('googleLogin', () => {
-    const googleUser: GoogleUser = {
+  describe('firebaseLogin', () => {
+    const googleFirebaseUser: FirebaseAuthUser = {
       providerId: 'google-sub-123',
       email: 'google@example.com',
+      provider: 'google',
       displayName: 'Google User',
       avatarUrl: 'https://avatar.url',
     };
 
-    it('should create new user on first-time Google login', async () => {
-      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+    const appleFirebaseUser: FirebaseAuthUser = {
+      providerId: 'apple-123',
+      email: 'apple@example.com',
+      provider: 'apple',
+    };
+
+    it('should create new user on first-time Google Firebase login', async () => {
+      firebaseTokenStrategy.validate.mockResolvedValue(googleFirebaseUser);
       userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       userRepository.create.mockReturnValue(mockUser);
       userRepository.save.mockResolvedValue(mockUser);
@@ -241,11 +239,11 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.googleLogin('google-id-token', 'Google User');
+      const result = await service.firebaseLogin('firebase-id-token', 'Google User');
 
-      expect(googleIdTokenStrategy.validate).toHaveBeenCalledWith('google-id-token');
+      expect(firebaseTokenStrategy.validate).toHaveBeenCalledWith('firebase-id-token');
       expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { googleProviderId: googleUser.providerId },
+        where: { googleProviderId: googleFirebaseUser.providerId },
       });
       expect(userRepository.create).toHaveBeenCalled();
       expect(result).toHaveProperty('accessToken');
@@ -253,13 +251,13 @@ describe('AuthService', () => {
 
     it('should login existing Google user by provider ID', async () => {
       const existingGoogleUser = { ...mockUser, googleProviderId: 'google-sub-123' };
-      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+      firebaseTokenStrategy.validate.mockResolvedValue(googleFirebaseUser);
       userRepository.findOne.mockResolvedValue(existingGoogleUser);
       jwtService.sign.mockReturnValue('access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.googleLogin('google-id-token');
+      const result = await service.firebaseLogin('firebase-id-token');
 
       expect(userRepository.create).not.toHaveBeenCalled();
       expect(result.user.email).toBe(existingGoogleUser.email);
@@ -267,8 +265,7 @@ describe('AuthService', () => {
 
     it('should auto-link Google account to existing email user', async () => {
       const existingEmailUser = { ...mockUser, authProvider: 'email' };
-      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
-      // Not found by provider ID, found by email
+      firebaseTokenStrategy.validate.mockResolvedValue(googleFirebaseUser);
       userRepository.findOne
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(existingEmailUser);
@@ -277,18 +274,56 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.googleLogin('google-id-token');
+      const result = await service.firebaseLogin('firebase-id-token');
 
       expect(userRepository.update).toHaveBeenCalledWith(
         { id: existingEmailUser.id },
-        { googleProviderId: googleUser.providerId },
+        { googleProviderId: googleFirebaseUser.providerId },
       );
       expect(userRepository.create).not.toHaveBeenCalled();
       expect(result).toHaveProperty('accessToken');
     });
 
+    it('should create new user for first-time Apple Firebase login', async () => {
+      firebaseTokenStrategy.validate.mockResolvedValue(appleFirebaseUser);
+      userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+
+      const result = await service.firebaseLogin('apple-firebase-token', 'Apple User');
+
+      expect(firebaseTokenStrategy.validate).toHaveBeenCalledWith('apple-firebase-token');
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { appleProviderId: appleFirebaseUser.providerId },
+      });
+      expect(result).toHaveProperty('accessToken');
+    });
+
+    it('should auto-link Apple account to existing email user', async () => {
+      const existingEmailUser = { ...mockUser, authProvider: 'email' };
+      firebaseTokenStrategy.validate.mockResolvedValue(appleFirebaseUser);
+      userRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingEmailUser);
+      userRepository.update.mockResolvedValue({ affected: 1 } as any);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+
+      const result = await service.firebaseLogin('apple-firebase-token');
+
+      expect(userRepository.update).toHaveBeenCalledWith(
+        { id: existingEmailUser.id },
+        { appleProviderId: appleFirebaseUser.providerId },
+      );
+      expect(result).toHaveProperty('accessToken');
+    });
+
     it('should pass conversationId to onboarding linking', async () => {
-      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+      firebaseTokenStrategy.validate.mockResolvedValue(googleFirebaseUser);
       userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       userRepository.create.mockReturnValue(mockUser);
       userRepository.save.mockResolvedValue(mockUser);
@@ -297,81 +332,12 @@ describe('AuthService', () => {
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
       conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
 
-      await service.googleLogin('google-id-token', undefined, 'conv-tok');
+      await service.firebaseLogin('firebase-id-token', undefined, 'conv-tok');
 
       expect(conversationRepository.update).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'conv-tok' }),
         expect.objectContaining({ userId: mockUser.id }),
       );
-    });
-  });
-
-  describe('appleLogin', () => {
-    it('should create new user for first-time Apple login', async () => {
-      const appleUser: AppleUser = {
-        providerId: 'apple-123',
-        email: 'apple@example.com',
-      };
-
-      appleStrategy.validate.mockResolvedValue(appleUser);
-      userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-      userRepository.create.mockReturnValue(mockUser);
-      userRepository.save.mockResolvedValue(mockUser);
-      jwtService.sign.mockReturnValue('access-token');
-      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
-      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
-
-      const result = await service.appleLogin('apple-id-token', 'Apple User');
-
-      expect(appleStrategy.validate).toHaveBeenCalledWith('apple-id-token');
-      expect(userRepository.create).toHaveBeenCalled();
-      expect(result).toHaveProperty('accessToken');
-    });
-
-    it('should login existing Apple user by provider ID', async () => {
-      const appleUser: AppleUser = {
-        providerId: 'apple-123',
-        email: 'apple@example.com',
-      };
-
-      const existingAppleUser = { ...mockUser, authProvider: 'apple', appleProviderId: 'apple-123' };
-      appleStrategy.validate.mockResolvedValue(appleUser);
-      userRepository.findOne.mockResolvedValue(existingAppleUser);
-      jwtService.sign.mockReturnValue('access-token');
-      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
-      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
-
-      const result = await service.appleLogin('apple-id-token');
-
-      expect(userRepository.create).not.toHaveBeenCalled();
-      expect(result.user.email).toBe(existingAppleUser.email);
-    });
-
-    it('should auto-link Apple account to existing email user (no ConflictException)', async () => {
-      const appleUser: AppleUser = {
-        providerId: 'apple-123',
-        email: 'test@example.com',
-      };
-
-      const existingEmailUser = { ...mockUser, authProvider: 'email' };
-      appleStrategy.validate.mockResolvedValue(appleUser);
-      // Not found by provider ID, found by email
-      userRepository.findOne
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(existingEmailUser);
-      userRepository.update.mockResolvedValue({ affected: 1 } as any);
-      jwtService.sign.mockReturnValue('access-token');
-      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
-      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
-
-      const result = await service.appleLogin('apple-id-token');
-
-      // Should NOT throw, should auto-link via update()
-      expect(userRepository.update).toHaveBeenCalledWith(
-        { id: existingEmailUser.id },
-        { appleProviderId: appleUser.providerId },
-      );
-      expect(result).toHaveProperty('accessToken');
     });
   });
 
