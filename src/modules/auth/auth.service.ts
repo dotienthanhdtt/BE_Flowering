@@ -17,7 +17,7 @@ import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation, AiConversationType } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
-import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto } from './dto';
+import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto, FirebaseAuthDto } from './dto';
 import { FirebaseTokenStrategy, OAuthProvider } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 
@@ -26,10 +26,13 @@ const ACCESS_TOKEN_EXPIRY = '30d';
 const REFRESH_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 interface OAuthProviderUser {
+  firebaseUid: string;
   email: string;
+  emailVerified: boolean;
   providerId: string;
   displayName?: string;
   avatarUrl?: string;
+  phoneNumber?: string;
 }
 
 @Injectable()
@@ -99,19 +102,18 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  async firebaseLogin(
-    idToken: string,
-    displayName?: string,
-    conversationId?: string,
-  ): Promise<AuthResponseDto> {
-    const firebaseUser = await this.firebaseTokenStrategy.validate(idToken);
+  async firebaseLogin(dto: FirebaseAuthDto): Promise<AuthResponseDto> {
+    const firebaseUser = await this.firebaseTokenStrategy.validate(dto.idToken);
     const providerUser: OAuthProviderUser = {
+      firebaseUid: firebaseUser.firebaseUid,
       email: firebaseUser.email,
+      emailVerified: firebaseUser.emailVerified,
       providerId: firebaseUser.providerId,
-      displayName: displayName ?? firebaseUser.displayName,
-      avatarUrl: firebaseUser.avatarUrl,
+      displayName: dto.displayName ?? firebaseUser.displayName,
+      avatarUrl: dto.avatarUrl ?? firebaseUser.avatarUrl,
+      phoneNumber: dto.phoneNumber,
     };
-    return this.oauthLogin(firebaseUser.provider, providerUser, conversationId);
+    return this.oauthLogin(firebaseUser.provider, providerUser, dto.conversationId);
   }
 
   /**
@@ -130,28 +132,48 @@ export class AuthService {
       where: { [providerColumn]: providerUser.providerId },
     });
 
-    if (!user) {
+    if (user) {
+      // Update profile fields that may have changed (e.g. Google avatar, name, email verification)
+      const profileUpdate: Partial<User> = {};
+      if (providerUser.displayName && !user.displayName) profileUpdate.displayName = providerUser.displayName;
+      if (providerUser.avatarUrl && providerUser.avatarUrl !== user.avatarUrl) profileUpdate.avatarUrl = providerUser.avatarUrl;
+      if (providerUser.firebaseUid && !user.firebaseUid) profileUpdate.firebaseUid = providerUser.firebaseUid;
+      if (providerUser.emailVerified && !user.emailVerified) profileUpdate.emailVerified = true;
+      if (providerUser.phoneNumber && providerUser.phoneNumber !== user.phoneNumber) profileUpdate.phoneNumber = providerUser.phoneNumber;
+
+      if (Object.keys(profileUpdate).length > 0) {
+        await this.userRepository.update({ id: user.id }, profileUpdate);
+        user = { ...user, ...profileUpdate };
+      }
+    } else {
       // 2. Find by email — auto-link if matched, create if not
       const existingEmailUser = await this.userRepository.findOne({
         where: { email: providerUser.email },
       });
 
       if (existingEmailUser) {
-        // Auto-link: attach this provider to the existing account using typed update
-        const update =
-          provider === 'google'
-            ? { googleProviderId: providerUser.providerId }
-            : { appleProviderId: providerUser.providerId };
+        // Auto-link: attach provider + Firebase UID + update profile
+        const update: Partial<User> = {
+          [providerColumn]: providerUser.providerId,
+          firebaseUid: providerUser.firebaseUid,
+          emailVerified: providerUser.emailVerified,
+          ...(providerUser.displayName && !existingEmailUser.displayName ? { displayName: providerUser.displayName } : {}),
+          ...(providerUser.avatarUrl ? { avatarUrl: providerUser.avatarUrl } : {}),
+          ...(providerUser.phoneNumber ? { phoneNumber: providerUser.phoneNumber } : {}),
+        };
         await this.userRepository.update({ id: existingEmailUser.id }, update);
         user = { ...existingEmailUser, ...update };
       } else {
         // New user
         user = this.userRepository.create({
           email: providerUser.email,
+          emailVerified: providerUser.emailVerified,
           displayName: providerUser.displayName,
           avatarUrl: providerUser.avatarUrl,
+          phoneNumber: providerUser.phoneNumber,
           authProvider: provider,
           providerId: providerUser.providerId,
+          firebaseUid: providerUser.firebaseUid,
           [providerColumn]: providerUser.providerId,
         });
         await this.userRepository.save(user);
@@ -353,8 +375,12 @@ export class AuthService {
     return {
       id: user.id,
       email: user.email,
+      emailVerified: user.emailVerified ?? false,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
+      phoneNumber: user.phoneNumber,
+      firebaseUid: user.firebaseUid,
+      authProvider: user.authProvider,
     };
   }
 }

@@ -15,20 +15,25 @@ describe('AuthController', () => {
     user: {
       id: 'user-123',
       email: 'test@example.com',
+      emailVerified: false,
       displayName: 'Test User',
       avatarUrl: undefined,
+      firebaseUid: undefined,
+      authProvider: 'email',
     },
   };
 
   const mockUser: User = {
     id: 'user-123',
     email: 'test@example.com',
+    emailVerified: false,
     displayName: 'Test User',
     passwordHash: 'hashed',
     authProvider: 'email',
     providerId: undefined,
     googleProviderId: undefined,
     appleProviderId: undefined,
+    firebaseUid: undefined,
     avatarUrl: undefined,
     nativeLanguageId: undefined,
     createdAt: new Date(),

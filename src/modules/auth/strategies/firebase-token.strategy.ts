@@ -4,7 +4,9 @@ import { FirebaseAdminService } from '../../../common/services/firebase-admin.se
 export type OAuthProvider = 'google' | 'apple';
 
 export interface FirebaseAuthUser {
+  firebaseUid: string;
   email: string;
+  emailVerified: boolean;
   providerId: string;
   provider: OAuthProvider;
   displayName?: string;
@@ -41,7 +43,9 @@ export class FirebaseTokenStrategy {
       const providerId = providerIds?.[0] ?? decoded.uid;
 
       return {
+        firebaseUid: decoded.uid,
         email: decoded.email,
+        emailVerified: !!decoded.email_verified,
         providerId,
         provider,
         displayName: decoded.name,
