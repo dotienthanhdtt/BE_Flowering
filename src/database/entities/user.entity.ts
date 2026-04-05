@@ -33,11 +33,20 @@ export class User {
   @Column({ type: 'varchar', length: 255, name: 'apple_provider_id', nullable: true })
   appleProviderId?: string;
 
+  @Column({ type: 'varchar', length: 128, name: 'firebase_uid', nullable: true, unique: true })
+  firebaseUid?: string;
+
+  @Column({ type: 'boolean', name: 'email_verified', default: false })
+  emailVerified!: boolean;
+
   @Column({ type: 'varchar', length: 100, name: 'display_name', nullable: true })
   displayName?: string;
 
   @Column({ type: 'text', name: 'avatar_url', nullable: true })
   avatarUrl?: string;
+
+  @Column({ type: 'varchar', length: 20, name: 'phone_number', nullable: true })
+  phoneNumber?: string;
 
   @ManyToOne(() => Language, { nullable: true })
   @JoinColumn({ name: 'native_language_id' })

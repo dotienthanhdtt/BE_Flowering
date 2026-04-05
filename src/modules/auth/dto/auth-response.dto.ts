@@ -7,11 +7,23 @@ export class UserResponseDto {
   @ApiProperty()
   email!: string;
 
+  @ApiProperty()
+  emailVerified!: boolean;
+
   @ApiProperty({ required: false })
   displayName?: string;
 
   @ApiProperty({ required: false })
   avatarUrl?: string;
+
+  @ApiProperty({ required: false })
+  phoneNumber?: string;
+
+  @ApiProperty({ required: false })
+  firebaseUid?: string;
+
+  @ApiProperty({ required: false })
+  authProvider?: string;
 }
 
 export class AuthResponseDto {

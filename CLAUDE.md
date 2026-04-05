@@ -118,7 +118,7 @@ All docs in `docs/` directory:
 - **Rate Limiting**: AI endpoints: 20 req/min, 100 req/hour per user
   - **RLS Policies**: Database-level row security for user data isolation
 - **Composite Refresh Tokens**: Stored hashed in DB with device fingerprint; 90-day expiry
-- **Google Auth**: POST `/auth/google` accepts `idToken` directly (no OAuth redirect flow)
+- **Firebase Auth**: POST `/auth/firebase` accepts Firebase ID token (auto-detects Google/Apple provider)
 - **Account Auto-linking**: Google/Apple login auto-links to existing email account
 - **Anonymous Onboarding**: Session-based chat at `/onboarding/*`; no JWT needed; state stored in-memory per `sessionId`
 
@@ -194,3 +194,10 @@ Before ending any session, confirm:
 - **Missing either registration causes runtime errors** (`EntityMetadataNotFoundError` or `No repository was found`). These won't surface at build time — only at runtime when the entity is first used.
 
 > **Root cause of 2026-03-08 runtime 500:** `Vocabulary` entity was added to `AiModule`'s `TypeOrmModule.forFeature()` but not to `database.module.ts` global entities array. `createQueryBuilder().insert().into(Vocabulary)` hit the DataSource directly and threw `EntityMetadataNotFoundError`. Fix: add entity to both locations.
+
+### External Service Initialization
+- **Services depending on external credentials (Firebase, SMTP, etc.) must NEVER crash the app on init failure.** Use try-catch in `onModuleInit()`, log a warning, and degrade gracefully — the specific endpoints return proper errors, but the rest of the app stays up.
+- **Before deploying new external service integrations**, verify Railway env vars contain real values (not `.env.example` placeholders like `your-xxx`). Placeholder values pass null-checks but fail at runtime parsing.
+- **Always test with `NODE_ENV=production` locally** when adding services that read env vars — catches missing/malformed config before Railway deploy.
+
+> **Root cause of 2026-04-04 Railway crash:** `FirebaseAdminService.onModuleInit()` threw on invalid `FIREBASE_PRIVATE_KEY` (placeholder value from `.env.example`), crashing the entire NestJS app. Fix: graceful init with try-catch + `initialized` flag.

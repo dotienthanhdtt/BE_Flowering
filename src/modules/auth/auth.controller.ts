@@ -46,7 +46,7 @@ export class AuthController {
   @ApiResponse({ status: 200, type: AuthResponseDto })
   @ApiResponse({ status: 401, description: 'Invalid Firebase ID token' })
   async firebaseAuth(@Body() dto: FirebaseAuthDto): Promise<AuthResponseDto> {
-    return this.authService.firebaseLogin(dto.idToken, dto.displayName, dto.conversationId);
+    return this.authService.firebaseLogin(dto);
   }
 
   @Public()

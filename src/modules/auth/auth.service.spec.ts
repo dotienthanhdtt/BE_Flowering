@@ -28,13 +28,16 @@ describe('AuthService', () => {
   const mockUser: User = {
     id: 'user-123',
     email: 'test@example.com',
+    emailVerified: false,
     passwordHash: 'hashed-password',
     displayName: 'Test User',
     avatarUrl: undefined,
+    phoneNumber: undefined,
     authProvider: 'email',
     providerId: undefined,
     googleProviderId: undefined,
     appleProviderId: undefined,
+    firebaseUid: undefined,
     nativeLanguageId: undefined,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -217,16 +220,20 @@ describe('AuthService', () => {
 
   describe('firebaseLogin', () => {
     const googleFirebaseUser: FirebaseAuthUser = {
+      firebaseUid: 'firebase-uid-google-123',
       providerId: 'google-sub-123',
       email: 'google@example.com',
+      emailVerified: true,
       provider: 'google',
       displayName: 'Google User',
       avatarUrl: 'https://avatar.url',
     };
 
     const appleFirebaseUser: FirebaseAuthUser = {
+      firebaseUid: 'firebase-uid-apple-456',
       providerId: 'apple-123',
       email: 'apple@example.com',
+      emailVerified: true,
       provider: 'apple',
     };
 
@@ -278,7 +285,7 @@ describe('AuthService', () => {
 
       expect(userRepository.update).toHaveBeenCalledWith(
         { id: existingEmailUser.id },
-        { googleProviderId: googleFirebaseUser.providerId },
+        expect.objectContaining({ googleProviderId: googleFirebaseUser.providerId, firebaseUid: googleFirebaseUser.firebaseUid }),
       );
       expect(userRepository.create).not.toHaveBeenCalled();
       expect(result).toHaveProperty('accessToken');
@@ -317,7 +324,7 @@ describe('AuthService', () => {
 
       expect(userRepository.update).toHaveBeenCalledWith(
         { id: existingEmailUser.id },
-        { appleProviderId: appleFirebaseUser.providerId },
+        expect.objectContaining({ appleProviderId: appleFirebaseUser.providerId, firebaseUid: appleFirebaseUser.firebaseUid }),
       );
       expect(result).toHaveProperty('accessToken');
     });
