@@ -16,6 +16,9 @@ import { RefreshToken } from './entities/refresh-token.entity';
 import { PasswordReset } from './entities/password-reset.entity';
 import { Vocabulary } from './entities/vocabulary.entity';
 import { WebhookEvent } from './entities/webhook-event.entity';
+import { ScenarioCategory } from './entities/scenario-category.entity';
+import { Scenario } from './entities/scenario.entity';
+import { UserScenarioAccess } from './entities/user-scenario-access.entity';
 
 const entities = [
   Language,
@@ -33,6 +36,9 @@ const entities = [
   PasswordReset,
   Vocabulary,
   WebhookEvent,
+  ScenarioCategory,
+  Scenario,
+  UserScenarioAccess,
 ];
 
 @Module({
