@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-04-04
+**Last Updated:** 2026-04-06
 
 ## Architecture Overview
 
@@ -33,7 +33,7 @@ AI-powered language learning backend following Clean Architecture principles wit
 ## Core Architecture Patterns
 
 ### 1. Modular Architecture
-7 feature modules (auth, ai, user, language, subscription, onboarding, email) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
+8 feature modules (auth, ai, user, language, subscription, onboarding, email, lesson) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
 
 **Module Structure:**
 ```
@@ -226,6 +226,59 @@ AI client factory dynamically selects provider based on configuration.
 └──────────────────────────────────────────────────────┘
 ```
 
+### Lesson Module Flow
+```
+┌──────────────────────────────────────────────────────┐
+│           Lesson Controller                          │
+│  GET /lessons?language=uuid&level=beginner&search=.. │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│           Lesson Service                             │
+│  - getLessons(userId, query)                        │
+│  - buildVisibilityFilter()                          │
+│  - computeScenarioStatus()                          │
+│  - groupByCategoryAndPaginate()                     │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌────────────────────────────────────────────────────────────┐
+│     Repository Queries (TypeORM QueryBuilder)              │
+│  - Scenario: visibility + difficulty + search filters     │
+│  - UserScenarioAccess: user-granted scenarios             │
+│  - Subscription: premium status for status computation    │
+│  - UserProgress: (future) learned status tracking        │
+└────────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Response Aggregation & Grouping                 │
+│  - Group scenarios by ScenarioCategory              │
+│  - Compute status per scenario                      │
+│  - Apply pagination on total count                  │
+│  - Return grouped response                          │
+└──────────────────────────────────────────────────────┘
+```
+
+**Visibility Filter Logic:**
+```
+Scenario is visible if:
+  (is_active = true) AND
+  (
+    language_id IS NULL OR
+    language_id = requested_language_id OR
+    scenario_id IN user_scenario_access(user_id)
+  )
+```
+
+**Status Computation:**
+```
+scenario_status = {
+  'learned'   if user completed scenario (future: UserProgress lookup)
+  'locked'    if is_premium && user.subscription.plan == 'free' && !is_trial
+  'trial'     if is_trial && user.subscription.plan == 'free'
+  'available' otherwise
+}
+```
+
 ## Database Architecture
 
 ### Entity Relationships
@@ -236,9 +289,15 @@ User (1) ──< (N) AiConversation
 User (1) ──< (N) RefreshToken
 User (1) ──< (N) PasswordReset
 User (1) ──< (N) Vocabulary
+User (1) ──< (N) UserScenarioAccess
 
 Language (1) ──< (N) UserLanguage
 Language (1) ──< (N) Lesson
+Language (1) ──< (N) Scenario  (nullable: scenarios can be global)
+
+ScenarioCategory (1) ──< (N) Scenario
+Scenario (1) ──< (N) UserScenarioAccess
+User (1) ──< (N) Scenario  (as creator, nullable)
 
 Lesson (1) ──< (N) Exercise
 Exercise (1) ──< (N) UserExerciseAttempt

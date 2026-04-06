@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-04-04
+**Last Updated:** 2026-04-06
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.4.0
+**API Version:** 1.5.0
 
 ## Overview
 
@@ -313,6 +313,66 @@ Set native language.
 Remove language.
 
 **Auth:** Required | **Response (200):** `{code: 1, message: "Language removed", data: null}`
+
+---
+
+### Lessons
+
+#### GET /lessons
+Get home screen lessons grouped by category with filtering.
+
+**Auth:** Required | **Query params:**
+- `language` (optional, UUID) — Filter by specific language
+- `level` (optional, enum: beginner|intermediate|advanced) — Filter by difficulty
+- `search` (optional, string) — Search scenario title (case-insensitive)
+- `page` (optional, integer, min: 1, default: 1) — Page number
+- `limit` (optional, integer, min: 1, max: 50, default: 20) — Items per page
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "categories": [
+      {
+        "id": "uuid",
+        "name": "Greetings",
+        "icon": "icon_url or null",
+        "scenarios": [
+          {
+            "id": "uuid",
+            "title": "Meet & Greet",
+            "image_url": "url or null",
+            "difficulty": "beginner",
+            "status": "available"
+          }
+        ]
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 45
+    }
+  }
+}
+```
+
+**Scenario Status Values:**
+- `available` — Scenario is accessible
+- `trial` — Trial scenario (free users only)
+- `locked` — Premium scenario (requires active subscription)
+- `learned` — User has completed scenario
+
+**Visibility Rules:**
+- Global scenarios (language_id = NULL) visible to all users
+- Language-specific scenarios visible only if matching user's requested language
+- User-granted scenarios (via user_scenario_access table) always visible
+- Only active scenarios (is_active = true) returned
+- Empty categories excluded from response
+
+**Errors:** 400 (invalid query params), 401 (unauthorized)
 
 ---
 
