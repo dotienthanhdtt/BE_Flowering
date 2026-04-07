@@ -12,6 +12,8 @@ import { SubscriptionModule } from '../subscription/subscription.module';
 import { OpenAILLMProvider } from './providers/openai-llm.provider';
 import { AnthropicLLMProvider } from './providers/anthropic-llm.provider';
 import { GeminiLLMProvider } from './providers/gemini-llm.provider';
+import { OpenAiSttProvider } from './providers/openai-stt.provider';
+import { GeminiSttProvider } from './providers/gemini-stt.provider';
 
 // Services
 import { LangfuseService } from './services/langfuse-tracing.service';
@@ -19,6 +21,8 @@ import { PromptLoaderService } from './services/prompt-loader.service';
 import { UnifiedLLMService } from './services/unified-llm.service';
 import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
+import { TranscriptionService } from './services/transcription.service';
+import { SupabaseStorageService } from '../../database/supabase-storage.service';
 
 // Controller
 import { AiController } from './ai.controller';
@@ -53,11 +57,16 @@ import { AiController } from './ai.controller';
     OpenAILLMProvider,
     AnthropicLLMProvider,
     GeminiLLMProvider,
+    // STT Providers
+    OpenAiSttProvider,
+    GeminiSttProvider,
     // Services
+    SupabaseStorageService,
     PromptLoaderService,
     UnifiedLLMService,
     LearningAgentService,
     TranslationService,
+    TranscriptionService,
   ],
   exports: [UnifiedLLMService, LearningAgentService, PromptLoaderService],
 })

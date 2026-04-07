@@ -10,7 +10,7 @@ completedAt: 2026-04-06
 # Home Screen Lessons API
 
 ## Overview
-Implement `GET /lessons` API returning scenarios grouped by category with visibility rules (global, language-specific, user-specific) and computed status (available/trial/locked/learned).
+Implement `GET /lessons` API returni`ng scenarios grouped by category with visibility rules (global, language-specific, user-specific) and computed status (available/trial/locked/learned).
 
 ## Phases
 

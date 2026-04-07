@@ -28,7 +28,8 @@
       "Do not add or fix punctuation marks including periods, commas, or question marks",
       "Do not fix capitalization including proper nouns",
       "Treat accent marks as spelling, not punctuation",
-      "The original wrong word must only appear inside the strikethrough span, never duplicated outside it"
+      "The original wrong word must only appear inside the strikethrough span, never duplicated outside it",
+      "If reply is already a complete thought, do not expand or restructure it even if it ends casually"
     ]
   }
 }

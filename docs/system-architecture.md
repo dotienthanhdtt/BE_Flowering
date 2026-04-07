@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-04-06
+**Last Updated:** 2026-04-07
 
 ## Architecture Overview
 
@@ -106,48 +106,44 @@ AI client factory dynamically selects provider based on configuration.
 ```
 ┌──────────────────────────────────────────────────────┐
 │           AI Controller                              │
-│  POST /ai/chat, /exercises/...                      │
-│  POST /ai/chat/correct, /ai/translate              │
-│  SSE /ai/chat/stream, /ai/conversations/:id/msgs   │
+│  POST /ai/chat, /chat/correct, /translate           │
+│  POST /ai/transcribe (audio to text)                │
+│  SSE /ai/chat/stream                               │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌────────────────────────────────────────────────────────────────┐
-│           Learning Agent Service        │  Translation Service │
-│  - processChat()                        │  - translateWord()   │
-│  - checkCorrection()                    │  - translateSentence │
-│  - generateExercises()                  │  - upsertVocabulary()│
-│  - assessPronunciation()                │                      │
+│  Learning Agent  │  Translation Service  │  Transcription Svc  │
+│  - processChat() │  - translateWord()    │  - transcribe()     │
+│  - checkCorrect()│  - translateSentence()│  - validateFile()   │
+│                 │  - upsertVocab()      │  - selectProvider() │
 └────────────────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────────┐
-│        Unified LLM Service                           │
-│  - selectProvider()                                 │
-│  - callLLM()                                        │
-│  - handleFallback()                                 │
-└──────────────────────────────────────────────────────┘
-                    ↓
-┌─────────────────────┬──────────────────┬──────────────────┐
-│  OpenAI (3)         │  Anthropic (2)   │  Google AI (5)   │
-│  - GPT-4o           │  - Claude 3.5    │  - Gemini 2.5 FL │
-│  - GPT-4o-mini      │  - Claude 3 HK   │  - Gemini 2.0 FL │
-│  - GPT-4.1-nano     │                  │  - Gemini 1.5 Pro│
-│                     │                  │  - Gemini 1.5 FL │
-│                     │                  │  - Gemini 1.0 Pro│
-└─────────────────────┴──────────────────┴──────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────────┐
-│         Langfuse Observability                       │
-│  - Trace AI requests                                │
-│  - Log prompts & responses                          │
-│  - Track usage metrics                              │
-└──────────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────────┐
-│         Database Operations                          │
-│  - Save AiConversationMessage                       │
-│  - Save/update Vocabulary (word translations)       │
-│  - Cache sentence translation on message            │
-└──────────────────────────────────────────────────────┘
+        ┌───────────┴────────────────────────────────┐
+        ↓                                            ↓
+┌──────────────────────────────┐      ┌──────────────────────┐
+│  Unified LLM Service          │      │  Transcription Svc   │
+│  - selectProvider()           │      │  (STT)               │
+│  - callLLM()                  │      │  - validateFile()    │
+│  - handleFallback()           │      │  - uploadAudio()     │
+│  LLM Providers:               │      │  - transcribe()      │
+│  ├─ OpenAI (3 models)         │      └──────────────────────┘
+│  ├─ Anthropic (2 models)      │             ↓
+│  └─ Google AI (5 models)      │      STT Providers:
+└──────────────────────────────┘      ├─ OpenAI Whisper (primary)
+        ↓                             └─ Gemini Multimodal (fallback)
+┌──────────────────────────────┐             ↓
+│   Langfuse Observability     │      Supabase Storage
+│   - Trace AI requests        │      (Audio persistence)
+│   - Log prompts & responses  │
+│   - Track usage metrics      │
+└──────────────────────────────┘
+        ↓
+┌──────────────────────────────┐
+│  Database Operations         │
+│  - AiConversationMessage     │
+│  - Vocabulary (translations) │
+│  - Message translation cache │
+└──────────────────────────────┘
 ```
 
 **AI Provider Selection:** Load balancing with fallback, cost optimization per request type
@@ -163,6 +159,21 @@ AI client factory dynamically selects provider based on configuration.
 - Output: correctedText (null if no errors, handles gibberish/emoji input)
 - Model: OPENAI_GPT4_1_NANO (temp 0.3)
 - Access: Public endpoint with optional premium (both authenticated and anonymous)
+
+**Speech-to-Text (STT) Transcription:**
+- Endpoint: POST /ai/transcribe (premium-only, JWT required)
+- Input: multipart/form-data with audio file (M4A, MP4, MPEG, WAV, max 10MB)
+- Flow:
+  1. Validate file type and size
+  2. Persist audio to Supabase storage (user_audio/ bucket)
+  3. Select preferred STT provider (configurable via STT_PROVIDER env var)
+  4. Transcribe audio to text
+  5. Return transcribed text in response
+  6. If primary provider fails, fallback to secondary provider
+- **Primary Provider:** OpenAI Whisper (high accuracy, broader language support)
+- **Fallback Provider:** Google Gemini multimodal (graceful degradation)
+- **Configuration:** STT_PROVIDER env var (default: "openai", options: "openai" | "gemini")
+- **Rate Limiting:** Inherits AI module throttling (20 req/min, 100 req/hr per user)
 
 ### Subscription Module Flow
 ```

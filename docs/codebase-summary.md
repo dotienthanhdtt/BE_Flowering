@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-04-06
-**Generated from:** repomix-output.xml (updated 2026-04-06)
+**Last Updated:** 2026-04-07
+**Generated from:** repomix-output.xml (updated 2026-04-07)
 
 ## Overview
 
@@ -9,11 +9,11 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ## Metrics
 
-- **Total TypeScript Files:** ~140 files in src/
-- **Code Lines:** ~8,500 LOC in src/
+- **Total TypeScript Files:** ~145 files in src/
+- **Code Lines:** ~8,800 LOC in src/
 - **Modules:** 8 feature modules (added Lesson module)
 - **Database Entities:** 16 TypeORM entities (added ScenarioCategory, Scenario, UserScenarioAccess)
-- **API Endpoints:** 32 REST endpoints (added GET /lessons)
+- **API Endpoints:** 33 REST endpoints (added GET /lessons, POST /ai/transcribe)
 - **External Integrations:** 7 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
 
 ## Tech Stack
@@ -58,28 +58,36 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - JWT HS256 (7d expiry)
 - Firebase Admin SDK for ID token verification
 
-### 2. AI Module (~25 files, ~1,900 LOC)
+### 2. AI Module (~30 files, ~2,200 LOC)
 
-**Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing
+**Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing + Speech-to-Text (STT) transcription
 
 **Endpoints:**
 - POST /ai/chat (premium-only)
 - SSE /ai/chat/stream (Server-Sent Events, premium-only)
 - POST /ai/chat/correct (grammar correction with context, public + optional premium)
 - POST /ai/translate (word/sentence translation, public + optional premium)
+- POST /ai/transcribe (audio to text transcription, premium-only, multipart/form-data)
 
 **Supported Models:** GPT-4o, GPT-4o-mini, GPT-4.1-nano, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash
 
 **Rate Limiting:** 20 req/min, 100 req/hr per user
 
 **Key Features:**
-- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini)
+- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini for LLM)
+- STT providers (OpenAI Whisper primary, Gemini multimodal fallback)
 - Prompts stored as markdown in prompts/ directory (9 templates)
-- Whisper audio transcription
 - Langfuse tracing with per-invocation handlers and explicit flushAsync
 - Async processing for long-running tasks
 - Translation service (word/sentence) with vocabulary storage
 - Correction check endpoint with context awareness, ignores punctuation/capitalization
+- Transcription service with audio persistence (Supabase storage) and multi-provider fallback
+
+**STT Configuration:**
+- `STT_PROVIDER` env var: `openai` (default) or `gemini`
+- Automatic fallback to secondary provider if primary unavailable
+- Max file size: 10MB
+- Supported formats: M4A, MP4, MPEG, WAV
 
 ### 3. Onboarding Module (11 files, ~1,309 LOC)
 

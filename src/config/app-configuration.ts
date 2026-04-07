@@ -26,6 +26,7 @@ export interface AppConfiguration {
     langfusePublicKey?: string;
     langfuseSecretKey?: string;
     langfuseHost: string;
+    sttProvider: string;
   };
   sentry: {
     dsn?: string;
@@ -69,6 +70,7 @@ export default (): AppConfiguration => ({
     langfusePublicKey: process.env.LANGFUSE_PUBLIC_KEY,
     langfuseSecretKey: process.env.LANGFUSE_SECRET_KEY,
     langfuseHost: process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com',
+    sttProvider: process.env.STT_PROVIDER || 'openai',
   },
   sentry: {
     dsn: process.env.SENTRY_DSN,
