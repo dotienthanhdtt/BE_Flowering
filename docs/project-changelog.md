@@ -1,6 +1,6 @@
 # Project Changelog
 
-**Last Updated:** 2026-04-04
+**Last Updated:** 2026-04-07
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
@@ -10,6 +10,43 @@ All notable changes documented here. Format follows [Keep a Changelog](https://k
 ### In Progress
 - Unit test coverage expansion
 - E2E test suite development
+
+---
+
+## [1.6.0] - 2026-04-07 (Speech-to-Text Transcription)
+
+### Added
+- **POST /ai/transcribe Endpoint:** Audio to text transcription for premium users
+  - Accepts multipart/form-data with audio file (M4A, MP4, MPEG, WAV, max 10MB)
+  - Returns transcribed text in response
+  - Optional onboarding conversation_id parameter for context
+  - Rate limited (inherits AI module: 20 req/min, 100 req/hr)
+- **SttProvider Interface:** src/modules/ai/providers/stt-provider.interface.ts
+  - Defines `name`, `transcribe()`, `isAvailable()` contract
+  - Supports SttResult with text field
+- **OpenAiSttProvider:** src/modules/ai/providers/openai-stt.provider.ts
+  - Uses OpenAI Whisper API for speech-to-text
+  - Configurable via OPENAI_API_KEY
+- **GeminiSttProvider:** src/modules/ai/providers/gemini-stt.provider.ts
+  - Uses Google Gemini multimodal API as fallback
+  - Configurable via GOOGLE_AI_API_KEY
+- **TranscriptionService:** src/modules/ai/services/transcription.service.ts
+  - Validates audio file (type, size)
+  - Persists audio to Supabase storage before transcription
+  - Multi-provider strategy: tries preferred provider, falls back to secondary
+  - Handles ServiceUnavailableException if no providers available
+- **TranscribeRequestDto:** Optional conversation_id for context
+- **TranscribeResponseDto:** Returns text field with transcribed content
+- **STT_PROVIDER Configuration:** New env var (default: openai, options: openai|gemini)
+
+### Changed
+- **AI Module File Count:** ~25 → ~30 files
+- **AI Module LOC:** ~1,900 → ~2,200
+- **API Endpoint Count:** 32 → 33 endpoints
+- **API Documentation:** Updated version to 1.6.0, added POST /ai/transcribe documentation
+
+### Environment Variables
+- `STT_PROVIDER` (new): Speech-to-Text provider selection (default: openai)
 
 ---
 

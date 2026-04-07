@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-04-04
+**Last Updated:** 2026-04-07
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.4.0
+**API Version:** 1.6.0
 
 ## Overview
 
@@ -316,6 +316,66 @@ Remove language.
 
 ---
 
+### Lessons
+
+#### GET /lessons
+Get home screen lessons grouped by category with filtering.
+
+**Auth:** Required | **Query params:**
+- `language` (optional, UUID) — Filter by specific language
+- `level` (optional, enum: beginner|intermediate|advanced) — Filter by difficulty
+- `search` (optional, string) — Search scenario title (case-insensitive)
+- `page` (optional, integer, min: 1, default: 1) — Page number
+- `limit` (optional, integer, min: 1, max: 50, default: 20) — Items per page
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "categories": [
+      {
+        "id": "uuid",
+        "name": "Greetings",
+        "icon": "icon_url or null",
+        "scenarios": [
+          {
+            "id": "uuid",
+            "title": "Meet & Greet",
+            "image_url": "url or null",
+            "difficulty": "beginner",
+            "status": "available"
+          }
+        ]
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 45
+    }
+  }
+}
+```
+
+**Scenario Status Values:**
+- `available` — Scenario is accessible
+- `trial` — Trial scenario (free users only)
+- `locked` — Premium scenario (requires active subscription)
+- `learned` — User has completed scenario
+
+**Visibility Rules:**
+- Global scenarios (language_id = NULL) visible to all users
+- Language-specific scenarios visible only if matching user's requested language
+- User-granted scenarios (via user_scenario_access table) always visible
+- Only active scenarios (is_active = true) returned
+- Empty categories excluded from response
+
+**Errors:** 400 (invalid query params), 401 (unauthorized)
+
+---
+
 ### AI Features
 
 Chat endpoint requires active premium subscription. Translation and correction endpoints are public but support optional premium. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
@@ -411,6 +471,43 @@ Translate words or sentences with vocabulary persistence for words.
 **Response (200) — sentence translation:** `{code: 1, message: "Success", data: {translated_content: "Eso es hermoso."}}`
 
 **Errors:** 400 (invalid type/missing fields), 404 (message not found), 429 (rate limit)
+
+---
+
+#### POST /ai/transcribe
+Transcribe audio to text using Speech-to-Text (STT) services.
+
+**Auth:** Required (Premium) | **Request:** multipart/form-data
+
+| Field | Type | Required | Limit | Description |
+|-------|------|----------|-------|-------------|
+| audio | file | Yes | 10MB | Audio file (M4A, MP4, MPEG, WAV) |
+| conversation_id | UUID | No | - | Optional onboarding conversation ID for context |
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:3000/ai/transcribe \
+  -H "Authorization: Bearer <jwt_token>" \
+  -F "audio=@/path/to/audio.m4a" \
+  -F "conversation_id=optional-uuid"
+```
+
+**Supported Audio Formats:** M4A, MP4, MPEG, WAV (max 10MB)
+
+**Response (200):** `{code: 1, message: "Success", data: {text: "Hello, how are you?"}}`
+
+**Provider Details:**
+- **Primary:** OpenAI Whisper (configurable via STT_PROVIDER=openai)
+- **Fallback:** Gemini multimodal (if primary unavailable)
+- **Configuration:** STT_PROVIDER env var (default: openai)
+
+**Audio Storage:** Audio files persisted to Supabase storage before transcription
+
+**Errors:** 
+- 400 (missing file, unsupported format, exceeds size limit)
+- 401 (unauthorized, not premium)
+- 429 (rate limit)
+- 503 (no STT provider available)
 
 ---
 

@@ -13,6 +13,7 @@ import { UserModule } from './modules/user/user.module';
 import { LanguageModule } from './modules/language/language.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { LessonModule } from './modules/lesson/lesson.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware';
 import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-case.middleware';
@@ -34,6 +35,7 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
     LanguageModule,
     SubscriptionModule,
     OnboardingModule,
+    LessonModule,
   ],
   controllers: [AppController],
   providers: [

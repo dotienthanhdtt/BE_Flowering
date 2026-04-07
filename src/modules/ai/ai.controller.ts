@@ -1,9 +1,11 @@
-import { Controller, Post, Sse, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Sse, Body, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { Observable, Subject } from 'rxjs';
 import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
+import { TranscriptionService } from './services/transcription.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { RequirePremium } from '../../common/decorators/require-premium.decorator';
@@ -16,6 +18,7 @@ import {
   CorrectionCheckResponseDto,
   TranslateRequestDto,
   TranslateType,
+  TranscribeResponseDto,
 } from './dto';
 
 /**
@@ -32,6 +35,7 @@ export class AiController {
   constructor(
     private learningAgent: LearningAgentService,
     private translationService: TranslationService,
+    private transcriptionService: TranscriptionService,
   ) {}
 
   @Post('chat')
@@ -103,5 +107,20 @@ export class AiController {
       userId,
       dto.conversationId,
     );
+  }
+
+  @Post('transcribe')
+  @ApiOperation({ summary: 'Transcribe audio to text' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, type: TranscribeResponseDto })
+  @UseInterceptors(FileInterceptor('audio', {
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB hard limit at Multer layer
+  }))
+  async transcribe(
+    @CurrentUser() user: User,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<TranscribeResponseDto> {
+    const result = await this.transcriptionService.transcribe(file, user.id);
+    return { text: result.text };
   }
 }

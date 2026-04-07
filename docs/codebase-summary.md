@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-04-04
-**Generated from:** repomix-output.xml (updated 2026-04-04)
+**Last Updated:** 2026-04-07
+**Generated from:** repomix-output.xml (updated 2026-04-07)
 
 ## Overview
 
@@ -9,11 +9,11 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ## Metrics
 
-- **Total TypeScript Files:** ~130 files in src/
-- **Code Lines:** ~8,000 LOC in src/
-- **Modules:** 7 feature modules
-- **Database Entities:** 13 TypeORM entities (registered in database.module.ts)
-- **API Endpoints:** 31 REST endpoints (reduced from 35 after removing unused endpoints)
+- **Total TypeScript Files:** ~145 files in src/
+- **Code Lines:** ~8,800 LOC in src/
+- **Modules:** 8 feature modules (added Lesson module)
+- **Database Entities:** 16 TypeORM entities (added ScenarioCategory, Scenario, UserScenarioAccess)
+- **API Endpoints:** 33 REST endpoints (added GET /lessons, POST /ai/transcribe)
 - **External Integrations:** 7 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
 
 ## Tech Stack
@@ -58,28 +58,36 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - JWT HS256 (7d expiry)
 - Firebase Admin SDK for ID token verification
 
-### 2. AI Module (~25 files, ~1,900 LOC)
+### 2. AI Module (~30 files, ~2,200 LOC)
 
-**Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing
+**Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing + Speech-to-Text (STT) transcription
 
 **Endpoints:**
 - POST /ai/chat (premium-only)
 - SSE /ai/chat/stream (Server-Sent Events, premium-only)
 - POST /ai/chat/correct (grammar correction with context, public + optional premium)
 - POST /ai/translate (word/sentence translation, public + optional premium)
+- POST /ai/transcribe (audio to text transcription, premium-only, multipart/form-data)
 
 **Supported Models:** GPT-4o, GPT-4o-mini, GPT-4.1-nano, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash
 
 **Rate Limiting:** 20 req/min, 100 req/hr per user
 
 **Key Features:**
-- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini)
+- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini for LLM)
+- STT providers (OpenAI Whisper primary, Gemini multimodal fallback)
 - Prompts stored as markdown in prompts/ directory (9 templates)
-- Whisper audio transcription
 - Langfuse tracing with per-invocation handlers and explicit flushAsync
 - Async processing for long-running tasks
 - Translation service (word/sentence) with vocabulary storage
 - Correction check endpoint with context awareness, ignores punctuation/capitalization
+- Transcription service with audio persistence (Supabase storage) and multi-provider fallback
+
+**STT Configuration:**
+- `STT_PROVIDER` env var: `openai` (default) or `gemini`
+- Automatic fallback to secondary provider if primary unavailable
+- Max file size: 10MB
+- Supported formats: M4A, MP4, MPEG, WAV
 
 ### 3. Onboarding Module (11 files, ~1,309 LOC)
 
@@ -149,13 +157,65 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - OTP email sending for password reset
 - Configured via SMTP environment variables
 
-## Database Schema (13 Entities)
+### 8. Lesson Module (6 files, ~400 LOC)
+
+**Purpose:** Home screen lessons API with scenario grouping and visibility rules
+
+**Endpoints:**
+- GET /lessons (paginated, filterable scenarios grouped by category)
+
+**Features:**
+- Global scenarios (language_id = NULL) visible to all users
+- Language-specific scenarios filtered by user language preference
+- User-granted access via user_scenario_access table
+- Scenario status computation: available, trial, locked, learned (based on subscription)
+- Premium subscription enforcement (free users see trial-only scenarios)
+- Search, difficulty level filtering
+- Pagination with total count
+
+**Entities:**
+- ScenarioCategory: Groups scenarios by topic/category
+- Scenario: Learning content with difficulty levels, premium flags, trial flags
+- UserScenarioAccess: Grants specific users access to scenarios
+
+## Database Schema (16 Entities)
 
 **Core:** User, Language, UserLanguage
-**Content:** Lesson, Exercise
+**Content:** Lesson, Exercise, ScenarioCategory, Scenario, UserScenarioAccess
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation, AiConversationMessage, Vocabulary
 **Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent
+
+### ScenarioCategory Entity
+- `id` - UUID primary key
+- `name` - String (max 100, e.g., "Greetings", "Food")
+- `icon` - Text (icon URL, nullable)
+- `order_index` - Integer for display ordering
+- `is_active` - Boolean (default: true)
+- Created/updated timestamps
+
+### Scenario Entity
+- `id` - UUID primary key
+- `category_id` - FK to ScenarioCategory (ON DELETE CASCADE)
+- `language_id` - FK to Language (nullable, NULL = global to all languages)
+- `creator_id` - FK to User (nullable, for future KOL support)
+- `gift_code` - String (max 50, nullable, unique)
+- `title` - String (max 255, e.g., "Meet & Greet")
+- `description` - Text (nullable)
+- `image_url` - Text (nullable)
+- `difficulty` - Enum (beginner, intermediate, advanced)
+- `is_premium` - Boolean (default: false, requires paid subscription)
+- `is_trial` - Boolean (default: false, visible to free users)
+- `is_active` - Boolean (default: true)
+- `order_index` - Integer for display ordering within category
+- Created/updated timestamps
+
+### UserScenarioAccess Entity
+- `id` - UUID primary key
+- `user_id` - FK to User (ON DELETE CASCADE)
+- `scenario_id` - FK to Scenario (ON DELETE CASCADE)
+- `granted_at` - Timestamp (when access was granted, default: now)
+- Unique constraint: (user_id, scenario_id) for one-to-one grants
 
 ### Vocabulary Entity (New)
 - `id` - UUID primary key
