@@ -1,4 +1,5 @@
 import { langfuseSdk } from './instrument';
+import * as Sentry from '@sentry/node';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +9,9 @@ import { ResponseTransformInterceptor, AllExceptionsFilter } from './common';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+
+  // Wire Sentry error handler into Express (captures unhandled errors with request context)
+  Sentry.setupExpressErrorHandler(app.getHttpAdapter().getInstance());
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port', 3000);
