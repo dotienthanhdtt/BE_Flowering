@@ -66,7 +66,7 @@ export class TranslationService {
 
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
       model: LLMModel.OPENAI_GPT4_1_NANO,
-      temperature: 0.1,
+      temperature: 0,
       metadata: {
         feature: 'translate-word',
         userId: userId ?? conversationId,
@@ -152,7 +152,7 @@ export class TranslationService {
 
     const translation = await this.llmService.chat([new HumanMessage(prompt)], {
       model: LLMModel.OPENAI_GPT4_1_NANO,
-      temperature: 0.1,
+      temperature: 0,
       metadata: {
         feature: 'translate-sentence',
         userId: userId ?? conversationId,

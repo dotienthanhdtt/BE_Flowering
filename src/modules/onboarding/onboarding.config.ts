@@ -6,5 +6,5 @@ export const onboardingConfig = {
   sessionTtlDays: 7,
   llmModel: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
   maxTokens: 1024,
-  temperature: 0.1,
+  temperature: 0,
 };

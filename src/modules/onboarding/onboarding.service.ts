@@ -106,7 +106,7 @@ export class OnboardingService {
 
     const response = await this.llmService.chat([new HumanMessage(extractionPrompt)], {
       model: onboardingConfig.llmModel,
-      temperature: 0.1,
+      temperature: 0,
       maxTokens: 512,
       metadata: { feature: 'onboarding-extraction', conversationId: conversation.id },
     });
@@ -128,7 +128,7 @@ export class OnboardingService {
 
       const response = await this.llmService.chat([new HumanMessage(scenariosPrompt)], {
         model: onboardingConfig.llmModel,
-        temperature: 0.7,
+        temperature: 0,
         maxTokens: 1024,
         metadata: { feature: 'onboarding-scenarios', conversationId },
       });
