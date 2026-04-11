@@ -20,9 +20,6 @@ export class UserResponseDto {
   phoneNumber?: string;
 
   @ApiProperty({ required: false })
-  firebaseUid?: string;
-
-  @ApiProperty({ required: false })
   authProvider?: string;
 }
 

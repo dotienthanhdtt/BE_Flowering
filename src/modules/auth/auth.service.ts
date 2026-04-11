@@ -379,7 +379,6 @@ export class AuthService {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       phoneNumber: user.phoneNumber,
-      firebaseUid: user.firebaseUid,
       authProvider: user.authProvider,
     };
   }

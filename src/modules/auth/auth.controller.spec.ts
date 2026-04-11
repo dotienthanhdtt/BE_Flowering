@@ -18,7 +18,6 @@ describe('AuthController', () => {
       emailVerified: false,
       displayName: 'Test User',
       avatarUrl: undefined,
-      firebaseUid: undefined,
       authProvider: 'email',
     },
   };
