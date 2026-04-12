@@ -228,11 +228,8 @@ export class AuthService {
     await this.refreshTokenRepository.update({ userId, revoked: false }, { revoked: true });
   }
 
-  async forgotPassword(email: string): Promise<{ email: string }> {
-    const user = await this.userRepository.findOne({ where: { email } });
-    if (!user) throw new NotFoundException('Email not found');
-
-    // Rate limit: max 3 requests per hour per email
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    // Rate limit FIRST by email — before user lookup to prevent enumeration
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const recentCount = await this.passwordResetRepository.count({
       where: { email, createdAt: MoreThan(oneHourAgo) },
@@ -241,6 +238,9 @@ export class AuthService {
       throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    // Always generate OTP + save record to prevent timing/rate-limit side-channels
     const otp = crypto.randomInt(100000, 999999).toString();
     const otpHash = this.sha256(otp);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // +10min
@@ -249,14 +249,17 @@ export class AuthService {
       this.passwordResetRepository.create({ email, otpHash, expiresAt }),
     );
 
-    // Fire-and-forget: never expose SMTP errors to client
-    try {
-      await this.emailService.sendOtp(email, otp);
-    } catch (error) {
-      this.logger.warn('Failed to send OTP email', { email: this.maskEmail(email), error });
+    // Only send email if user exists — but always do the DB write above
+    if (user) {
+      try {
+        await this.emailService.sendOtp(email, otp);
+      } catch (error) {
+        this.logger.warn('Failed to send OTP email', { email: this.maskEmail(email), error });
+      }
     }
 
-    return { email: this.maskEmail(email) };
+    // Always return identical response regardless of email existence
+    return { message: 'If that email is registered, you will receive an OTP' };
   }
 
   async verifyOtp(email: string, otp: string): Promise<{ resetToken: string }> {

@@ -135,11 +135,7 @@ describe('AuthController', () => {
 
       const result = await controller.firebaseAuth(firebaseAuthDto);
 
-      expect(authService.firebaseLogin).toHaveBeenCalledWith(
-        firebaseAuthDto.idToken,
-        firebaseAuthDto.displayName,
-        firebaseAuthDto.conversationId,
-      );
+      expect(authService.firebaseLogin).toHaveBeenCalledWith(firebaseAuthDto);
       expect(result).toEqual(mockAuthResponse);
     });
 
@@ -165,11 +161,7 @@ describe('AuthController', () => {
 
       await controller.firebaseAuth(firebaseAuthDto);
 
-      expect(authService.firebaseLogin).toHaveBeenCalledWith(
-        'firebase-id-token',
-        undefined,
-        'onboard-conv-uuid',
-      );
+      expect(authService.firebaseLogin).toHaveBeenCalledWith(firebaseAuthDto);
     });
   });
 

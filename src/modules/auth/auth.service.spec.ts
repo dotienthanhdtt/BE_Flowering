@@ -2,14 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ConflictException, UnauthorizedException, BadRequestException, NotFoundException, HttpException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException, BadRequestException, HttpException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
-import { RegisterDto, LoginDto } from './dto';
+import { RegisterDto, LoginDto, FirebaseAuthDto } from './dto';
 import { FirebaseTokenStrategy, FirebaseAuthUser } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 
@@ -246,7 +246,7 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.firebaseLogin('firebase-id-token', 'Google User');
+      const result = await service.firebaseLogin({ idToken: 'firebase-id-token', displayName: 'Google User' } as FirebaseAuthDto);
 
       expect(firebaseTokenStrategy.validate).toHaveBeenCalledWith('firebase-id-token');
       expect(userRepository.findOne).toHaveBeenCalledWith({
@@ -264,7 +264,7 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.firebaseLogin('firebase-id-token');
+      const result = await service.firebaseLogin({ idToken: 'firebase-id-token' } as FirebaseAuthDto);
 
       expect(userRepository.create).not.toHaveBeenCalled();
       expect(result.user.email).toBe(existingGoogleUser.email);
@@ -281,7 +281,7 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.firebaseLogin('firebase-id-token');
+      const result = await service.firebaseLogin({ idToken: 'firebase-id-token' } as FirebaseAuthDto);
 
       expect(userRepository.update).toHaveBeenCalledWith(
         { id: existingEmailUser.id },
@@ -300,7 +300,7 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.firebaseLogin('apple-firebase-token', 'Apple User');
+      const result = await service.firebaseLogin({ idToken: 'apple-firebase-token', displayName: 'Apple User' } as FirebaseAuthDto);
 
       expect(firebaseTokenStrategy.validate).toHaveBeenCalledWith('apple-firebase-token');
       expect(userRepository.findOne).toHaveBeenCalledWith({
@@ -320,7 +320,7 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.firebaseLogin('apple-firebase-token');
+      const result = await service.firebaseLogin({ idToken: 'apple-firebase-token' } as FirebaseAuthDto);
 
       expect(userRepository.update).toHaveBeenCalledWith(
         { id: existingEmailUser.id },
@@ -339,7 +339,7 @@ describe('AuthService', () => {
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
       conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
 
-      await service.firebaseLogin('firebase-id-token', undefined, 'conv-tok');
+      await service.firebaseLogin({ idToken: 'firebase-id-token', conversationId: 'conv-tok' } as FirebaseAuthDto);
 
       expect(conversationRepository.update).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'conv-tok' }),
@@ -533,7 +533,7 @@ describe('AuthService', () => {
       ...overrides,
     } as PasswordReset);
 
-    it('returns masked email when user found and OTP sent', async () => {
+    it('returns generic message when user found and OTP sent', async () => {
       userRepository.findOne.mockResolvedValue(mockUser);
       passwordResetRepository.count.mockResolvedValue(0);
       passwordResetRepository.create.mockImplementation((dto) => ({ ...dto }));
@@ -542,19 +542,24 @@ describe('AuthService', () => {
 
       const result = await service.forgotPassword('test@example.com');
 
-      expect(result.email).toMatch(/^t\*\*\*@/);
+      expect(result.message).toBe('If that email is registered, you will receive an OTP');
       expect(emailService.sendOtp).toHaveBeenCalled();
     });
 
-    it('throws NotFoundException when email not registered', async () => {
+    it('returns same generic message when email not registered (no enumeration)', async () => {
+      passwordResetRepository.count.mockResolvedValue(0);
       userRepository.findOne.mockResolvedValue(null);
+      passwordResetRepository.create.mockImplementation((dto) => ({ ...dto }));
+      passwordResetRepository.save.mockResolvedValue(makePasswordReset());
 
-      await expect(service.forgotPassword('unknown@example.com')).rejects.toThrow(NotFoundException);
-      expect(passwordResetRepository.save).not.toHaveBeenCalled();
+      const result = await service.forgotPassword('unknown@example.com');
+
+      expect(result.message).toBe('If that email is registered, you will receive an OTP');
+      expect(passwordResetRepository.save).toHaveBeenCalled();
+      expect(emailService.sendOtp).not.toHaveBeenCalled();
     });
 
     it('throws 429 HttpException when >= 3 requests in last hour', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
       passwordResetRepository.count.mockResolvedValue(3);
 
       await expect(service.forgotPassword('test@example.com')).rejects.toThrow(HttpException);
@@ -569,7 +574,7 @@ describe('AuthService', () => {
 
       const result = await service.forgotPassword('test@example.com');
 
-      expect(result.email).toMatch(/^t\*\*\*@/);
+      expect(result.message).toBe('If that email is registered, you will receive an OTP');
     });
   });
 

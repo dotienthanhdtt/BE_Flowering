@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
@@ -35,6 +35,10 @@ export class LearningAgentService {
     context: ConversationContext,
     model?: LLMModel,
   ): Promise<{ message: string; conversationId: string }> {
+    if (context.conversationId) {
+      await this.validateConversationOwnership(context.conversationId, userId);
+    }
+
     const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt.md', {
       targetLanguage: context.targetLanguage,
       nativeLanguage: context.nativeLanguage,
@@ -77,6 +81,10 @@ export class LearningAgentService {
     context: ConversationContext,
     model?: LLMModel,
   ): AsyncIterable<string> {
+    if (context.conversationId) {
+      await this.validateConversationOwnership(context.conversationId, userId);
+    }
+
     const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt.md', {
       targetLanguage: context.targetLanguage,
       nativeLanguage: context.nativeLanguage,
@@ -152,6 +160,25 @@ export class LearningAgentService {
     return messages.map((m) =>
       m.role === MessageRole.USER ? new HumanMessage(m.content) : new AIMessage(m.content),
     );
+  }
+
+  /**
+   * Verify the conversation belongs to the requesting user.
+   * Allows access to unowned conversations (anonymous onboarding).
+   */
+  private async validateConversationOwnership(
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
+    const conversation = await this.conversationRepo.findOne({
+      where: { id: conversationId },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+    if (conversation.userId && conversation.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
   }
 
   private async saveMessage(

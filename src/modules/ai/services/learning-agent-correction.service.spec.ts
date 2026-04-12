@@ -78,7 +78,7 @@ describe('LearningAgentService - checkCorrection', () => {
     );
   });
 
-  it('should use GPT-4o model with temperature 0', async () => {
+  it('should use Gemini Flash Lite model with temperature 0', async () => {
     llmService.chat.mockResolvedValue('null');
 
     await service.checkCorrection('Hi', 'Hi', 'en');
@@ -86,9 +86,9 @@ describe('LearningAgentService - checkCorrection', () => {
     expect(llmService.chat).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({
-        model: LLMModel.OPENAI_GPT4O,
-        temperature: 0,
-        maxTokens: 200,
+        model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
+        temperature: 0.0,
+        maxTokens: 10000,
         metadata: { feature: 'correction-check' },
       }),
     );

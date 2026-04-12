@@ -63,8 +63,7 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send OTP to email for password reset' })
-  @ApiResponse({ status: 200, description: 'OTP sent to email (masked)' })
-  @ApiResponse({ status: 404, description: 'Email not found' })
+  @ApiResponse({ status: 200, description: 'If email is registered, OTP will be sent' })
   @ApiResponse({ status: 429, description: 'Too many requests (3/hour limit)' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
