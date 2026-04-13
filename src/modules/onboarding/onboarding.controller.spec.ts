@@ -2,6 +2,7 @@
 jest.mock('./onboarding.service', () => ({ OnboardingService: class {} }));
 
 import { Test, TestingModule } from '@nestjs/testing';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
 
@@ -19,7 +20,10 @@ describe('OnboardingController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OnboardingController],
       providers: [{ provide: OnboardingService, useFactory: mockOnboardingService }],
-    }).compile();
+    })
+      .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get(OnboardingController);
     service = module.get(OnboardingService);
