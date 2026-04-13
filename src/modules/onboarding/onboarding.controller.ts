@@ -1,4 +1,5 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { OnboardingService } from './onboarding.service';
@@ -6,10 +7,13 @@ import { StartOnboardingDto, OnboardingChatDto, OnboardingCompleteDto } from './
 
 @ApiTags('onboarding')
 @Controller('onboarding')
+@UseGuards(ThrottlerGuard)
+@Throttle({ default: { limit: 30, ttl: 3600_000 } })
 export class OnboardingController {
   constructor(private readonly onboardingService: OnboardingService) {}
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 3600_000 } })
   @Post('start')
   @ApiOperation({ summary: 'Start anonymous onboarding chat session' })
   @ApiResponse({ status: 201, description: 'Session created with conversation_id' })
