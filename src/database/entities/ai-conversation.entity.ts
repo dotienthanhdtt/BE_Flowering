@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Language } from './language.entity';
+import { Scenario } from './scenario.entity';
 
 export enum AiConversationType {
   ANONYMOUS = 'anonymous',
@@ -52,6 +53,13 @@ export class AiConversation {
 
   @Column({ type: 'int', name: 'message_count', default: 0 })
   messageCount!: number;
+
+  @ManyToOne(() => Scenario, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'scenario_id' })
+  scenario?: Scenario;
+
+  @Column({ type: 'uuid', name: 'scenario_id', nullable: true })
+  scenarioId?: string;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, unknown>;
