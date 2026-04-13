@@ -57,12 +57,7 @@ export class RevenuecatWebhookController implements OnModuleInit {
       `Received RevenueCat webhook: ${payload.event.type} for user ${payload.event.app_user_id}`,
     );
 
-    // Respond immediately, process asynchronously to meet 60s requirement
-    setImmediate(() => {
-      this.subscriptionService.processWebhook(payload).catch((err) => {
-        this.logger.error(`Webhook processing error: ${err.message}`, err.stack);
-      });
-    });
+    await this.subscriptionService.processWebhook(payload);
 
     return { status: 'received' };
   }
