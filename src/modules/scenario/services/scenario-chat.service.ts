@@ -124,16 +124,31 @@ export class ScenarioChatService {
 
     if (existing) return existing;
 
-    return this.convoRepo.save(
-      this.convoRepo.create({
-        userId,
-        scenarioId,
-        languageId: languageId ?? null,
-        type: AiConversationType.AUTHENTICATED,
-        topic: 'scenario_roleplay',
-        metadata: { maxTurns: MAX_TURNS, completed: false },
-      }),
-    );
+    try {
+      return await this.convoRepo.save(
+        this.convoRepo.create({
+          userId,
+          scenarioId,
+          languageId: languageId ?? null,
+          type: AiConversationType.AUTHENTICATED,
+          topic: 'scenario_roleplay',
+          metadata: { maxTurns: MAX_TURNS, completed: false },
+        }),
+      );
+    } catch (err: unknown) {
+      // Postgres unique violation (23505): concurrent request already inserted the row.
+      // Re-query and return that row instead of propagating the error.
+      if ((err as { code?: string }).code === '23505') {
+        const race = await this.convoRepo
+          .createQueryBuilder('c')
+          .where('c.userId = :userId AND c.scenarioId = :scenarioId', { userId, scenarioId })
+          .andWhere(`c.metadata->>'completed' IS DISTINCT FROM 'true'`)
+          .orderBy('c.createdAt', 'DESC')
+          .getOne();
+        if (race) return race;
+      }
+      throw err;
+    }
   }
 
   private async resolveExisting(
