@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
@@ -35,9 +35,10 @@ export class LearningAgentService {
     context: ConversationContext,
     model?: LLMModel,
   ): Promise<{ message: string; conversationId: string }> {
-    if (context.conversationId) {
-      await this.validateConversationOwnership(context.conversationId, userId);
+    if (!context.conversationId) {
+      throw new BadRequestException('conversationId required');
     }
+    await this.validateConversationOwnership(context.conversationId, userId);
 
     const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt.md', {
       targetLanguage: context.targetLanguage,
@@ -81,9 +82,10 @@ export class LearningAgentService {
     context: ConversationContext,
     model?: LLMModel,
   ): AsyncIterable<string> {
-    if (context.conversationId) {
-      await this.validateConversationOwnership(context.conversationId, userId);
+    if (!context.conversationId) {
+      throw new BadRequestException('conversationId required');
     }
+    await this.validateConversationOwnership(context.conversationId, userId);
 
     const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt.md', {
       targetLanguage: context.targetLanguage,
