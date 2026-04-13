@@ -22,10 +22,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private userRepository: Repository<User>,
   ) {
     const secret = configService.get('jwt.secret', { infer: true });
+    if (!secret) {
+      throw new Error('JWT_SECRET env var is required');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: secret || 'fallback-secret',
+      secretOrKey: secret,
     });
   }
 
