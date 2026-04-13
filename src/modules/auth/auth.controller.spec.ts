@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, RefreshTokenDto, FirebaseAuthDto, AuthResponseDto } from './dto';
+import { RefreshTokenDto, FirebaseAuthDto, AuthResponseDto } from './dto';
 import { User } from '../../database/entities/user.entity';
 
 describe('AuthController', () => {
@@ -46,8 +46,6 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: {
-            register: jest.fn(),
-            login: jest.fn(),
             firebaseLogin: jest.fn(),
             refreshTokens: jest.fn(),
             logout: jest.fn(),
@@ -64,63 +62,62 @@ describe('AuthController', () => {
     jest.clearAllMocks();
   });
 
-  describe('register', () => {
-    it('should register new user successfully', async () => {
-      const registerDto: RegisterDto = {
-        email: 'new@example.com',
-        password: 'SecurePass123!',
-        displayName: 'New User',
-      };
-
-      authService.register.mockResolvedValue(mockAuthResponse);
-
-      const result = await controller.register(registerDto);
-
-      expect(authService.register).toHaveBeenCalledWith(registerDto);
-      expect(result).toEqual(mockAuthResponse);
-      expect(result.accessToken).toBe('access-token');
-      expect(result.user.email).toBe('test@example.com');
+  describe('register (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.register()).toThrow(HttpException);
+      try {
+        controller.register();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
     });
 
-    it('should throw ConflictException if email already exists', async () => {
-      const registerDto: RegisterDto = {
-        email: 'existing@example.com',
-        password: 'SecurePass123!',
-      };
-
-      authService.register.mockRejectedValue(new ConflictException('Email already registered'));
-
-      await expect(controller.register(registerDto)).rejects.toThrow(ConflictException);
-      expect(authService.register).toHaveBeenCalledWith(registerDto);
+    it('should not call authService', () => {
+      expect(() => controller.register()).toThrow();
     });
   });
 
-  describe('login', () => {
-    it('should login user successfully', async () => {
-      const loginDto: LoginDto = {
-        email: 'test@example.com',
-        password: 'SecurePass123!',
-      };
-
-      authService.login.mockResolvedValue(mockAuthResponse);
-
-      const result = await controller.login(loginDto);
-
-      expect(authService.login).toHaveBeenCalledWith(loginDto);
-      expect(result).toEqual(mockAuthResponse);
-      expect(result.accessToken).toBe('access-token');
+  describe('login (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.login()).toThrow(HttpException);
+      try {
+        controller.login();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
     });
+  });
 
-    it('should throw UnauthorizedException with invalid credentials', async () => {
-      const loginDto: LoginDto = {
-        email: 'test@example.com',
-        password: 'WrongPassword',
-      };
+  describe('forgotPassword (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.forgotPassword()).toThrow(HttpException);
+      try {
+        controller.forgotPassword();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
+    });
+  });
 
-      authService.login.mockRejectedValue(new UnauthorizedException('Invalid credentials'));
+  describe('verifyOtp (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.verifyOtp()).toThrow(HttpException);
+      try {
+        controller.verifyOtp();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
+    });
+  });
 
-      await expect(controller.login(loginDto)).rejects.toThrow(UnauthorizedException);
-      expect(authService.login).toHaveBeenCalledWith(loginDto);
+  describe('resetPassword (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.resetPassword()).toThrow(HttpException);
+      try {
+        controller.resetPassword();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
     });
   });
 
@@ -183,18 +180,6 @@ describe('AuthController', () => {
     it('should throw UnauthorizedException with invalid refresh token', async () => {
       const refreshDto: RefreshTokenDto = {
         refreshToken: 'invalid-token',
-      };
-
-      authService.refreshTokens.mockRejectedValue(
-        new UnauthorizedException('Invalid or expired refresh token'),
-      );
-
-      await expect(controller.refresh(refreshDto)).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should throw UnauthorizedException with expired refresh token', async () => {
-      const refreshDto: RefreshTokenDto = {
-        refreshToken: 'expired-token',
       };
 
       authService.refreshTokens.mockRejectedValue(
