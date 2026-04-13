@@ -132,8 +132,26 @@ describe('OnboardingService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('increments messageCount by 2 after saving messages', async () => {
+    it('increments messageCount by 1 on first turn (msgCount=0)', async () => {
       const conversation = makeConversation({ messageCount: 0 });
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      messageRepo.find.mockResolvedValue([]);
+      messageRepo.save.mockResolvedValue({});
+      conversationRepo.increment.mockResolvedValue({});
+      llmService.chat.mockResolvedValue('Reply');
+
+      // First turn: no message required (omit or provide — msgCount=0 wins)
+      await service.chat({ conversationId: 'conv-1' });
+
+      expect(conversationRepo.increment).toHaveBeenCalledWith(
+        { id: 'conv-1' },
+        'messageCount',
+        1,
+      );
+    });
+
+    it('increments messageCount by 2 after saving messages on second turn', async () => {
+      const conversation = makeConversation({ messageCount: 1 });
       conversationRepo.findOne.mockResolvedValue(conversation);
       messageRepo.find.mockResolvedValue([]);
       messageRepo.save.mockResolvedValue({});
@@ -147,6 +165,15 @@ describe('OnboardingService', () => {
         'messageCount',
         2,
       );
+    });
+
+    it('throws BadRequestException when message missing on non-first turn', async () => {
+      const conversation = makeConversation({ messageCount: 1 });
+      conversationRepo.findOne.mockResolvedValue(conversation);
+
+      await expect(
+        service.chat({ conversationId: 'conv-1' }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('marks isLastTurn=true on final turn', async () => {
