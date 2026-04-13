@@ -61,12 +61,16 @@ export class OnboardingService {
       maxTurns: String(onboardingConfig.maxTurns),
     });
 
+    const isFirstTurn = msgCount === 0;
+    if (!isFirstTurn && !dto.message) {
+      throw new BadRequestException('message required after first turn');
+    }
+
     const history = await this.getHistory(conversation.id);
-    const isFirstTurn = !dto.message && history.length === 0;
     const messages: BaseMessage[] = [
       new SystemMessage(systemPrompt),
       ...history,
-      ...(isFirstTurn ? [new HumanMessage('Start')] : [new HumanMessage(dto.message)]),
+      ...(isFirstTurn ? [new HumanMessage('Start')] : [new HumanMessage(dto.message!)]),
     ];
 
     const rawReply = await this.llmService.chat(messages, {
@@ -79,7 +83,7 @@ export class OnboardingService {
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn);
 
     if (!isFirstTurn) {
-      await this.saveMessage(conversation.id, MessageRole.USER, dto.message);
+      await this.saveMessage(conversation.id, MessageRole.USER, dto.message!);
     }
     const messageId = await this.saveMessage(conversation.id, MessageRole.ASSISTANT, reply);
     await this.conversationRepo.increment(
