@@ -1,13 +1,13 @@
 import { Controller, Post, Sse, Body, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { Observable, Subject } from 'rxjs';
 import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
 import { TranscriptionService } from './services/transcription.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Public } from '../../common/decorators/public-route.decorator';
+import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
 import { RequirePremium } from '../../common/decorators/require-premium.decorator';
 import { PremiumGuard } from '../../common/guards/premium.guard';
 import { User } from '../../database/entities';
@@ -67,8 +67,9 @@ export class AiController {
     return subject.asObservable();
   }
 
-  @Public()
+  @OptionalAuth()
   @RequirePremium(false)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('chat/correct')
   @ApiOperation({ summary: 'Check grammar/vocabulary of user chat reply' })
   @ApiResponse({ status: 200, type: CorrectionCheckResponseDto })
@@ -83,8 +84,9 @@ export class AiController {
     );
   }
 
-  @Public()
+  @OptionalAuth()
   @RequirePremium(false)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('translate')
   @ApiOperation({ summary: 'Translate a word or sentence' })
   @ApiResponse({ status: 200, description: 'Translation result' })
