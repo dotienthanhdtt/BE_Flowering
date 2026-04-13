@@ -96,11 +96,11 @@ AI client factory dynamically selects provider based on configuration.
 ```
 
 **Key Features:**
-- Unified Firebase endpoint: auto-detects Google or Apple provider
+- **Sole auth method: `POST /auth/firebase`** — accepts Firebase ID token; auto-detects Google or Apple provider
 - Composite refresh tokens (uuid:hex) for O(1) validation
-- OAuth auto-linking to existing email
-- Password reset: OTP (10min) + reset token (15min)
+- OAuth auto-linking to existing email accounts (legacy password accounts are migrated on first OAuth sign-in matching the email)
 - Provider-specific IDs prevent duplicates
+- **Email/password endpoints disabled (410 Gone):** `/auth/register`, `/auth/login`, `/auth/forgot-password`, `/auth/verify-otp`, `/auth/reset-password` return HTTP 410. Service code and DB records preserved for future migration if needed.
 
 ### AI Module Flow
 ```
@@ -195,12 +195,12 @@ AI client factory dynamically selects provider based on configuration.
 ┌──────────────────────────────────────────────────────┘
 │        Webhook Processing Flow (Idempotent):         │
 │  1. Validate Bearer token (timing-safe)             │
-│  2. Check WebhookEvent table for eventId            │
-│  3. Respond immediately with 200 (< 60s)            │
-│  4. Process async via setImmediate()                │
+│  2. Reject if NODE_ENV=production and sandbox event │
+│  3. Check WebhookEvent table for eventId            │
+│  4. Process synchronously (RC retries on failure)  │
 │  5. Insert into WebhookEvent (acts as lock)         │
 │  6. Update subscription status in DB                │
-│  7. Log processing errors                           │
+│  7. Return 200 after processing; errors return 5xx  │
 └──────────────────────────────────────────────────────┘
 ```
 

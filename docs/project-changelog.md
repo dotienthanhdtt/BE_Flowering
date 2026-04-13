@@ -1,9 +1,34 @@
 # Project Changelog
 
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-13
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-04-13 — Security & Hardening Sprint
+
+### Critical Security Fixes
+- **RevenueCat webhook**: now requires `REVENUECAT_WEBHOOK_SECRET` env at boot; always verifies signature (no silent bypass)
+- **Sandbox isolation**: production env now rejects sandbox webhook events
+- **Premium gate**: lesson access now checks subscription expiration (`currentPeriodEnd > now`) — fixes drift from missed EXPIRATION webhooks
+- **JWT secret**: removed fallback literal; missing `JWT_SECRET` now fails boot
+
+### AI Cost Protection
+- `/ai/translate` and `/ai/chat/correct`: switched from `@Public()` to `@OptionalAuth()` with stricter per-IP throttle (5/min)
+- `/onboarding/*`: per-IP rate limits added (30 req/hr controller-wide, 5/hr on `/start`)
+- Prompt loader: now eager-loads all `.md` and `.json` prompts at module init (catches Docker packaging issues at boot)
+
+### Reliability & Auth
+- RevenueCat webhook: now processes synchronously — RC retries on failure instead of fire-and-forget
+- Email/password authentication endpoints (`/auth/register`, `/login`, `/forgot-password`, `/verify-otp`, `/reset-password`): soft-disabled (HTTP 410 Gone). Google/Apple OAuth (`/auth/firebase`) is now the only auth method. Existing accounts kept; service code preserved.
+- Email service: graceful `onModuleInit` — bad SMTP config no longer crashes app boot
+
+### Data Correctness
+- Supabase audio bucket: now uses signed URLs (1h expiry). **Manual step required**: set `audio-files` bucket to private + RLS deny public reads in Supabase dashboard.
+- Onboarding chat: first-turn detection now uses authoritative message count, not message presence — fixes retry edge case
+- Learning agent: `conversationId` now required in chat methods (was conditionally validated)
+
+---
 
 ## [Unreleased]
 

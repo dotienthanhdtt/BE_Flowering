@@ -59,6 +59,8 @@ Authorization: Bearer <jwt_token>
 ### Authentication (POST /auth/*)
 
 #### POST /auth/register
+> **DISABLED — returns 410 Gone.** Email/password auth is soft-disabled. Use `POST /auth/firebase` instead.
+
 Register new user account.
 
 **Auth:** Not required | **Request:**
@@ -70,26 +72,16 @@ Register new user account.
 }
 ```
 
-**Response (201):** `{code: 1, message: "User registered", data: {access_token, user: {id, email, name}}}`
-
-**Errors:** 400 (invalid input), 409 (email exists)
+**Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
 
 ---
 
 #### POST /auth/login
+> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase` instead.
+
 Login with email and password.
 
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "SecurePassword123!"
-}
-```
-
-**Response (200):** `{code: 1, message: "Logged in", data: {access_token, user: {...}}}`
-
-**Errors:** 401 (invalid credentials)
+**Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
 
 ---
 
@@ -142,51 +134,25 @@ Invalidate refresh token.
 ---
 
 #### POST /auth/forgot-password
+> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase` instead.
+
 Request password reset via OTP.
 
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-**Response (200):** `{code: 1, message: "OTP sent to email", data: null}`
+**Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
 
 ---
 
 #### POST /auth/verify-otp
-Verify OTP code.
+> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase` instead.
 
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com",
-  "otp": "123456"
-}
-```
-
-**Response (200):** `{code: 1, message: "OTP verified", data: {reset_token}}`
-
-**Errors:** 400 (invalid/expired OTP), 429 (too many attempts)
+**Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
 
 ---
 
 #### POST /auth/reset-password
-Reset password with reset token.
+> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase` instead.
 
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com",
-  "reset_token": "token_from_verify_otp",
-  "new_password": "NewPassword123!"
-}
-```
-
-**Response (200):** `{code: 1, message: "Password reset", data: null}`
-
-**Errors:** 400 (invalid token/password)
+**Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
 
 ---
 
