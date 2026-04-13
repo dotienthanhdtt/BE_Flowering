@@ -46,6 +46,14 @@ export class SubscriptionService {
   async processWebhook(payload: RevenueCatWebhookDto): Promise<void> {
     const { event } = payload;
 
+    // Reject sandbox events in production to prevent test data contamination
+    if (process.env.NODE_ENV === 'production' && event.environment === 'SANDBOX') {
+      this.logger.warn(
+        `Ignoring SANDBOX event ${event.id} (type: ${event.type}) received in production`,
+      );
+      return;
+    }
+
     // DB-based idempotency: insert first as lock, catch duplicate
     try {
       await this.webhookEventRepo.insert({
@@ -173,9 +181,9 @@ export class SubscriptionService {
   }
 
   /**
-   * Check if subscription is currently active
+   * Check if subscription is currently active (considers expiration and status)
    */
-  private isSubscriptionActive(subscription: Subscription): boolean {
+  isSubscriptionActive(subscription: Subscription): boolean {
     if (subscription.status !== SubscriptionStatus.ACTIVE) return false;
     if (subscription.plan === SubscriptionPlan.LIFETIME) return true;
     if (!subscription.currentPeriodEnd) return true;
