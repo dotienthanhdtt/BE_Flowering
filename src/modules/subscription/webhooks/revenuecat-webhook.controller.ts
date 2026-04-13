@@ -6,6 +6,7 @@ import {
   HttpCode,
   UnauthorizedException,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
@@ -13,19 +14,29 @@ import { timingSafeEqual } from 'crypto';
 import { Public } from '../../../common/decorators/public-route.decorator';
 import { SubscriptionService } from '../subscription.service';
 import { RevenueCatWebhookDto } from '../dto/revenuecat-webhook.dto';
+import { AppConfiguration } from '../../../config/app-configuration';
 
 /**
  * Controller for RevenueCat webhook endpoint
  * Handles subscription lifecycle events from RevenueCat
  */
 @Controller('webhooks')
-export class RevenuecatWebhookController {
+export class RevenuecatWebhookController implements OnModuleInit {
   private readonly logger = new Logger(RevenuecatWebhookController.name);
+  private webhookSecret!: string;
 
   constructor(
     private readonly subscriptionService: SubscriptionService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService<AppConfiguration>,
   ) {}
+
+  onModuleInit(): void {
+    const secret = this.configService.get('revenuecat.webhookSecret', { infer: true });
+    if (!secret) {
+      throw new Error('REVENUECAT_WEBHOOK_SECRET is required');
+    }
+    this.webhookSecret = secret;
+  }
 
   @Public()
   @Post('revenuecat')
@@ -36,9 +47,8 @@ export class RevenuecatWebhookController {
     @Headers('authorization') authHeader: string,
     @Body() payload: RevenueCatWebhookDto,
   ): Promise<{ status: string }> {
-    // Verify webhook authorization using timing-safe comparison
-    const expectedSecret = this.configService.get<string>('revenuecat.webhookSecret');
-    if (expectedSecret && !this.verifyAuth(authHeader, expectedSecret)) {
+    // Always verify webhook authorization using timing-safe comparison
+    if (!this.verifyAuth(authHeader, this.webhookSecret)) {
       this.logger.warn('Invalid webhook authorization attempt');
       throw new UnauthorizedException('Invalid webhook authorization');
     }
