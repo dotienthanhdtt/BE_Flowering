@@ -58,18 +58,30 @@ export class VocabularyReviewService {
       throw new BadRequestException('Card already rated');
     }
 
-    const vocab = await this.repo.findOne({ where: { id: dto.vocabId, userId } });
-    if (!vocab) throw new NotFoundException('Vocabulary not found');
-
-    const { box, dueAt } = applyLeitner(vocab.box, dto.correct);
-    vocab.box = box;
-    vocab.dueAt = dueAt;
-    vocab.lastReviewedAt = new Date();
-    vocab.reviewCount += 1;
-    if (dto.correct) vocab.correctCount += 1;
-    await this.repo.save(vocab);
-
+    // Claim the slot before any async work to prevent concurrent double-rate.
+    // If persistence fails below, we remove the entry so the card can be retried.
     session.ratings.set(dto.vocabId, dto.correct);
+
+    const vocab = await this.repo.findOne({ where: { id: dto.vocabId, userId } });
+    if (!vocab) {
+      session.ratings.delete(dto.vocabId);
+      throw new NotFoundException('Vocabulary not found');
+    }
+
+    let box: number;
+    let dueAt: Date;
+    try {
+      ({ box, dueAt } = applyLeitner(vocab.box, dto.correct));
+      vocab.box = box;
+      vocab.dueAt = dueAt;
+      vocab.lastReviewedAt = new Date();
+      vocab.reviewCount += 1;
+      if (dto.correct) vocab.correctCount += 1;
+      await this.repo.save(vocab);
+    } catch (err) {
+      session.ratings.delete(dto.vocabId);
+      throw err;
+    }
 
     return {
       updated: { box, dueAt },
