@@ -3,11 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Scenario } from '../../database/entities/scenario.entity';
 import { UserScenarioAccess } from '../../database/entities/user-scenario-access.entity';
-import {
-  Subscription,
-  SubscriptionPlan,
-  SubscriptionStatus,
-} from '../../database/entities/subscription.entity';
+import { Subscription, SubscriptionPlan } from '../../database/entities/subscription.entity';
+import { SubscriptionService } from '../subscription/subscription.service';
 import { GetLessonsQueryDto } from './dto/get-lessons-query.dto';
 import {
   GetLessonsResponseDto,
@@ -22,6 +19,7 @@ export class LessonService {
     private readonly scenarioRepo: Repository<Scenario>,
     @InjectRepository(Subscription)
     private readonly subscriptionRepo: Repository<Subscription>,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   async getLessons(userId: string, query: GetLessonsQueryDto): Promise<GetLessonsResponseDto> {
@@ -50,12 +48,13 @@ export class LessonService {
       .take(limit)
       .getMany();
 
-    // Get subscription for status computation — expired/cancelled = free tier
+    // Get subscription for status computation — checks status AND expiration date
     const subscription = await this.subscriptionRepo.findOne({ where: { userId } });
     const hasActivePremium =
-      subscription &&
+      subscription !== null &&
+      subscription !== undefined &&
       subscription.plan !== SubscriptionPlan.FREE &&
-      subscription.status === SubscriptionStatus.ACTIVE;
+      this.subscriptionService.isSubscriptionActive(subscription);
     const isFreeUser = !hasActivePremium;
 
     // Group by category and compute status

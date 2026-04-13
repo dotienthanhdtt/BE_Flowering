@@ -6,10 +6,12 @@ import { Scenario } from '../../database/entities/scenario.entity';
 import { ScenarioCategory } from '../../database/entities/scenario-category.entity';
 import { UserScenarioAccess } from '../../database/entities/user-scenario-access.entity';
 import { Subscription } from '../../database/entities/subscription.entity';
+import { SubscriptionModule } from '../subscription/subscription.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Scenario, ScenarioCategory, UserScenarioAccess, Subscription]),
+    SubscriptionModule,
   ],
   controllers: [LessonController],
   providers: [LessonService],

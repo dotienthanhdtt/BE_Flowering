@@ -6,6 +6,7 @@ import { Scenario, ScenarioDifficulty } from '../../database/entities/scenario.e
 
 import { Subscription, SubscriptionPlan, SubscriptionStatus } from '../../database/entities/subscription.entity';
 import { ScenarioCategory } from '../../database/entities/scenario-category.entity';
+import { SubscriptionService } from '../subscription/subscription.service';
 import { GetLessonsQueryDto } from './dto/get-lessons-query.dto';
 import { ScenarioStatus } from './dto/lesson-response.dto';
 
@@ -19,10 +20,15 @@ const mockSubscriptionRepo = () => ({
   findOne: jest.fn(),
 });
 
+const mockSubscriptionService = () => ({
+  isSubscriptionActive: jest.fn(),
+});
+
 describe('LessonService', () => {
   let service: LessonService;
   let scenarioRepo: ReturnType<typeof mockScenarioRepo>;
   let subscriptionRepo: ReturnType<typeof mockSubscriptionRepo>;
+  let subscriptionService: ReturnType<typeof mockSubscriptionService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -30,12 +36,18 @@ describe('LessonService', () => {
         LessonService,
         { provide: getRepositoryToken(Scenario), useFactory: mockScenarioRepo },
         { provide: getRepositoryToken(Subscription), useFactory: mockSubscriptionRepo },
+        { provide: SubscriptionService, useFactory: mockSubscriptionService },
       ],
     }).compile();
 
     service = module.get<LessonService>(LessonService);
     scenarioRepo = module.get(getRepositoryToken(Scenario));
     subscriptionRepo = module.get(getRepositoryToken(Subscription));
+    subscriptionService = module.get(SubscriptionService);
+    // Default: isSubscriptionActive returns true for any non-null subscription
+    subscriptionService.isSubscriptionActive.mockImplementation(
+      (sub: Subscription) => sub.status === SubscriptionStatus.ACTIVE,
+    );
   });
 
   // Helper: Create mock category
