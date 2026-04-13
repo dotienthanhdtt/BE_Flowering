@@ -102,6 +102,26 @@ describe('TranslationService', () => {
 
       expect(result.translation).toBe('hola');
     });
+
+    // Regression for SRS Leitner migration: ensure re-translate of an existing word
+    // does NOT clobber SRS state (`box`, `due_at`, `last_reviewed_at`,
+    // `review_count`, `correct_count`). These columns MUST be absent from the
+    // `orUpdate` overwrite column list.
+    it('must not include SRS columns in orUpdate conflict overwrite list', async () => {
+      llmService.chat.mockResolvedValue(llmJson);
+      mockQueryBuilder.orUpdate.mockClear();
+
+      await service.translateWord('hello', 'en', 'es', 'user-1');
+
+      expect(mockQueryBuilder.orUpdate).toHaveBeenCalledTimes(1);
+      const [overwriteCols, conflictCols] = mockQueryBuilder.orUpdate.mock.calls[0];
+      const srsCols = ['box', 'due_at', 'last_reviewed_at', 'review_count', 'correct_count'];
+      for (const col of srsCols) {
+        expect(overwriteCols).not.toContain(col);
+      }
+      // Conflict target remains the original uniqueness key
+      expect(conflictCols).toEqual(['user_id', 'word', 'source_lang', 'target_lang']);
+    });
   });
 
   describe('translateSentence', () => {

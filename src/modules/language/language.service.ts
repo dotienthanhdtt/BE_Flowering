@@ -173,6 +173,17 @@ export class LanguageService {
   }
 
   /**
+   * Get user's native language entity (from User.nativeLanguageId relation)
+   */
+  async getNativeLanguage(userId: string): Promise<Language | null> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['nativeLanguage'],
+    });
+    return user?.nativeLanguage ?? null;
+  }
+
+  /**
    * Remove language from user's learning list
    */
   async removeUserLanguage(userId: string, languageId: string): Promise<void> {
