@@ -1,8 +1,8 @@
 # Project Roadmap
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-12
 **Project:** AI Language Learning Backend
-**Status:** Phase 1 Complete, Phase 2 In Progress (90%)
+**Status:** Phase 1 Complete, Phase 2 In Progress (95%)
 
 ## Vision
 
@@ -40,7 +40,7 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 **Duration:** 6 weeks
 **Status:** 🔄 In Progress
-**Progress:** 90% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, premium features, grammar consolidation, Langfuse fixes, code cleanup, API standardization, documentation done)
+**Progress:** 98% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, premium features, grammar consolidation, Langfuse fixes, code cleanup, API standardization, scenario chat, vocabulary SRS, documentation done)
 **Target Completion:** 2026-03-31
 
 **Completed:**
@@ -68,6 +68,19 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ Removed entire notification module (FCM device management) (2026-03-28)
 - ✅ Standardized API JSON keys to snake_case (all HTTP payloads) (2026-03-28)
 - ✅ Updated all documentation for code cleanup & API standardization (2026-03-28)
+- ✅ Scenario Chat API: POST /scenario/chat with AI roleplay, 12-turn cap, resumable conversations (2026-04-12)
+- ✅ Database: Added ai_conversations.scenario_id FK + partial index (2026-04-12)
+- ✅ ScenarioChatService + ScenarioAccessService (access control, language context) (2026-04-12)
+- ✅ scenario-chat-prompt.json with scenario/learner/turn context injection (2026-04-12)
+- ✅ 31 unit tests for scenario chat (service, access, controller, 100% coverage) (2026-04-12)
+- ✅ Updated API docs, changelog, codebase-summary for scenario chat feature (2026-04-12)
+- ✅ Vocabulary CRUD endpoints: GET /vocabulary (list + filter), GET /vocabulary/:id, DELETE /vocabulary/:id (2026-04-12)
+- ✅ Leitner 5-box SRS review endpoints: POST /vocabulary/review/start, POST /vocabulary/review/:sessionId/rate, POST /vocabulary/review/:sessionId/complete (2026-04-12)
+- ✅ Database: Added vocabulary SRS columns (box, due_at, last_reviewed_at, review_count, correct_count) + index (2026-04-12)
+- ✅ VocabularyModule: CRUD service, review service, session store, Leitner algorithm (2026-04-12)
+- ✅ Auto-save regression test: POST /ai/translate type=word does not reset SRS fields (2026-04-12)
+- ✅ Full unit test coverage: 4 spec files, 100% branch coverage on Leitner transitions (2026-04-12)
+- ✅ Updated API docs, changelog, codebase-summary, system-architecture for vocabulary/SRS feature (2026-04-12)
 
 **In Progress:**
 | Feature | Priority | Status | Target Date |

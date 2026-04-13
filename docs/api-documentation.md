@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-04-07
+**Last Updated:** 2026-04-12
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.6.0
+**API Version:** 1.7.0
 
 ## Overview
 
@@ -511,6 +511,291 @@ curl -X POST http://localhost:3000/ai/transcribe \
 
 ---
 
+### Scenario Chat
+
+Engage in roleplay conversations within scenario-based learning activities.
+
+#### POST /scenario/chat
+Conduct a turn in a scenario roleplay conversation.
+
+**Auth:** Required (Premium) | **Rate Limit:** 20 req/min, 100 req/hr | **Request:**
+```json
+{
+  "scenario_id": "uuid",
+  "message": "I need a table for two",
+  "conversation_id": "uuid"
+}
+```
+
+| Field | Type | Required | Limit | Description |
+|-------|------|----------|-------|-------------|
+| scenario_id | UUID | Yes | - | ID of scenario to engage with |
+| message | string | No | 2000 chars | User's roleplay response (omit on first turn to let AI open) |
+| conversation_id | UUID | No | - | Conversation ID to resume existing session |
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "reply": "Of course! A table for two right away. This way, please.",
+    "conversation_id": "uuid",
+    "turn": 1,
+    "max_turns": 10,
+    "completed": false
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| reply | string | AI roleplay response |
+| conversation_id | UUID | Conversation session ID |
+| turn | number | Current turn number (1-based) |
+| max_turns | number | Maximum turns for this conversation |
+| completed | boolean | True when max turns reached |
+
+**Behavior:**
+- First turn: Omit `message` parameter; AI initiates the roleplay
+- Subsequent turns: Include `message` parameter
+- Resume conversation: Provide `conversation_id` from previous turn
+- Conversation ends when `completed: true`
+- Premium subscription required
+
+**Errors:**
+- 400 (conversation completed, invalid body, scenario not found)
+- 401 (missing/invalid JWT)
+- 403 (free user trying premium scenario)
+- 404 (scenario not found)
+
+---
+
+### Vocabulary (Spaced Repetition & CRUD)
+
+**Auth:** Required | **Rate Limit:** None (non-AI endpoint)
+
+#### GET /vocabulary
+List user's vocabulary with optional filters and pagination.
+
+**Query params:**
+- `language_code` (optional) — Filter by source/target language (e.g., "en", "es")
+- `box` (optional, 1-5) — Filter by Leitner box number
+- `search` (optional) — Search word or translation (substring)
+- `page` (optional, default: 1) — Page number
+- `limit` (optional, default: 20, max: 100) — Items per page
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "word": "beautiful",
+        "translation": "hermoso",
+        "source_lang": "en",
+        "target_lang": "es",
+        "part_of_speech": "adjective",
+        "pronunciation": "byoo-tuh-fuhl",
+        "definition": "pleasing to look at",
+        "examples": ["It was a beautiful day.", "She looked beautiful."],
+        "box": 2,
+        "due_at": "2026-04-15T10:00:00Z",
+        "last_reviewed_at": "2026-04-12T10:00:00Z",
+        "review_count": 5,
+        "correct_count": 4,
+        "created_at": "2026-03-28T10:00:00Z"
+      }
+    ],
+    "total": 42,
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
+**Errors:** 401 (unauthorized)
+
+---
+
+#### GET /vocabulary/:id
+Get a single vocabulary item.
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "id": "uuid",
+    "word": "beautiful",
+    "translation": "hermoso",
+    "source_lang": "en",
+    "target_lang": "es",
+    "part_of_speech": "adjective",
+    "pronunciation": "byoo-tuh-fuhl",
+    "definition": "pleasing to look at",
+    "examples": ["It was a beautiful day."],
+    "box": 2,
+    "due_at": "2026-04-15T10:00:00Z",
+    "last_reviewed_at": "2026-04-12T10:00:00Z",
+    "review_count": 5,
+    "correct_count": 4,
+    "created_at": "2026-03-28T10:00:00Z"
+  }
+}
+```
+
+**Errors:** 401 (unauthorized), 404 (not found or not owned)
+
+---
+
+#### DELETE /vocabulary/:id
+Delete a vocabulary item.
+
+**Response (204):** No content
+
+**Errors:** 401 (unauthorized), 404 (not found or not owned)
+
+---
+
+#### POST /vocabulary/review/start
+Start a Leitner SRS review session. Returns due vocabulary cards for review.
+
+**Auth:** Required | **Request:**
+```json
+{
+  "language_code": "en",
+  "limit": 10
+}
+```
+
+| Field | Type | Required | Limit | Description |
+|-------|------|----------|-------|-------------|
+| language_code | string | No | 10 chars | Filter cards by language; defaults to all |
+| limit | number | No | max 100 | Max cards per session (default: 20) |
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Session started",
+  "data": {
+    "session_id": "session-uuid-1234",
+    "cards": [
+      {
+        "vocab_id": "uuid",
+        "word": "beautiful",
+        "translation": "hermoso",
+        "pronunciation": "byoo-tuh-fuhl",
+        "part_of_speech": "adjective",
+        "definition": "pleasing to look at",
+        "examples": ["It was a beautiful day."],
+        "box": 1,
+        "source_lang": "en",
+        "target_lang": "es"
+      }
+    ],
+    "total": 3
+  }
+}
+```
+
+**Behavior:**
+- Session TTL: 1 hour
+- Returns cards where `due_at <= NOW()` ordered by box priority
+- Session ID used for rating and completion endpoints
+- Anonymous cards have sourceLang/targetLang, not language_id
+
+**Errors:** 401 (unauthorized)
+
+---
+
+#### POST /vocabulary/review/:sessionId/rate
+Rate a card in a review session (correct/incorrect).
+
+**Auth:** Required | **Request:**
+```json
+{
+  "vocab_id": "uuid",
+  "correct": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| vocab_id | UUID | Yes | Vocabulary ID from session cards |
+| correct | boolean | Yes | true = correct, false = incorrect |
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Card rated",
+  "data": {
+    "updated": {
+      "box": 2,
+      "due_at": "2026-04-15T10:00:00Z"
+    },
+    "remaining": 2
+  }
+}
+```
+
+**Leitner Transitions:**
+| From Box | Correct | New Box | Interval |
+|----------|---------|---------|----------|
+| 1 | yes | 2 | +3 days |
+| 2 | yes | 3 | +7 days |
+| 3 | yes | 4 | +14 days |
+| 4 | yes | 5 | +30 days |
+| 5 | yes | 5 | +30 days |
+| 1-5 | no | 1 | +1 day |
+
+**Errors:**
+- 400 (vocab not in session, already rated, invalid body)
+- 401 (unauthorized)
+- 403 (vocab not owned)
+- 404 (session expired, vocab missing)
+
+---
+
+#### POST /vocabulary/review/:sessionId/complete
+Complete a review session. Returns stats.
+
+**Auth:** Required | **Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Review completed",
+  "data": {
+    "total": 5,
+    "correct": 4,
+    "wrong": 1,
+    "accuracy": 80,
+    "box_distribution": [
+      { "box": 1, "count": 0 },
+      { "box": 2, "count": 2 },
+      { "box": 3, "count": 1 },
+      { "box": 4, "count": 1 },
+      { "box": 5, "count": 1 }
+    ]
+  }
+}
+```
+
+**Behavior:**
+- Session is deleted after completion
+- boxDistribution shows final box counts of all reviewed cards
+- Deleted session cannot be resumed
+
+**Errors:** 401 (unauthorized), 404 (session not found)
+
+---
+
 ### Onboarding (No Auth Required)
 
 #### POST /onboarding/start
@@ -610,6 +895,22 @@ curl -X POST http://localhost:3000/ai/chat \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"Hello!","language":"spanish"}'
+```
+
+**cURL - Scenario Chat (first turn):**
+```bash
+curl -X POST http://localhost:3000/scenario/chat \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"scenario_id":"550e8400-e29b-41d4-a716-446655440000"}'
+```
+
+**cURL - Scenario Chat (subsequent turn):**
+```bash
+curl -X POST http://localhost:3000/scenario/chat \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"scenario_id":"550e8400-e29b-41d4-a716-446655440000","message":"I need a table for two","conversation_id":"660e8400-e29b-41d4-a716-446655440000"}'
 ```
 
 ## Interactive Documentation

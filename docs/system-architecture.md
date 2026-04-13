@@ -290,6 +290,126 @@ scenario_status = {
 }
 ```
 
+### Scenario Chat Module Flow
+```
+┌──────────────────────────────────────────────────────┐
+│        Scenario Chat Controller                      │
+│  POST /scenario/chat                                │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│        Scenario Chat Service                         │
+│  - validateScenarioAccess()                         │
+│  - generateAIReply()                                │
+│  - updateConversationState()                        │
+│  - checkCompletionStatus()                          │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Scenario Access Service                         │
+│  - checkPremiumAccess()                             │
+│  - verifyScenarioExists()                           │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌────────────────────────────────────────────────────────────────┐
+│  LangChain AI Provider & Langfuse Tracing                      │
+│  - Multi-provider LLM support (OpenAI, Anthropic, Gemini)     │
+│  - Request tracing with prompt/response logging               │
+└────────────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Database Operations                             │
+│  - AiConversation (with scenarioId FK)              │
+│  - AiConversationMessage (turn history)             │
+│  - Subscription (premium check)                     │
+│  - Scenario (premium/trial flags)                   │
+└──────────────────────────────────────────────────────┘
+```
+
+**Turn-Based Conversation Flow:**
+```
+1. User sends first message (without message parameter) → AI initiates
+2. User sends subsequent messages → AI responds based on conversation history
+3. Each turn increments turn counter
+4. When turn == maxTurns → completed: true
+5. Completed conversations cannot accept new messages
+```
+
+### Vocabulary & Leitner SRS Module Flow
+```
+┌──────────────────────────────────────────────────────────────────┐
+│              Vocabulary CRUD Endpoints                            │
+│  GET /vocabulary, GET /vocabulary/:id, DELETE /vocabulary/:id   │
+└──────────────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────────────┐
+│              Vocabulary Service                                  │
+│  - list(userId, query)       → paginated list with filters      │
+│  - findOne(userId, id)       → single item or 404               │
+│  - remove(userId, id)        → delete and verify ownership      │
+└──────────────────────────────────────────────────────────────────┘
+                    ↓
+        ┌───────────────────────────────────────────┐
+        ↓                                           ↓
+┌──────────────────────────────────────┐   ┌──────────────────────────┐
+│   Review Session Endpoints:           │   │   Database:              │
+│   POST /vocabulary/review/start       │   │   - Vocabulary table     │
+│   POST /vocabulary/review/:id/rate    │   │     (box, due_at, etc.)  │
+│   POST /vocabulary/review/:id/complete│   │   - Index: user_id,      │
+│                                       │   │     due_at               │
+└──────────────────────────────────────┘   └──────────────────────────┘
+        ↓                                           ↑
+┌──────────────────────────────────────────────────────────────────┐
+│       Vocabulary Review Service                                  │
+│  - startSession(userId, query)                                   │
+│    → Query due cards WHERE due_at <= NOW()                       │
+│    → Create in-memory session (1h TTL)                           │
+│    → Return cards + session_id                                   │
+│                                                                  │
+│  - rateCard(sessionId, vocabId, correct)                         │
+│    → Verify card in session, not yet rated                       │
+│    → Apply Leitner transition (see table below)                  │
+│    → Update vocabulary.box, vocabulary.due_at                    │
+│    → Update vocabulary.last_reviewed_at, review_count, correct   │
+│    → Return updated box & new due_at                             │
+│                                                                  │
+│  - completeSession(sessionId)                                    │
+│    → Verify session exists                                       │
+│    → Compute stats (total, correct, wrong, accuracy)             │
+│    → Group final boxes for distribution                          │
+│    → Delete session from store                                   │
+│    → Return stats + box_distribution                             │
+└──────────────────────────────────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────────────────────────────────┐
+│       Review Session Store (In-Memory)                           │
+│  - Key: session UUID                                             │
+│  - Value: {userId, cardIds[], ratings: {cardId: bool}}           │
+│  - TTL: 1 hour (auto-eviction)                                   │
+│  - Cleanup: 5-minute sweep for expired sessions                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Leitner Box Transitions:**
+```
+Correct Answer:
+  Box 1 → Box 2: due_at += 3 days
+  Box 2 → Box 3: due_at += 7 days
+  Box 3 → Box 4: due_at += 14 days
+  Box 4 → Box 5: due_at += 30 days
+  Box 5 → Box 5: due_at += 30 days (cap, no promotion)
+
+Incorrect Answer (any box):
+  → Box 1: due_at += 1 day
+```
+
+**Key Invariants:**
+- Once session created, card cannot be re-rated in same session
+- Session expiry does NOT auto-delete vocabulary (session store only)
+- dueAt is exclusive: due cards query uses `due_at <= NOW()`
+- reviewCount incremented on every rating (correct or wrong)
+- correctCount incremented only on correct ratings
+
 ## Database Architecture
 
 ### Entity Relationships
@@ -308,6 +428,7 @@ Language (1) ──< (N) Scenario  (nullable: scenarios can be global)
 
 ScenarioCategory (1) ──< (N) Scenario
 Scenario (1) ──< (N) UserScenarioAccess
+Scenario (1) ──< (N) AiConversation  (for scenario chat)
 User (1) ──< (N) Scenario  (as creator, nullable)
 
 Lesson (1) ──< (N) Exercise

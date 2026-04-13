@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-04-07
-**Generated from:** repomix-output.xml (updated 2026-04-07)
+**Last Updated:** 2026-04-12
+**Generated from:** repomix-output.xml (updated 2026-04-12)
 
 ## Overview
 
@@ -9,11 +9,11 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ## Metrics
 
-- **Total TypeScript Files:** ~145 files in src/
-- **Code Lines:** ~8,800 LOC in src/
-- **Modules:** 8 feature modules (added Lesson module)
-- **Database Entities:** 16 TypeORM entities (added ScenarioCategory, Scenario, UserScenarioAccess)
-- **API Endpoints:** 33 REST endpoints (added GET /lessons, POST /ai/transcribe)
+- **Total TypeScript Files:** ~160 files in src/
+- **Code Lines:** ~9,500 LOC in src/
+- **Modules:** 10 feature modules (added Lesson, Scenario Chat, and Vocabulary modules)
+- **Database Entities:** 16 TypeORM entities (Vocabulary enhanced with SRS columns)
+- **API Endpoints:** 39 REST endpoints (added 6 vocabulary endpoints: GET /vocabulary, GET /vocabulary/:id, DELETE /vocabulary/:id, POST /vocabulary/review/start, POST /vocabulary/review/:sessionId/rate, POST /vocabulary/review/:sessionId/complete)
 - **External Integrations:** 7 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
 
 ## Tech Stack
@@ -178,6 +178,73 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Scenario: Learning content with difficulty levels, premium flags, trial flags
 - UserScenarioAccess: Grants specific users access to scenarios
 
+### 9. Scenario Chat Module (7 files, ~600 LOC)
+
+**Purpose:** Premium scenario roleplay conversation engine with turn-based interactions
+
+**Endpoints:**
+- POST /scenario/chat (roleplay conversation with AI)
+
+**Services:**
+- ScenarioChatService: Main conversation logic, turn management, completion tracking
+- ScenarioAccessService: Permission checks for premium scenarios vs. free users
+
+**Features:**
+- Turn-based roleplay conversations with configurable max turns (default: 10)
+- AI-initiated first turn (omit message parameter)
+- Conversation resumption via conversation_id
+- Premium access control (free users blocked from premium scenarios)
+- AiConversation entity extended with `scenario_id` FK
+- Rate limiting: 20 req/min, 100 req/hr per user
+- Automatic conversation completion tracking
+
+**Rate Limiting:** Shared with AI endpoints (20 req/min, 100 req/hr)
+
+### 10. Vocabulary Module (16 files, ~800 LOC)
+
+**Purpose:** Premium scenario roleplay conversation engine with turn-based interactions
+
+**Endpoints:**
+- POST /scenario/chat (roleplay conversation with AI)
+
+**Services:**
+- ScenarioChatService: Main conversation logic, turn management, completion tracking
+- ScenarioAccessService: Permission checks for premium scenarios vs. free users
+
+**Features:**
+- Turn-based roleplay conversations with configurable max turns (default: 10)
+- AI-initiated first turn (omit message parameter)
+- Conversation resumption via conversation_id
+- Premium access control (free users blocked from premium scenarios)
+- AiConversation entity extended with `scenario_id` FK
+- Rate limiting: 20 req/min, 100 req/hr per user
+- Automatic conversation completion tracking
+
+**Rate Limiting:** Shared with AI endpoints (20 req/min, 100 req/hr)
+
+**Purpose:** User vocabulary management with Leitner 5-box spaced repetition system (SRS)
+
+**Endpoints:**
+- GET /vocabulary (paginated list with filters)
+- GET /vocabulary/:id (single item)
+- DELETE /vocabulary/:id (delete item)
+- POST /vocabulary/review/start (begin review session, fetch due cards)
+- POST /vocabulary/review/:sessionId/rate (rate card, apply Leitner transition)
+- POST /vocabulary/review/:sessionId/complete (finish session, return stats)
+
+**Services:**
+- VocabularyService: CRUD operations, pagination, filtering by language/box/search
+- VocabularyReviewService: Session orchestration, Leitner state transitions, card rating
+- ReviewSessionStore: In-memory session storage with 1h TTL and 5m cleanup sweep
+- leitner.ts: Pure Leitner algorithm (box transitions, interval calculations)
+
+**Key Features:**
+- Leitner intervals: box 1→2 (+3d correct), box 2→3 (+7d), box 3→4 (+14d), box 4→5 (+30d), box 5→5 (cap +30d), any→1 (+1d wrong)
+- Session-based review: cards marked due in session, one rating per card, session expires after 1h
+- Auto-save regression prevention: POST /ai/translate (type=word) upserts without resetting SRS fields (orUpdate excludes box/dueAt/lastReviewedAt/etc.)
+- Full test coverage (4 spec files): unit tests for CRUD, Leitner transitions, session store, review service
+- No rate limits on review endpoints (not AI-powered)
+
 ## Database Schema (16 Entities)
 
 **Core:** User, Language, UserLanguage
@@ -217,18 +284,26 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `granted_at` - Timestamp (when access was granted, default: now)
 - Unique constraint: (user_id, scenario_id) for one-to-one grants
 
-### Vocabulary Entity (New)
+### Vocabulary Entity (Enhanced with SRS)
 - `id` - UUID primary key
 - `userId` - FK to User
 - `word` - String (lexeme)
 - `translation` - String
 - `sourceLang` - String (max 10, e.g., "en", "ja")
 - `targetLang` - String (max 10)
-- `partOfSpeech` - String (noun, verb, etc.)
-- `pronunciation` - String (IPA)
-- `definition` - Text
-- `examples` - JSONB (array of example sentences)
+- `partOfSpeech` - String (noun, verb, etc., nullable)
+- `pronunciation` - String (IPA, nullable)
+- `definition` - Text (nullable)
+- `examples` - JSONB (array of example sentences, nullable)
+- **SRS Fields (NEW):**
+  - `box` - smallint (1-5, CHECK constraint, default: 1)
+  - `dueAt` - timestamptz (when next review due, default: NOW())
+  - `lastReviewedAt` - timestamptz (last review timestamp, nullable)
+  - `reviewCount` - int (total reviews, default: 0)
+  - `correctCount` - int (correct reviews, default: 0)
 - Unique constraint: (userId, word, sourceLang, targetLang)
+- **Index:** idx_vocabulary_user_due on (user_id, due_at) for efficient due cards lookup
+- **Migration:** 1775800000000-add-srs-columns-to-vocabulary.ts
 
 ### User Entity Updates
 - `googleProviderId` - OAuth account linking
@@ -240,6 +315,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `expiresAt` - Session expiration (7 days)
 - `messageCount` - Turn counter
 - `metadata` - JSONB for flexible data storage
+- `scenarioId` - FK to Scenario (nullable, indicates scenario chat conversation)
 
 ### AiConversationMessage Entity Updates
 - `translatedContent` - Cached sentence translation

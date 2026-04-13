@@ -1,11 +1,45 @@
 # Project Changelog
 
-**Last Updated:** 2026-04-07
+**Last Updated:** 2026-04-12
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+
+### Added
+- **Vocabulary CRUD Endpoints:**
+  - GET /vocabulary — List user's vocabulary with pagination, filtering by language/box/search
+  - GET /vocabulary/:id — Get single vocabulary item
+  - DELETE /vocabulary/:id — Delete vocabulary item
+  - All endpoints return SRS fields: box, due_at, last_reviewed_at, review_count, correct_count
+
+- **Leitner 5-Box SRS Review Endpoints:**
+  - POST /vocabulary/review/start — Start review session, returns due cards
+  - POST /vocabulary/review/:sessionId/rate — Rate card (correct/incorrect), apply Leitner transition
+  - POST /vocabulary/review/:sessionId/complete — End session, return stats (accuracy, box distribution)
+  - Sessions: 1h TTL, in-memory store with 5m cleanup sweep
+  - Transitions: box 1→2 +3d (correct), box 2→3 +7d, box 3→4 +14d, box 4→5 +30d, box 5→5 +30d, any→1 +1d (wrong)
+
+- **Database Schema (Vocabulary SRS):**
+  - New columns: box (1-5 CHECK), due_at (timestamptz), last_reviewed_at (timestamptz), review_count (int), correct_count (int)
+  - Index: idx_vocabulary_user_due on (user_id, due_at) for due cards query optimization
+  - Migration: `src/database/migrations/1775800000000-add-srs-columns-to-vocabulary.ts`
+
+- **VocabularyModule:** New module at `src/modules/vocabulary/`
+  - VocabularyController: CRUD endpoints + review route delegation
+  - VocabularyReviewController: 3 review endpoints
+  - VocabularyService: CRUD + pagination logic
+  - VocabularyReviewService: Session management, Leitner transitions
+  - ReviewSessionStore: In-memory session storage (1h TTL, 5m eviction)
+  - leitner.ts: Pure Leitner state transition helper (~30 LOC)
+  - Full unit test coverage (4 spec files, 100% branch coverage)
+
+- **Auto-save Regression Prevention:** POST /ai/translate (type=word) still upserts vocabulary without resetting SRS fields
+
+### Modified
+- **Vocabulary Entity:** Added 5 SRS columns (box, due_at, last_reviewed_at, review_count, correct_count)
+- **AppModule:** Registered VocabularyModule in imports
 
 ### In Progress
 - Unit test coverage expansion
