@@ -81,6 +81,10 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ Auto-save regression test: POST /ai/translate type=word does not reset SRS fields (2026-04-12)
 - ✅ Full unit test coverage: 4 spec files, 100% branch coverage on Leitner transitions (2026-04-12)
 - ✅ Updated API docs, changelog, codebase-summary, system-architecture for vocabulary/SRS feature (2026-04-12)
+- ✅ Onboarding endpoint merge: collapsed POST /onboarding/start + /onboarding/chat into single unified endpoint (2026-04-14)
+- ✅ OnboardingThrottlerGuard: custom throttler with conditional 5/hr (creation) and 30/hr (chat) limits (2026-04-14)
+- ✅ All onboarding tests passing (25/25), backend test suite passing (284/284) (2026-04-14)
+- ✅ Updated docs: api/onboarding-api.md, mobile-api-reference.md, codebase-summary, project-overview-pdr (2026-04-14)
 
 **In Progress:**
 | Feature | Priority | Status | Target Date |

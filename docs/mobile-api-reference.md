@@ -301,22 +301,38 @@ Call after purchase and on app open. Empty body.
 
 ## Onboarding — no auth required
 
-### POST /onboarding/start
+### POST /onboarding/chat
+
+Single endpoint. Omit `conversation_id` on first call to create a session; the response always includes the `conversation_id`.
+
+**Create (first call)** — 5 req/hour/IP
 ```json
 // Request
-{ "native_language": "english" }
+{ "native_language": "vi", "target_language": "en" }
 
 // Response data
-{ "conversation_id": "uuid", "expires_at": "2026-03-28T01:00:00Z" }
+{
+  "conversation_id": "uuid",
+  "reply": "Hi! What's your current level?",
+  "message_id": "uuid",
+  "turn_number": 1,
+  "is_last_turn": false
+}
 ```
 
-### POST /onboarding/chat
+**Continue** — 30 req/hour/IP
 ```json
 // Request
 { "conversation_id": "uuid", "message": "I want to learn Spanish" }
 
 // Response data
-{ "response": "...", "turn_count": 2, "max_turns": 10 }
+{
+  "conversation_id": "uuid",
+  "reply": "...",
+  "message_id": "uuid",
+  "turn_number": 2,
+  "is_last_turn": false
+}
 ```
 
 ### POST /onboarding/complete

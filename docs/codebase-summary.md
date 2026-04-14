@@ -94,7 +94,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Purpose:** Anonymous session-based chat for new users
 
 **Endpoints:**
-- POST /onboarding/start, /onboarding/chat, /onboarding/complete
+- POST /onboarding/chat (create when no conversationId; otherwise continue), /onboarding/complete
 
 **Config:**
 - maxTurns: 10
