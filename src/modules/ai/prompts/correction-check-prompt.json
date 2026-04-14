@@ -31,6 +31,8 @@
     "Do not convert number formats (digits↔words)",
     "Wrong word appears only inside strikethrough span, never duplicated outside",
     "Do not expand complete thoughts even if they end casually",
-    "No explanation, no quotes, no wrapping"
+    "No explanation, no quotes, no wrapping",
+    "NEVER add or fix punctuation marks including periods, commas, question marks, or exclamation marks",
+    "Minimal fixes only — do not rephrase or restructure"
   ]
 }
