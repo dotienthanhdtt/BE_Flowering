@@ -19,6 +19,7 @@ const mockConversationRepo = () => ({
   save: jest.fn(),
   findOne: jest.fn(),
   increment: jest.fn(),
+  update: jest.fn(),
 });
 
 const mockMessageRepo = () => ({
@@ -359,6 +360,141 @@ describe('OnboardingService', () => {
 
       expect(result.scenarios[0].accentColor).toBe('primary');
       expect(result.scenarios[1].accentColor).toBe('blue');
+    });
+  });
+
+  describe('getMessages', () => {
+    it('returns messages ordered by createdAt with turn metadata', async () => {
+      const conversation = makeConversation({ id: VALID_UUID, messageCount: 3 });
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      const rows = [
+        { id: 'm1', role: 'assistant', content: 'Hi', createdAt: new Date('2026-01-01T00:00:00Z') },
+        { id: 'm2', role: 'user', content: 'Hello', createdAt: new Date('2026-01-01T00:01:00Z') },
+        { id: 'm3', role: 'assistant', content: 'Great!', createdAt: new Date('2026-01-01T00:02:00Z') },
+      ];
+      messageRepo.find.mockResolvedValue(rows);
+
+      const result = await service.getMessages(VALID_UUID);
+
+      expect(result.conversationId).toBe(VALID_UUID);
+      expect(result.turnNumber).toBe(2); // (3-1)/2 + 1 = 2
+      expect(result.maxTurns).toBe(onboardingConfig.maxTurns);
+      expect(result.isLastTurn).toBe(false);
+      expect(result.messages).toHaveLength(3);
+      expect(result.messages[0]).toEqual({
+        id: 'm1',
+        role: 'assistant',
+        content: 'Hi',
+        createdAt: rows[0].createdAt,
+      });
+      expect(messageRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ order: { createdAt: 'ASC' } }),
+      );
+    });
+
+    it('returns turnNumber=0 for empty conversation', async () => {
+      const conversation = makeConversation({ id: VALID_UUID, messageCount: 0 });
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      messageRepo.find.mockResolvedValue([]);
+
+      const result = await service.getMessages(VALID_UUID);
+
+      expect(result.turnNumber).toBe(0);
+      expect(result.messages).toEqual([]);
+    });
+
+    it('throws NotFoundException when conversation missing', async () => {
+      conversationRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.getMessages(VALID_UUID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when conversation is AUTHENTICATED (findValidSession filter)', async () => {
+      // findValidSession already filters by type=ANONYMOUS, so null for non-anonymous
+      conversationRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.getMessages(VALID_UUID)).rejects.toThrow(NotFoundException);
+      expect(conversationRepo.findOne).toHaveBeenCalledWith({
+        where: { id: VALID_UUID, type: AiConversationType.ANONYMOUS },
+      });
+    });
+  });
+
+  describe('complete (idempotency)', () => {
+    const cachedProfile = {
+      nativeLanguage: 'English',
+      targetLanguage: 'Spanish',
+      currentLevel: 'A1',
+    };
+    const cachedScenarios = Array.from({ length: 5 }, (_, i) => ({
+      id: `00000000-0000-0000-0000-00000000000${i}`,
+      title: `T${i}`,
+      description: `D${i}`,
+      icon: 'star',
+      accentColor: 'primary' as const,
+    }));
+
+    it('returns cached profile + scenarios without calling LLM on 2nd call', async () => {
+      const conversation = makeConversation({
+        extractedProfile: cachedProfile,
+        scenarios: cachedScenarios,
+      } as Partial<AiConversation>);
+      conversationRepo.findOne.mockResolvedValue(conversation);
+
+      const result = await service.complete({ conversationId: 'conv-1' });
+
+      expect(llmService.chat).not.toHaveBeenCalled();
+      expect(messageRepo.find).not.toHaveBeenCalled();
+      expect(result).toMatchObject(cachedProfile);
+      expect(result.scenarios).toEqual(cachedScenarios);
+    });
+
+    it('writes cache when profile structured AND scenarios.length === 5', async () => {
+      const conversation = makeConversation();
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      messageRepo.find.mockResolvedValue([]);
+
+      llmService.chat
+        .mockResolvedValueOnce(JSON.stringify(cachedProfile))
+        .mockResolvedValueOnce(makeValidScenariosJson());
+
+      await service.complete({ conversationId: 'conv-1' });
+
+      expect(conversationRepo.update).toHaveBeenCalledWith(
+        conversation.id,
+        expect.objectContaining({
+          extractedProfile: expect.objectContaining({ nativeLanguage: 'English' }),
+          scenarios: expect.any(Array),
+        }),
+      );
+    });
+
+    it('does NOT write cache when profile parse fails (raw fallback)', async () => {
+      const conversation = makeConversation();
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      messageRepo.find.mockResolvedValue([]);
+
+      llmService.chat
+        .mockResolvedValueOnce('not-json-at-all') // parseExtraction returns {raw: ...}
+        .mockResolvedValueOnce(makeValidScenariosJson());
+
+      await service.complete({ conversationId: 'conv-1' });
+
+      expect(conversationRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('does NOT write cache when scenarios empty (LLM failure)', async () => {
+      const conversation = makeConversation();
+      conversationRepo.findOne.mockResolvedValue(conversation);
+      messageRepo.find.mockResolvedValue([]);
+
+      llmService.chat
+        .mockResolvedValueOnce(JSON.stringify(cachedProfile))
+        .mockRejectedValueOnce(new Error('LLM timeout'));
+
+      await service.complete({ conversationId: 'conv-1' });
+
+      expect(conversationRepo.update).not.toHaveBeenCalled();
     });
   });
 });

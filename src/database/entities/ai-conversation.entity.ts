@@ -64,6 +64,14 @@ export class AiConversation {
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, unknown>;
 
+  // Cached learner profile extracted by `POST /onboarding/complete` for idempotency.
+  @Column({ type: 'jsonb', name: 'extracted_profile', nullable: true })
+  extractedProfile?: Record<string, unknown> | null;
+
+  // Cached 5-scenario payload (full OnboardingScenarioDto shape) for stable UUIDs across resumes.
+  @Column({ type: 'jsonb', nullable: true })
+  scenarios?: Array<Record<string, unknown>> | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

@@ -5,6 +5,22 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-04-14 — Onboarding Resume Support
+
+### Added
+
+- `GET /onboarding/conversations/:conversationId/messages` — fetch anonymous onboarding transcript for mobile resume UX.
+
+### Changed
+
+- `POST /onboarding/complete` is now idempotent. Cached `extracted_profile` + `scenarios` columns added to `ai_conversations`. Second call returns same data with stable scenario UUIDs; no extra LLM tokens.
+
+### Database
+
+- Migration `1776100000000-add-onboarding-cache-to-ai-conversations` adds `extracted_profile JSONB NULL` + `scenarios JSONB NULL` to `ai_conversations`. No backfill required.
+
+---
+
 ## 2026-04-14 — BREAKING: Onboarding Endpoint Consolidation
 
 ### Breaking Changes

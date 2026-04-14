@@ -995,10 +995,41 @@ Start new session or continue existing onboarding conversation.
 
 ---
 
+#### GET /onboarding/conversations/:conversationId/messages
+
+**Auth:** public. **Throttler:** 30/hr per IP.
+
+Fetch full transcript for an anonymous onboarding conversation. Used by mobile to rehydrate chat UI on resume.
+
+**Path param:** `conversationId` (UUID v4).
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+    "turn_number": 3,
+    "max_turns": 10,
+    "is_last_turn": false,
+    "messages": [
+      {"id": "...", "role": "assistant", "content": "Hello!", "created_at": "2026-04-14T23:20:00Z"},
+      {"id": "...", "role": "user", "content": "I want to learn English", "created_at": "2026-04-14T23:21:00Z"}
+    ]
+  }
+}
+```
+
+**Errors:**
+- 404 — conversation not found or not an anonymous onboarding session
+
+---
+
 #### POST /onboarding/complete
 Complete onboarding and extract profile.
 
-**Auth:** Not required | **Request:**
+**Auth:** Not required | **Idempotent.** Second+ calls with same `conversation_id` return cached profile + scenarios (same scenario UUIDs) without re-invoking the LLM. Cache is populated on the first successful call (structured profile + 5 scenarios); partial failures skip caching and retry next call. | **Request:**
 ```json
 {
   "conversation_id": "conversation_uuid"

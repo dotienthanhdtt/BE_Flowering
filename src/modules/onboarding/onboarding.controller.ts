@@ -1,8 +1,22 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { OnboardingService } from './onboarding.service';
-import { OnboardingChatDto, OnboardingCompleteDto } from './dto';
+import {
+  OnboardingChatDto,
+  OnboardingCompleteDto,
+  OnboardingMessagesResponseDto,
+} from './dto';
 import { OnboardingThrottlerGuard } from './onboarding-throttler.guard';
 
 @ApiTags('onboarding')
@@ -54,10 +68,30 @@ export class OnboardingController {
   @Public()
   @Post('complete')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Extract structured onboarding profile from conversation' })
+  @ApiOperation({
+    summary:
+      'Extract structured onboarding profile from conversation (idempotent — cached after first success)',
+  })
   @ApiResponse({ status: 200, description: 'Extracted user profile data' })
   @ApiResponse({ status: 404, description: 'Session not found' })
   async complete(@Body() dto: OnboardingCompleteDto) {
     return this.onboardingService.complete(dto);
+  }
+
+  @Public()
+  @Get('conversations/:conversationId/messages')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Fetch transcript of an anonymous onboarding conversation (for resume UX)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Conversation transcript with turn metadata',
+    type: OnboardingMessagesResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Conversation not found or not anonymous' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  async getMessages(@Param('conversationId', ParseUUIDPipe) conversationId: string) {
+    return this.onboardingService.getMessages(conversationId);
   }
 }

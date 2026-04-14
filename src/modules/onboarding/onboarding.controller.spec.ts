@@ -11,6 +11,7 @@ const VALID_UUID = '7e982513-fff0-4d07-b008-36dd8047c326';
 const mockOnboardingService = () => ({
   handleChat: jest.fn(),
   complete: jest.fn(),
+  getMessages: jest.fn(),
 });
 
 describe('OnboardingController', () => {
@@ -79,6 +80,24 @@ describe('OnboardingController', () => {
 
       expect(service.complete).toHaveBeenCalledWith(dto);
       expect(result).toBe(expected);
+    });
+  });
+
+  describe('getMessages', () => {
+    it('delegates to service.getMessages with path param', async () => {
+      const expected = {
+        conversationId: VALID_UUID,
+        turnNumber: 1,
+        maxTurns: 5,
+        isLastTurn: false,
+        messages: [],
+      };
+      service.getMessages.mockResolvedValue(expected);
+
+      const result = await controller.getMessages(VALID_UUID);
+
+      expect(service.getMessages).toHaveBeenCalledWith(VALID_UUID);
+      expect(result).toEqual(expected);
     });
   });
 });

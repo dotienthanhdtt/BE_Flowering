@@ -112,6 +112,21 @@ export class OnboardingService {
 
   async complete(dto: OnboardingCompleteDto) {
     const conversation = await this.findValidSession(dto.conversationId);
+
+    // Cache hit: return previously extracted profile + scenarios to keep UUIDs stable
+    // across resumes and avoid burning LLM tokens. Requires both fields populated and
+    // a full 5-scenario payload (partial failures are retried on next call).
+    if (
+      conversation.extractedProfile &&
+      Array.isArray(conversation.scenarios) &&
+      conversation.scenarios.length === 5
+    ) {
+      return {
+        ...(conversation.extractedProfile as Record<string, unknown>),
+        scenarios: conversation.scenarios as unknown as OnboardingScenarioDto[],
+      };
+    }
+
     const messages = await this.messageRepo.find({
       where: { conversationId: conversation.id },
       order: { createdAt: 'ASC' },
@@ -133,7 +148,58 @@ export class OnboardingService {
     const profile = this.parseExtraction(response);
     const scenarios = await this.generateScenarios(profile, conversation.id);
 
+    // Cache only on full success. Skip if profile parse fell back to {raw: ...} or if
+    // scenario generation returned an incomplete payload (prevents sticky empty state).
+    const isProfileStructured =
+      !Object.prototype.hasOwnProperty.call(profile, 'raw') && Object.keys(profile).length > 0;
+    if (isProfileStructured && scenarios.length === 5) {
+      // Cast to `any` — TypeORM's DeepPartial rejects free-form JSONB shapes, but
+      // the underlying column type is `jsonb` so any JSON-serializable value is valid.
+      await this.conversationRepo.update(conversation.id, {
+        extractedProfile: profile as any,
+        scenarios: scenarios as any,
+      });
+    }
+
     return { ...profile, scenarios };
+  }
+
+  /**
+   * Fetch full transcript for an anonymous onboarding conversation so mobile can
+   * rehydrate the chat UI on resume. Non-anonymous conversations return 404 via
+   * the shared `findValidSession` guard.
+   */
+  async getMessages(conversationId: string): Promise<{
+    conversationId: string;
+    turnNumber: number;
+    maxTurns: number;
+    isLastTurn: boolean;
+    messages: Array<{ id: string; role: MessageRole; content: string; createdAt: Date }>;
+  }> {
+    const conversation = await this.findValidSession(conversationId);
+    const rows = await this.messageRepo.find({
+      where: { conversationId: conversation.id },
+      order: { createdAt: 'ASC' },
+    });
+
+    // Same turn formula as chat(): first turn stores assistant only (msgCount=1),
+    // subsequent turns store user+assistant pairs (msgCount grows by 2).
+    const msgCount = conversation.messageCount;
+    const turnNumber = msgCount === 0 ? 0 : Math.floor((msgCount - 1) / 2) + 1;
+    const isLastTurn = turnNumber >= onboardingConfig.maxTurns;
+
+    return {
+      conversationId: conversation.id,
+      turnNumber,
+      maxTurns: onboardingConfig.maxTurns,
+      isLastTurn,
+      messages: rows.map((r) => ({
+        id: r.id,
+        role: r.role,
+        content: r.content,
+        createdAt: r.createdAt,
+      })),
+    };
   }
 
   private async generateScenarios(
