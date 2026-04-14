@@ -9,9 +9,15 @@
     "Replace non-{{targetLanguage}} words with correct equivalents"
   ],
   "output": {
-    "no_errors": "null",
-    "has_errors": "Return corrected reply with: replaced=<span style=\"color:#EF4444;text-decoration:line-through\">wrong</span> <span style=\"color:#EF4444\">correct</span> | removed=<span style=\"color:#EF4444;text-decoration:line-through\">word</span> | added=<span style=\"color:#EF4444\">word</span> | expansion words=no highlight",
-    "gibberish_or_emoji": "null"
+    "no_errors": "respond exactly null",
+    "has_errors": {
+      "format": "return corrected full reply",
+      "replaced_words": "<span style=\"color:#EF4444;text-decoration:line-through\">wrong</span> <span style=\"color:#EF4444\">correct</span>",
+      "removed_words": "<span style=\"color:#EF4444;text-decoration:line-through\">word</span>",
+      "added_missing_words": "<span style=\"color:#EF4444\">word</span>",
+      "sentence_completion": "no highlight"
+    },
+    "gibberish_or_emoji": "respond exactly null"
   },
   "rules": [
     "Minimal fixes only — do not rephrase or restructure",
