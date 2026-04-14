@@ -8,16 +8,19 @@
     "Expand fragments into full sentences using context",
     "Replace non-{{targetLanguage}} words with correct equivalents"
   ],
-  "output": {
-    "no_errors": "respond exactly null",
-    "has_errors": {
-      "format": "return corrected full reply",
-      "replaced_words": "<span style=\"color:#EF4444;text-decoration:line-through\">wrong</span> <span style=\"color:#EF4444\">correct</span>",
-      "removed_words": "<span style=\"color:#EF4444;text-decoration:line-through\">word</span>",
-      "added_missing_words": "<span style=\"color:#EF4444\">word</span>",
-      "sentence_completion": "no highlight"
+  "output_rules": {
+    "rules": {
+      "no_errors": "respond exactly null",
+      "has_errors": {
+        "format": "return corrected full reply",
+        "replaced_words": "<span style=\"color:#EF4444;text-decoration:line-through\">wrong</span> <span style=\"color:#EF4444\">correct</span>",
+        "removed_words": "<span style=\"color:#EF4444;text-decoration:line-through\">word</span>",
+        "added_missing_words": "<span style=\"color:#EF4444\">word</span>",
+        "sentence_completion": "no highlight"
+      },
+      "gibberish_or_emoji": "respond exactly null"
     },
-    "gibberish_or_emoji": "respond exactly null"
+    "sample": "I <span style=\"color:#EF4444;text-decoration:line-through\">eated</span> <span style=\"color:#EF4444\">ate</span> two <span style=\"color:#EF4444;text-decoration:line-through\">egg</span> <span style=\"color:#EF4444\">eggs</span> and a <span style=\"color:#EF4444;text-decoration:line-through\">rize</span> <span style=\"color:#EF4444\">rice</span> at a restaurant"
   },
   "rules": [
     "Minimal fixes only — do not rephrase or restructure",
