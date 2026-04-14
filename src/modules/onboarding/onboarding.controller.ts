@@ -1,35 +1,54 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { OnboardingService } from './onboarding.service';
-import { StartOnboardingDto, OnboardingChatDto, OnboardingCompleteDto } from './dto';
+import { OnboardingChatDto, OnboardingCompleteDto } from './dto';
+import { OnboardingThrottlerGuard } from './onboarding-throttler.guard';
 
 @ApiTags('onboarding')
 @Controller('onboarding')
-@UseGuards(ThrottlerGuard)
-@Throttle({ default: { limit: 30, ttl: 3600_000 } })
+@UseGuards(OnboardingThrottlerGuard)
 export class OnboardingController {
   constructor(private readonly onboardingService: OnboardingService) {}
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 3600_000 } })
-  @Post('start')
-  @ApiOperation({ summary: 'Start anonymous onboarding chat session' })
-  @ApiResponse({ status: 201, description: 'Session created with conversation_id' })
-  async start(@Body() dto: StartOnboardingDto) {
-    return this.onboardingService.startSession(dto);
-  }
-
-  @Public()
   @Post('chat')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send message in onboarding chat' })
-  @ApiResponse({ status: 200, description: 'AI reply with turn info' })
-  @ApiResponse({ status: 400, description: 'Max turns reached or session expired' })
-  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiOperation({ summary: 'Start or continue onboarding chat' })
+  @ApiBody({
+    type: OnboardingChatDto,
+    examples: {
+      newSession: {
+        summary: 'New session (no conversationId)',
+        value: { nativeLanguage: 'vi', targetLanguage: 'en' },
+      },
+      continueSession: {
+        summary: 'Continue session',
+        value: { conversationId: '550e8400-e29b-41d4-a716-446655440000', message: 'hello' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'AI reply with conversation state',
+    schema: {
+      example: {
+        code: 1,
+        message: 'Success',
+        data: {
+          conversationId: '550e8400-e29b-41d4-a716-446655440000',
+          reply: 'Hello! Welcome to your language learning journey.',
+          messageId: 'msg-uuid',
+          turnNumber: 1,
+          isLastTurn: false,
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Validation error or max turns reached' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async chat(@Body() dto: OnboardingChatDto) {
-    return this.onboardingService.chat(dto);
+    return this.onboardingService.handleChat(dto);
   }
 
   @Public()

@@ -9,7 +9,7 @@ import { AiConversationType } from '../../database/entities/ai-conversation.enti
 import { UnifiedLLMService } from '../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../ai/services/prompt-loader.service';
 import { onboardingConfig } from './onboarding.config';
-import { StartOnboardingDto, OnboardingChatDto, OnboardingCompleteDto } from './dto';
+import { OnboardingChatDto, OnboardingCompleteDto } from './dto';
 
 @Injectable()
 export class OnboardingService {
@@ -24,7 +24,26 @@ export class OnboardingService {
     private promptLoader: PromptLoaderService,
   ) {}
 
-  async startSession(dto: StartOnboardingDto) {
+  async handleChat(dto: OnboardingChatDto): Promise<{
+    conversationId: string;
+    reply: string;
+    messageId: string;
+    turnNumber: number;
+    isLastTurn: boolean;
+  }> {
+    const conversationId =
+      dto.conversationId ??
+      (
+        await this.startSession({
+          nativeLanguage: dto.nativeLanguage!,
+          targetLanguage: dto.targetLanguage!,
+        })
+      ).conversationId;
+    const result = await this.chat({ conversationId, message: dto.message });
+    return { conversationId, ...result };
+  }
+
+  private async startSession(args: { nativeLanguage: string; targetLanguage: string }) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + onboardingConfig.sessionTtlDays);
 
@@ -33,8 +52,8 @@ export class OnboardingService {
       expiresAt,
       title: 'Onboarding Chat',
       metadata: {
-        nativeLanguage: dto.nativeLanguage,
-        targetLanguage: dto.targetLanguage,
+        nativeLanguage: args.nativeLanguage,
+        targetLanguage: args.targetLanguage,
       },
     });
     const saved = await this.conversationRepo.save(conversation);
@@ -42,8 +61,8 @@ export class OnboardingService {
     return { conversationId: saved.id };
   }
 
-  async chat(dto: OnboardingChatDto) {
-    const conversation = await this.findValidSession(dto.conversationId);
+  private async chat(args: { conversationId: string; message?: string }) {
+    const conversation = await this.findValidSession(args.conversationId);
     // First turn saves 1 msg (assistant only), subsequent turns save 2 (user + assistant)
     const msgCount = conversation.messageCount;
     const currentTurn = msgCount === 0 ? 1 : Math.floor((msgCount - 1) / 2) + 2;
@@ -62,7 +81,7 @@ export class OnboardingService {
     });
 
     const isFirstTurn = msgCount === 0;
-    if (!isFirstTurn && !dto.message) {
+    if (!isFirstTurn && !args.message) {
       throw new BadRequestException('message required after first turn');
     }
 
@@ -70,7 +89,7 @@ export class OnboardingService {
     const messages: BaseMessage[] = [
       new SystemMessage(systemPrompt),
       ...history,
-      ...(isFirstTurn ? [new HumanMessage('Start')] : [new HumanMessage(dto.message!)]),
+      ...(isFirstTurn ? [new HumanMessage('Start')] : [new HumanMessage(args.message!)]),
     ];
 
     const rawReply = await this.llmService.chat(messages, {
@@ -83,7 +102,7 @@ export class OnboardingService {
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn);
 
     if (!isFirstTurn) {
-      await this.saveMessage(conversation.id, MessageRole.USER, dto.message!);
+      await this.saveMessage(conversation.id, MessageRole.USER, args.message!);
     }
     const messageId = await this.saveMessage(conversation.id, MessageRole.ASSISTANT, reply);
     await this.conversationRepo.increment(
