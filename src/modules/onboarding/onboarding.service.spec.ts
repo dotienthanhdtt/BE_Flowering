@@ -39,7 +39,6 @@ const makeConversation = (overrides: Partial<AiConversation> = {}): AiConversati
     id: 'conv-1',
     type: AiConversationType.ANONYMOUS,
     messageCount: 0,
-    expiresAt: new Date(Date.now() + 86400000), // 1 day in future
     metadata: { nativeLanguage: 'English', targetLanguage: 'Spanish' },
     ...overrides,
   } as AiConversation);
@@ -176,15 +175,6 @@ describe('OnboardingService', () => {
         await expect(
           service.handleChat({ conversationId: 'bad-id', message: 'Hi' }),
         ).rejects.toThrow(NotFoundException);
-      });
-
-      it('throws BadRequestException when session is expired', async () => {
-        const expired = makeConversation({ expiresAt: new Date(Date.now() - 1000) });
-        conversationRepo.findOne.mockResolvedValue(expired);
-
-        await expect(
-          service.handleChat({ conversationId: VALID_UUID, message: 'Hi' }),
-        ).rejects.toThrow(BadRequestException);
       });
 
       it('throws BadRequestException when max turns exceeded', async () => {

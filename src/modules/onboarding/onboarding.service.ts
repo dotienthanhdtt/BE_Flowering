@@ -44,12 +44,8 @@ export class OnboardingService {
   }
 
   private async startSession(args: { nativeLanguage: string; targetLanguage: string }) {
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + onboardingConfig.sessionTtlDays);
-
     const conversation = this.conversationRepo.create({
       type: AiConversationType.ANONYMOUS,
-      expiresAt,
       title: 'Onboarding Chat',
       metadata: {
         nativeLanguage: args.nativeLanguage,
@@ -191,9 +187,6 @@ export class OnboardingService {
     });
     if (!conversation) {
       throw new NotFoundException('Session not found');
-    }
-    if (conversation.expiresAt && conversation.expiresAt < new Date()) {
-      throw new BadRequestException('Session expired');
     }
     return conversation;
   }
