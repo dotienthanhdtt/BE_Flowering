@@ -764,32 +764,85 @@ Complete a review session. Returns stats.
 
 ### Onboarding (No Auth Required)
 
-#### POST /onboarding/start
-Start anonymous onboarding session.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "native_language": "english"
-}
-```
-
-**Response (200):** `{code: 1, message: "Session started", data: {conversation_id, expires_at}}`
-
----
-
 #### POST /onboarding/chat
-Chat in onboarding session.
+Start new session or continue existing onboarding conversation.
 
-**Auth:** Not required | **Request:**
+**Auth:** Not required | **Rate Limit:** 5 req/hr (new session), 30 req/hr (chat continuation)
+
+**Create New Session — Request:**
 ```json
 {
-  "conversation_id": "conversation_id",
-  "message": "I want to learn Spanish"
+  "native_language": "english",
+  "target_language": "spanish"
 }
 ```
 
-**Response (200):** `{code: 1, message: "Response generated", data: {response, turn_count, max_turns}}`
+**Create New Session — Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Session started",
+  "data": {
+    "conversation_id": "uuid",
+    "reply": "Welcome! I'm excited to help you learn...",
+    "message_id": "uuid",
+    "turn_number": 1,
+    "is_last_turn": false
+  }
+}
+```
+
+**Continue Existing Session — Request:**
+```json
+{
+  "conversation_id": "uuid",
+  "message": "I want to focus on speaking skills"
+}
+```
+
+**Continue Existing Session — Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Response generated",
+  "data": {
+    "conversation_id": "uuid",
+    "reply": "Great choice! Speaking is crucial...",
+    "message_id": "uuid",
+    "turn_number": 2,
+    "is_last_turn": false
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| native_language | string | Yes (new) | User's native language (required for new session only) |
+| target_language | string | Yes (new) | Language user wants to learn (required for new session only) |
+| conversation_id | UUID | Yes (resume) | Existing session ID (required to continue) |
+| message | string | No (resume) | User's response (omit to skip turn) |
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| conversation_id | UUID | Unique session identifier |
+| reply | string | AI tutor's response (greeting on turn 1) |
+| message_id | UUID | ID of AI's message |
+| turn_number | number | Current turn (1-based) |
+| is_last_turn | boolean | True when max 10 turns reached |
+
+**Behavior:**
+- First request: omit `conversation_id`, include `native_language` and `target_language` → AI initiates with greeting
+- Subsequent requests: include `conversation_id` and `message` → AI responds to user input
+- Rate limits: 5/hr for session creation (new `conversation_id`), 30/hr for chat turns
+- Sessions expire after 7 days of inactivity
+- Maximum 10 turns per session
+
+**Errors:**
+- 400 (missing required fields, invalid languages)
+- 429 (rate limit exceeded — 5/hr new sessions or 30/hr chat turns)
+- 404 (session not found or expired)
+- 503 (AI provider unavailable)
 
 ---
 

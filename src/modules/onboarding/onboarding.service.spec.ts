@@ -12,6 +12,8 @@ import { UnifiedLLMService } from '../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../ai/services/prompt-loader.service';
 import { onboardingConfig } from './onboarding.config';
 
+const VALID_UUID = '7e982513-fff0-4d07-b008-36dd8047c326';
+
 const mockConversationRepo = () => ({
   create: jest.fn(),
   save: jest.fn(),
@@ -67,128 +69,199 @@ describe('OnboardingService', () => {
 
   afterEach(() => jest.clearAllMocks());
 
-  describe('startSession', () => {
-    it('creates conversation with correct fields and returns conversationId', async () => {
-      const conversation = makeConversation({ id: 'conv-123' });
-      conversationRepo.create.mockReturnValue(conversation);
-      conversationRepo.save.mockResolvedValue(conversation);
+  describe('handleChat', () => {
+    describe('create branch (no conversationId)', () => {
+      it('creates a new session, returns conversationId + first-turn greeting', async () => {
+        const newConversation = makeConversation({ id: VALID_UUID });
+        conversationRepo.create.mockReturnValue(newConversation);
+        conversationRepo.save.mockResolvedValue(newConversation);
+        // findOne is called by the internal chat() after session is created
+        conversationRepo.findOne.mockResolvedValue(newConversation);
+        messageRepo.find.mockResolvedValue([]);
+        messageRepo.save.mockResolvedValue({ id: 'msg-1' });
+        conversationRepo.increment.mockResolvedValue({});
+        llmService.chat.mockResolvedValue(JSON.stringify({ reply: 'Hello! Welcome.', isLastTurn: false }));
 
-      const result = await service.startSession({
-        nativeLanguage: 'English',
-        targetLanguage: 'Spanish',
+        const result = await service.handleChat({
+          nativeLanguage: 'English',
+          targetLanguage: 'Spanish',
+        });
+
+        expect(conversationRepo.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: AiConversationType.ANONYMOUS,
+            title: 'Onboarding Chat',
+            metadata: { nativeLanguage: 'English', targetLanguage: 'Spanish' },
+          }),
+        );
+        expect(conversationRepo.save).toHaveBeenCalledTimes(1);
+        expect(result.conversationId).toBe(VALID_UUID);
+        expect(result.reply).toBe('Hello! Welcome.');
+        expect(result.turnNumber).toBe(1);
+        expect(result.isLastTurn).toBe(false);
+        expect(result.messageId).toBeDefined();
       });
 
-      expect(conversationRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: AiConversationType.ANONYMOUS,
-          title: 'Onboarding Chat',
-          metadata: { nativeLanguage: 'English', targetLanguage: 'Spanish' },
-        }),
-      );
-      expect(result.conversationId).toBe('conv-123');
-    });
-  });
+      it('saves only assistant message on first turn (no user message stored)', async () => {
+        const newConversation = makeConversation({ id: VALID_UUID });
+        conversationRepo.create.mockReturnValue(newConversation);
+        conversationRepo.save.mockResolvedValue(newConversation);
+        conversationRepo.findOne.mockResolvedValue(newConversation);
+        messageRepo.find.mockResolvedValue([]);
+        messageRepo.save.mockResolvedValue({ id: 'msg-1' });
+        conversationRepo.increment.mockResolvedValue({});
+        llmService.chat.mockResolvedValue('Assistant greeting');
 
-  describe('chat', () => {
-    it('returns AI reply with turn info for valid session', async () => {
-      const conversation = makeConversation({ messageCount: 0 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-      messageRepo.save.mockResolvedValue({});
-      conversationRepo.increment.mockResolvedValue({});
-      llmService.chat.mockResolvedValue('Hello! Tell me about yourself.');
+        await service.handleChat({
+          nativeLanguage: 'English',
+          targetLanguage: 'Spanish',
+        });
 
-      const result = await service.chat({ conversationId: 'conv-1', message: 'Hi' });
+        // messageRepo.save called once (assistant only, no user message on first turn)
+        expect(messageRepo.save).toHaveBeenCalledTimes(1);
+        // messageCount incremented by 1 (first turn)
+        expect(conversationRepo.increment).toHaveBeenCalledWith(
+          { id: VALID_UUID },
+          'messageCount',
+          1,
+        );
+      });
 
-      expect(result.reply).toBe('Hello! Tell me about yourself.');
-      expect(result.turnNumber).toBe(1);
-      expect(result.isLastTurn).toBe(false);
-    });
+      it('ignores message field when creating a new session (uses "Start" prompt)', async () => {
+        const newConversation = makeConversation({ id: VALID_UUID, messageCount: 0 });
+        conversationRepo.create.mockReturnValue(newConversation);
+        conversationRepo.save.mockResolvedValue(newConversation);
+        conversationRepo.findOne.mockResolvedValue(newConversation);
+        messageRepo.find.mockResolvedValue([]);
+        messageRepo.save.mockResolvedValue({ id: 'msg-1' });
+        conversationRepo.increment.mockResolvedValue({});
+        llmService.chat.mockResolvedValue('Greeting');
 
-    it('throws NotFoundException for invalid conversationId', async () => {
-      conversationRepo.findOne.mockResolvedValue(null);
+        // Even though message is provided, it should not be stored as a user message
+        await service.handleChat({
+          nativeLanguage: 'English',
+          targetLanguage: 'Spanish',
+          message: 'this should be ignored',
+        });
 
-      await expect(
-        service.chat({ conversationId: 'bad-id', message: 'Hi' }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws BadRequestException when session is expired', async () => {
-      const expired = makeConversation({ expiresAt: new Date(Date.now() - 1000) });
-      conversationRepo.findOne.mockResolvedValue(expired);
-
-      await expect(
-        service.chat({ conversationId: 'conv-1', message: 'Hi' }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws BadRequestException when max turns exceeded', async () => {
-      // messageCount = maxTurns * 2 means currentTurn = maxTurns + 1
-      const conversation = makeConversation({ messageCount: onboardingConfig.maxTurns * 2 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-
-      await expect(
-        service.chat({ conversationId: 'conv-1', message: 'Hi' }),
-      ).rejects.toThrow(BadRequestException);
+        // Only 1 save call = assistant message only (message field ignored on creation)
+        expect(messageRepo.save).toHaveBeenCalledTimes(1);
+      });
     });
 
-    it('increments messageCount by 1 on first turn (msgCount=0)', async () => {
-      const conversation = makeConversation({ messageCount: 0 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-      messageRepo.save.mockResolvedValue({});
-      conversationRepo.increment.mockResolvedValue({});
-      llmService.chat.mockResolvedValue('Reply');
+    describe('continue branch (with conversationId)', () => {
+      it('reuses existing session and returns chat response with same conversationId', async () => {
+        const conversation = makeConversation({ id: VALID_UUID, messageCount: 1 });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+        messageRepo.find.mockResolvedValue([]);
+        messageRepo.save.mockResolvedValue({ id: 'msg-2' });
+        conversationRepo.increment.mockResolvedValue({});
+        llmService.chat.mockResolvedValue(JSON.stringify({ reply: 'Nice to meet you!', isLastTurn: false }));
 
-      // First turn: no message required (omit or provide — msgCount=0 wins)
-      await service.chat({ conversationId: 'conv-1' });
+        const result = await service.handleChat({
+          conversationId: VALID_UUID,
+          message: 'Hello',
+        });
 
-      expect(conversationRepo.increment).toHaveBeenCalledWith(
-        { id: 'conv-1' },
-        'messageCount',
-        1,
-      );
+        // No new conversation created
+        expect(conversationRepo.create).not.toHaveBeenCalled();
+        expect(result.conversationId).toBe(VALID_UUID);
+        expect(result.reply).toBe('Nice to meet you!');
+        expect(result.turnNumber).toBe(2);
+      });
+
+      it('throws NotFoundException for invalid conversationId', async () => {
+        conversationRepo.findOne.mockResolvedValue(null);
+
+        await expect(
+          service.handleChat({ conversationId: 'bad-id', message: 'Hi' }),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('throws BadRequestException when session is expired', async () => {
+        const expired = makeConversation({ expiresAt: new Date(Date.now() - 1000) });
+        conversationRepo.findOne.mockResolvedValue(expired);
+
+        await expect(
+          service.handleChat({ conversationId: VALID_UUID, message: 'Hi' }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('throws BadRequestException when max turns exceeded', async () => {
+        // messageCount = maxTurns * 2 means currentTurn = maxTurns + 1
+        const conversation = makeConversation({ messageCount: onboardingConfig.maxTurns * 2 });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+
+        await expect(
+          service.handleChat({ conversationId: VALID_UUID, message: 'Hi' }),
+        ).rejects.toThrow(BadRequestException);
+      });
     });
 
-    it('increments messageCount by 2 after saving messages on second turn', async () => {
-      const conversation = makeConversation({ messageCount: 1 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-      messageRepo.save.mockResolvedValue({});
-      conversationRepo.increment.mockResolvedValue({});
-      llmService.chat.mockResolvedValue('Reply');
+    describe('turn counting (via handleChat continue branch)', () => {
+      it('increments messageCount by 1 on first turn (msgCount=0)', async () => {
+        const newConversation = makeConversation({ id: VALID_UUID, messageCount: 0 });
+        conversationRepo.create.mockReturnValue(newConversation);
+        conversationRepo.save.mockResolvedValue(newConversation);
+        conversationRepo.findOne.mockResolvedValue(newConversation);
+        messageRepo.find.mockResolvedValue([]);
+        messageRepo.save.mockResolvedValue({ id: 'msg-1' });
+        conversationRepo.increment.mockResolvedValue({});
+        llmService.chat.mockResolvedValue('Reply');
 
-      await service.chat({ conversationId: 'conv-1', message: 'Hi' });
+        // First turn via create branch (no conversationId)
+        await service.handleChat({ nativeLanguage: 'English', targetLanguage: 'Spanish' });
 
-      expect(conversationRepo.increment).toHaveBeenCalledWith(
-        { id: 'conv-1' },
-        'messageCount',
-        2,
-      );
-    });
+        expect(conversationRepo.increment).toHaveBeenCalledWith(
+          { id: VALID_UUID },
+          'messageCount',
+          1,
+        );
+      });
 
-    it('throws BadRequestException when message missing on non-first turn', async () => {
-      const conversation = makeConversation({ messageCount: 1 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
+      it('increments messageCount by 2 after saving messages on second turn', async () => {
+        const conversation = makeConversation({ id: VALID_UUID, messageCount: 1 });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+        messageRepo.find.mockResolvedValue([]);
+        messageRepo.save.mockResolvedValue({ id: 'msg-2' });
+        conversationRepo.increment.mockResolvedValue({});
+        llmService.chat.mockResolvedValue('Reply');
 
-      await expect(
-        service.chat({ conversationId: 'conv-1' }),
-      ).rejects.toThrow(BadRequestException);
-    });
+        await service.handleChat({ conversationId: VALID_UUID, message: 'Hi' });
 
-    it('marks isLastTurn=true on final turn', async () => {
-      // currentTurn = maxTurns when messageCount = (maxTurns-1)*2
-      const conversation = makeConversation({ messageCount: (onboardingConfig.maxTurns - 1) * 2 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-      messageRepo.save.mockResolvedValue({});
-      conversationRepo.increment.mockResolvedValue({});
-      llmService.chat.mockResolvedValue('Final reply');
+        expect(conversationRepo.increment).toHaveBeenCalledWith(
+          { id: VALID_UUID },
+          'messageCount',
+          2,
+        );
+      });
 
-      const result = await service.chat({ conversationId: 'conv-1', message: 'Hi' });
+      it('throws BadRequestException when message missing on non-first turn', async () => {
+        const conversation = makeConversation({ messageCount: 1 });
+        conversationRepo.findOne.mockResolvedValue(conversation);
 
-      expect(result.isLastTurn).toBe(true);
-      expect(result.turnNumber).toBe(onboardingConfig.maxTurns);
+        await expect(
+          service.handleChat({ conversationId: VALID_UUID }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('marks isLastTurn=true on final turn', async () => {
+        // currentTurn = maxTurns when messageCount = (maxTurns-1)*2
+        const conversation = makeConversation({
+          id: VALID_UUID,
+          messageCount: (onboardingConfig.maxTurns - 1) * 2,
+        });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+        messageRepo.find.mockResolvedValue([]);
+        messageRepo.save.mockResolvedValue({ id: 'msg-last' });
+        conversationRepo.increment.mockResolvedValue({});
+        llmService.chat.mockResolvedValue('Final reply');
+
+        const result = await service.handleChat({ conversationId: VALID_UUID, message: 'Hi' });
+
+        expect(result.isLastTurn).toBe(true);
+        expect(result.turnNumber).toBe(onboardingConfig.maxTurns);
+      });
     });
   });
 

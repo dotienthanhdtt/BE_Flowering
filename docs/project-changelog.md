@@ -1,9 +1,37 @@
 # Project Changelog
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-14
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-04-14 — BREAKING: Onboarding Endpoint Consolidation
+
+### Breaking Changes
+- **Endpoint Removal:** `POST /onboarding/start` removed entirely
+- **Endpoint Consolidation:** `POST /onboarding/chat` now handles both session creation and chat turns
+  - New session: omit `conversation_id`, include `native_language` + `target_language` → AI greeting response on turn 1
+  - Chat continuation: include `conversation_id` + `message` → AI responds to user
+- **Response Shape Change:** 
+  - Old `/start` response: `{conversation_id, expires_at}`
+  - Old `/chat` response: `{response, turn_count, max_turns}`
+  - New unified response: `{conversation_id, reply, message_id, turn_number, is_last_turn}`
+- **Rate Limiting:** Differentiated by operation
+  - New session creation: 5 req/hr per IP
+  - Chat continuation: 30 req/hr per IP
+  - Previously: blanket 30 req/hr
+
+### Migration Required
+- **Mobile clients:** Remove all calls to `POST /onboarding/start`; migrate to single `POST /onboarding/chat` endpoint with dual request body shapes
+- **Backend consumers:** If any internal services call old `/start` endpoint, update to consolidated flow
+- **Tests:** Old `/start` tests no longer valid; rewrite with consolidated pattern
+
+### Technical Details
+- Implementation: `src/modules/onboarding/onboarding.controller.ts`, `onboarding.service.ts`
+- Rate limiting: Custom `OnboardingThrottlerGuard` with branching rules
+- Database: No schema changes; conversation session storage unchanged
+
+---
 
 ## 2026-04-13 — Security & Hardening Sprint
 
