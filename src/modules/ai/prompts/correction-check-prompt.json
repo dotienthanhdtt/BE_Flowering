@@ -13,14 +13,14 @@
       "no_errors": "respond exactly null",
       "has_errors": {
         "format": "return corrected full reply",
-        "replaced_words": "<span style=color:#EF4444;text-decoration:line-through>wrong</span> <span style=color:#EF4444>correct</span>",
+        "replaced_words": "<span style=color:#EF4444;text-decoration:line-through>wrong</span> <span style=color:#22C55E>correct</span>",
         "removed_words": "<span style=color:#EF4444;text-decoration:line-through>word</span>",
-        "added_missing_words": "<span style=color:#EF4444>word</span>",
+        "added_missing_words": "<span style=color:#22C55E>word</span>",
         "sentence_completion": "no highlight"
       },
       "gibberish_or_emoji": "respond exactly null"
     },
-    "sample": "I <span style=color:#EF4444;text-decoration:line-through>eated</span> <span style=color:#EF4444>ate</span> two <span style=color:#EF4444;text-decoration:line-through>egg</span> <span style=color:#EF4444>eggs</span> and a <span style=color:#EF4444;text-decoration:line-through>rize</span> <span style=color:#EF4444>rice</span> at a restaurant"
+    "sample": "I <span style=color:#EF4444;text-decoration:line-through>eated</span> <span style=color:#22C55E>ate</span> two <span style=color:#EF4444;text-decoration:line-through>egg</span> <span style=color:#22C55E>eggs</span> and a <span style=color:#EF4444;text-decoration:line-through>rize</span> <span style=color:#22C55E>rice</span> at a restaurant"
   },
   "rules": [
     "Minimal fixes only — do not rephrase or restructure",
@@ -31,10 +31,9 @@
     "Do not convert number formats (digits↔words)",
     "Wrong word appears only inside strikethrough span, never duplicated outside",
     "Do not expand complete thoughts even if they end casually",
-    "No explanation, no quotes, no wrapping",
     "NEVER add or fix punctuation marks including periods, commas, question marks, or exclamation marks",
-    "Minimal fixes only — do not rephrase or restructure",
     "When fixing errors, choose the correction closest to the learner's original intent and wording",
-    "When consecutive words are all incorrect, group them into a single strikethrough span and a single correction span"
+    "When consecutive words are all incorrect, group them into a single strikethrough span and a single correction span",
+    "No explanation, no quotes, no wrapping"
   ]
 }
