@@ -32,9 +32,6 @@ export class CategoryWithScenariosDto {
   @ApiProperty()
   name!: string;
 
-  @ApiProperty({ nullable: true })
-  icon!: string | null;
-
   @ApiProperty({ type: [ScenarioItemDto] })
   scenarios!: ScenarioItemDto[];
 }

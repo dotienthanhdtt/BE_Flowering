@@ -5,15 +5,15 @@
  */
 
 export const seedScenarioCategoriesQuery = `
-  INSERT INTO scenario_categories (name, icon, order_index, is_active)
+  INSERT INTO scenario_categories (name, order_index, is_active)
   VALUES
-    ('Daily Life',              '🏠', 0, true),
-    ('Travel & Transportation', '✈️', 1, true),
-    ('Food & Dining',           '🍜', 2, true),
-    ('Business & Work',         '💼', 3, true),
-    ('Shopping',                '🛍️', 4, true),
-    ('Healthcare',              '🏥', 5, true),
-    ('Social & Hobbies',        '🎉', 6, true)
+    ('Daily Life',              0, true),
+    ('Travel & Transportation', 1, true),
+    ('Food & Dining',           2, true),
+    ('Business & Work',         3, true),
+    ('Shopping',                4, true),
+    ('Healthcare',              5, true),
+    ('Social & Hobbies',        6, true)
   ON CONFLICT DO NOTHING;
 `;
 

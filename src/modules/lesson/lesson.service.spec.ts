@@ -54,7 +54,6 @@ describe('LessonService', () => {
   const mockCategory = (id: string = 'cat-1', name: string = 'Category 1'): ScenarioCategory => ({
     id,
     name,
-    icon: 'icon-url',
     orderIndex: 0,
     isActive: true,
     createdAt: new Date(),
@@ -467,9 +466,8 @@ describe('LessonService', () => {
         expect(result.categories[1].scenarios).toHaveLength(1);
       });
 
-      it('should preserve category metadata (id, name, icon)', async () => {
+      it('should preserve category metadata (id, name)', async () => {
         const category = mockCategory('cat-1', 'Advanced Conversations');
-        category.icon = 'https://example.com/icon.svg';
         const scenarios = [mockScenario('s-1', category)];
         const queryBuilder = createMockQueryBuilder();
 
@@ -484,25 +482,6 @@ describe('LessonService', () => {
 
         expect(result.categories[0].id).toBe('cat-1');
         expect(result.categories[0].name).toBe('Advanced Conversations');
-        expect(result.categories[0].icon).toBe('https://example.com/icon.svg');
-      });
-
-      it('should handle categories without icons', async () => {
-        const category = mockCategory('cat-1', 'No Icon Category');
-        category.icon = undefined;
-        const scenarios = [mockScenario('s-1', category)];
-        const queryBuilder = createMockQueryBuilder();
-
-        scenarioRepo.createQueryBuilder.mockReturnValue(queryBuilder);
-
-        (queryBuilder.getCount as jest.Mock).mockResolvedValue(1);
-        (queryBuilder.getMany as jest.Mock).mockResolvedValue(scenarios);
-        subscriptionRepo.findOne.mockResolvedValue(null);
-
-        const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
-
-        expect(result.categories[0].icon).toBeNull();
       });
 
       it('should handle scenarios without images', async () => {

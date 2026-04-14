@@ -6,6 +6,8 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 
 const mockScenarioChatService = () => ({
   chat: jest.fn(),
+  listConversations: jest.fn(),
+  getConversation: jest.fn(),
 });
 
 describe('ScenarioChatController', () => {
@@ -107,6 +109,63 @@ describe('ScenarioChatController', () => {
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId };
 
       await expect(controller.chat(req, dto)).rejects.toThrow('Service error');
+    });
+
+    it('should pass forceNew flag through to service', async () => {
+      service.chat.mockResolvedValue(mockResponse);
+      const req = { user: { id: mockUserId } };
+      const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId, forceNew: true };
+
+      await controller.chat(req, dto);
+
+      expect(service.chat).toHaveBeenCalledWith(
+        mockUserId,
+        expect.objectContaining({ forceNew: true }),
+      );
+    });
+  });
+
+  describe('listConversations', () => {
+    it('should delegate to service and return list', async () => {
+      const listResponse = {
+        items: [
+          {
+            id: mockConversationId,
+            startedAt: '2026-04-14T09:00:00.000Z',
+            lastTurnAt: '2026-04-14T09:15:00.000Z',
+            turnCount: 5,
+            completed: false,
+            maxTurns: 12,
+          },
+        ],
+      };
+      service.listConversations.mockResolvedValue(listResponse);
+
+      const req = { user: { id: mockUserId } };
+      const result = await controller.listConversations(req, mockScenarioId);
+
+      expect(service.listConversations).toHaveBeenCalledWith(mockUserId, mockScenarioId);
+      expect(result).toBe(listResponse);
+    });
+  });
+
+  describe('getConversation', () => {
+    it('should delegate to service and return transcript', async () => {
+      const detail = {
+        id: mockConversationId,
+        scenarioId: mockScenarioId,
+        completed: true,
+        turn: 12,
+        maxTurns: 12,
+        messages: [],
+      };
+      service.getConversation.mockResolvedValue(detail);
+
+      const req = { user: { id: mockUserId } };
+      const result = await controller.getConversation(req, mockConversationId);
+
+      expect(service.getConversation).toHaveBeenCalledWith(mockUserId, mockConversationId);
+      expect(result).toBe(detail);
     });
   });
 });

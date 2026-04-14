@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
@@ -9,7 +14,12 @@ import { PromptLoaderService } from '@/modules/ai/services/prompt-loader.service
 import { LLMModel } from '@/modules/ai/providers/llm-models.enum';
 import { LanguageService } from '@/modules/language/language.service';
 import { ScenarioAccessService } from './scenario-access.service';
-import { ScenarioChatRequestDto, ScenarioChatResponseDto } from '../dto/scenario-chat.dto';
+import {
+  ScenarioChatRequestDto,
+  ScenarioChatResponseDto,
+  ScenarioConversationDetailDto,
+  ScenarioConversationListResponseDto,
+} from '../dto/scenario-chat.dto';
 
 const MAX_TURNS = 12;
 // Cover full turn range: MAX_TURNS user + MAX_TURNS assistant + 2 buffer
@@ -37,17 +47,33 @@ export class ScenarioChatService {
   ) {}
 
   async chat(userId: string, dto: ScenarioChatRequestDto): Promise<ScenarioChatResponseDto> {
-    // 1. Verify scenario access
-    const scenario = await this.scenarioAccessService.findAccessibleScenario(userId, dto.scenarioId);
+    // 0. Reject conflicting intent: forceNew + conversationId is ambiguous
+    if (dto.forceNew && dto.conversationId) {
+      throw new BadRequestException('Cannot combine forceNew with conversationId');
+    }
 
-    // 2. Resolve conversation
+    // 1. Verify scenario access
+    const scenario = await this.scenarioAccessService.findAccessibleScenario(
+      userId,
+      dto.scenarioId,
+    );
+
+    // 2. If forceNew, mark any active conversation for this (user, scenario) as completed
+    //    so the subsequent findOrCreate creates a fresh row.
+    if (dto.forceNew) {
+      await this.markActiveAsCompleted(userId, dto.scenarioId);
+    }
+
+    // 3. Resolve conversation
     const conversation = dto.conversationId
       ? await this.resolveExisting(userId, dto.conversationId, dto.scenarioId)
       : await this.findOrCreate(userId, scenario.id, scenario.languageId);
 
-    // 3. Reject if already completed
+    // 4. Reject if already completed
     if (conversation.metadata?.['completed'] === true) {
-      throw new BadRequestException('Conversation is completed. Start a new one.');
+      throw new BadRequestException(
+        'Conversation is completed. Pass forceNew: true to start a new one.',
+      );
     }
 
     // 4. Load language context
@@ -94,11 +120,19 @@ export class ScenarioChatService {
     // 10. Persist messages
     if (dto.message) {
       await this.msgRepo.save(
-        this.msgRepo.create({ conversationId: conversation.id, role: MessageRole.USER, content: dto.message }),
+        this.msgRepo.create({
+          conversationId: conversation.id,
+          role: MessageRole.USER,
+          content: dto.message,
+        }),
       );
     }
     await this.msgRepo.save(
-      this.msgRepo.create({ conversationId: conversation.id, role: MessageRole.ASSISTANT, content: reply }),
+      this.msgRepo.create({
+        conversationId: conversation.id,
+        role: MessageRole.ASSISTANT,
+        content: reply,
+      }),
     );
 
     // 11. Update conversation state
@@ -161,6 +195,88 @@ export class ScenarioChatService {
     if (c.userId !== userId) throw new ForbiddenException();
     if (c.scenarioId !== scenarioId) throw new BadRequestException('scenarioId mismatch');
     return c;
+  }
+
+  /**
+   * Marks every active (non-completed) conversation for the given user+scenario
+   * as completed. Used by the forceNew flow so that the subsequent findOrCreate
+   * lookup will miss the old row and insert a fresh one.
+   */
+  private async markActiveAsCompleted(userId: string, scenarioId: string): Promise<void> {
+    await this.convoRepo
+      .createQueryBuilder()
+      .update(AiConversation)
+      .set({
+        metadata: () => `COALESCE(metadata, '{}'::jsonb) || '{"completed":true}'::jsonb`,
+      })
+      .where('user_id = :userId AND scenario_id = :scenarioId', { userId, scenarioId })
+      .andWhere(`metadata->>'completed' IS DISTINCT FROM 'true'`)
+      .execute();
+  }
+
+  /**
+   * Lists all past scenario conversations owned by the user, newest first.
+   * Owner-filter only (no premium gate) so users can still review history
+   * after a subscription downgrade.
+   */
+  async listConversations(
+    userId: string,
+    scenarioId: string,
+  ): Promise<ScenarioConversationListResponseDto> {
+    const rows = await this.convoRepo.find({
+      where: { userId, scenarioId },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        startedAt: r.createdAt.toISOString(),
+        lastTurnAt: r.updatedAt.toISOString(),
+        turnCount: Math.floor(r.messageCount / 2),
+        completed: r.metadata?.['completed'] === true,
+        maxTurns: (r.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS,
+      })),
+    };
+  }
+
+  /**
+   * Fetches a single conversation with its full transcript.
+   * Owner-check only — any authenticated user may read their own conversations,
+   * even for scenarios they no longer have premium access to.
+   */
+  async getConversation(
+    userId: string,
+    conversationId: string,
+  ): Promise<ScenarioConversationDetailDto> {
+    const c = await this.convoRepo.findOne({ where: { id: conversationId } });
+    if (!c) throw new NotFoundException('Conversation not found');
+    if (c.userId !== userId) throw new ForbiddenException();
+
+    const rows = await this.msgRepo.find({
+      where: { conversationId },
+      order: { createdAt: 'ASC' },
+    });
+
+    // Surface only user/assistant turns to the client (drop any system rows).
+    const messages = rows
+      .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
+      .map((r) => ({
+        role: r.role as 'user' | 'assistant',
+        content: r.content,
+        createdAt: r.createdAt.toISOString(),
+      }));
+
+    const maxTurns = (c.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS;
+
+    return {
+      id: c.id,
+      scenarioId: c.scenarioId ?? '',
+      completed: c.metadata?.['completed'] === true,
+      turn: Math.floor(c.messageCount / 2),
+      maxTurns,
+      messages,
+    };
   }
 
   private async loadHistory(conversationId: string): Promise<BaseMessage[]> {

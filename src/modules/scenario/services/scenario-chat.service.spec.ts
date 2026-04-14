@@ -13,17 +13,24 @@ import { PromptLoaderService } from '../../ai/services/prompt-loader.service';
 import { LanguageService } from '../../language/language.service';
 
 const mockConvoRepo = () => {
+  // Single unified query-builder mock covering both select and update paths
+  // (service uses `createQueryBuilder('c')` for selects and
+  // `createQueryBuilder()` for the forceNew update — both resolve here).
   const mockQb = {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     getOne: jest.fn(),
+    update: jest.fn().mockReturnThis(),
+    set: jest.fn().mockReturnThis(),
+    execute: jest.fn().mockResolvedValue({ affected: 0 }),
   };
   return {
     createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     create: jest.fn((dto) => dto),
     save: jest.fn((entity) => Promise.resolve({ ...entity, id: 'convo-uuid' })),
     findOne: jest.fn(),
+    find: jest.fn(),
   };
 };
 
@@ -425,6 +432,167 @@ describe('ScenarioChatService', () => {
       await service.chat(mockUserId, dto);
 
       expect(convoRepo.save).toHaveBeenCalledWith(expect.objectContaining({ messageCount: 7 }));
+    });
+  });
+
+  describe('chat - forceNew', () => {
+    it('should reject when both forceNew and conversationId are provided', async () => {
+      const dto = { scenarioId: mockScenarioId, conversationId: mockConversationId, forceNew: true };
+      await expect(service.chat(mockUserId, dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should mark active conversations as completed and create a fresh one', async () => {
+      jest.clearAllMocks();
+      scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
+      languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
+      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
+      // After forceNew wipes the active flag, findOrCreate's select returns null → insert.
+      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
+      convoRepo.save.mockResolvedValue({ ...mockConversationEntity, id: 'new-convo-uuid' });
+      msgRepo.find.mockResolvedValue([]);
+      promptLoader.loadPrompt.mockReturnValue('system prompt');
+      llmService.chat.mockResolvedValue('Fresh opening');
+
+      const dto = { scenarioId: mockScenarioId, forceNew: true };
+      const result = await service.chat(mockUserId, dto);
+
+      // The forceNew update chain should have fired.
+      const qb = convoRepo.createQueryBuilder();
+      expect(qb.update).toHaveBeenCalled();
+      expect(qb.set).toHaveBeenCalled();
+      expect(qb.execute).toHaveBeenCalled();
+      expect(result.conversationId).toBe('new-convo-uuid');
+      expect(result.turn).toBe(1);
+    });
+  });
+
+  describe('listConversations', () => {
+    it('should return owner-filtered conversations newest first', async () => {
+      const now = new Date('2026-04-14T10:00:00Z');
+      const earlier = new Date('2026-04-13T10:00:00Z');
+      convoRepo.find.mockResolvedValue([
+        {
+          id: 'convo-a',
+          createdAt: now,
+          updatedAt: now,
+          messageCount: 24,
+          metadata: { completed: true, maxTurns: 12 },
+        },
+        {
+          id: 'convo-b',
+          createdAt: earlier,
+          updatedAt: earlier,
+          messageCount: 6,
+          metadata: { completed: false, maxTurns: 12 },
+        },
+      ]);
+
+      const result = await service.listConversations(mockUserId, mockScenarioId);
+
+      expect(convoRepo.find).toHaveBeenCalledWith({
+        where: { userId: mockUserId, scenarioId: mockScenarioId },
+        order: { createdAt: 'DESC' },
+      });
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0]).toEqual({
+        id: 'convo-a',
+        startedAt: now.toISOString(),
+        lastTurnAt: now.toISOString(),
+        turnCount: 12,
+        completed: true,
+        maxTurns: 12,
+      });
+      expect(result.items[1].turnCount).toBe(3);
+      expect(result.items[1].completed).toBe(false);
+    });
+
+    it('should return empty list when user has no conversations', async () => {
+      convoRepo.find.mockResolvedValue([]);
+      const result = await service.listConversations(mockUserId, mockScenarioId);
+      expect(result).toEqual({ items: [] });
+    });
+
+    it('should default maxTurns when metadata missing', async () => {
+      convoRepo.find.mockResolvedValue([
+        {
+          id: 'convo-a',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          messageCount: 0,
+          metadata: null,
+        },
+      ]);
+      const result = await service.listConversations(mockUserId, mockScenarioId);
+      expect(result.items[0].maxTurns).toBe(12);
+      expect(result.items[0].completed).toBe(false);
+    });
+  });
+
+  describe('getConversation', () => {
+    it('should return transcript for the owner', async () => {
+      const created = new Date('2026-04-14T09:00:00Z');
+      convoRepo.findOne.mockResolvedValue({
+        id: mockConversationId,
+        userId: mockUserId,
+        scenarioId: mockScenarioId,
+        messageCount: 2,
+        metadata: { completed: false, maxTurns: 12 },
+      });
+      msgRepo.find.mockResolvedValue([
+        { role: MessageRole.USER, content: 'hello', createdAt: created },
+        { role: MessageRole.ASSISTANT, content: 'hi', createdAt: created },
+      ]);
+
+      const result = await service.getConversation(mockUserId, mockConversationId);
+
+      expect(result).toEqual({
+        id: mockConversationId,
+        scenarioId: mockScenarioId,
+        completed: false,
+        turn: 1,
+        maxTurns: 12,
+        messages: [
+          { role: 'user', content: 'hello', createdAt: created.toISOString() },
+          { role: 'assistant', content: 'hi', createdAt: created.toISOString() },
+        ],
+      });
+    });
+
+    it('should filter out system-role messages from the transcript', async () => {
+      convoRepo.findOne.mockResolvedValue({
+        id: mockConversationId,
+        userId: mockUserId,
+        scenarioId: mockScenarioId,
+        messageCount: 2,
+        metadata: {},
+      });
+      msgRepo.find.mockResolvedValue([
+        { role: MessageRole.SYSTEM, content: 'sys', createdAt: new Date() },
+        { role: MessageRole.USER, content: 'hi', createdAt: new Date() },
+      ]);
+      const result = await service.getConversation(mockUserId, mockConversationId);
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].role).toBe('user');
+    });
+
+    it('should throw NotFoundException when conversation is missing', async () => {
+      convoRepo.findOne.mockResolvedValue(null);
+      await expect(service.getConversation(mockUserId, mockConversationId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw ForbiddenException when caller is not the owner', async () => {
+      convoRepo.findOne.mockResolvedValue({
+        id: mockConversationId,
+        userId: 'other-user',
+        scenarioId: mockScenarioId,
+        messageCount: 0,
+        metadata: {},
+      });
+      await expect(service.getConversation(mockUserId, mockConversationId)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 

@@ -41,7 +41,7 @@ export class LessonService {
 
     // Apply pagination and ordering — category already joined in visibility query
     const scenarios = await qb
-      .addSelect(['cat.id', 'cat.name', 'cat.icon', 'cat.orderIndex'])
+      .addSelect(['cat.id', 'cat.name', 'cat.orderIndex'])
       .addOrderBy('cat.orderIndex', 'ASC')
       .addOrderBy('scenario.orderIndex', 'ASC')
       .skip((page - 1) * limit)
@@ -113,7 +113,6 @@ export class LessonService {
         categoryMap.set(cat.id, {
           id: cat.id,
           name: cat.name,
-          icon: cat.icon ?? null,
           scenarios: [],
         });
       }

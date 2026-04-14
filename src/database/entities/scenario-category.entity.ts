@@ -14,9 +14,6 @@ export class ScenarioCategory {
   @Column({ type: 'varchar', length: 100 })
   name!: string;
 
-  @Column({ type: 'text', nullable: true })
-  icon?: string;
-
   @Column({ type: 'int', name: 'order_index', default: 0 })
   orderIndex!: number;
 
