@@ -217,13 +217,21 @@ AI client factory dynamically selects provider based on configuration.
 ```
 ┌──────────────────────────────────────────────────────┐
 │      Onboarding Controller (No Auth Required)        │
-│  POST /onboarding/start, /chat, /complete           │
+│  POST /onboarding/chat (dual-purpose)              │
+│  POST /onboarding/complete                         │
 └──────────────────────────────────────────────────────┘
                     ↓
+        [Request contains conversationId?]
+                 ↙              ↖
+         No (New)            Yes (Resume)
+         ↙                      ↖
+   createSession()          processMessage()
+   (turn 1 greeting)        (standard turn)
+         ↓                      ↓
 ┌──────────────────────────────────────────────────────┐
 │        Onboarding Service                            │
-│  - createSession()                                  │
-│  - processMessage()                                 │
+│  - createSession(native_lang, target_lang)         │
+│  - processMessage(conv_id, message)                │
 │  - extractProfile()                                 │
 │  - cleanupExpiredSessions()                         │
 └──────────────────────────────────────────────────────┘
@@ -236,6 +244,10 @@ AI client factory dynamically selects provider based on configuration.
 │  - 7-day session TTL                                │
 └──────────────────────────────────────────────────────┘
 ```
+
+**Rate Limiting (OnboardingThrottlerGuard):**
+- New session (no `conversation_id`): 5 req/hr per IP
+- Chat continuation (with `conversation_id`): 30 req/hr per IP
 
 ### Lesson Module Flow
 ```

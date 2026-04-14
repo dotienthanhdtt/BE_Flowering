@@ -5,6 +5,7 @@ import { AiConversation, AiConversationMessage } from '../../database/entities';
 import { AiModule } from '../ai/ai.module';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
+import { OnboardingThrottlerGuard } from './onboarding-throttler.guard';
 
 @Module({
   imports: [
@@ -14,12 +15,12 @@ import { OnboardingService } from './onboarding.service';
       {
         name: 'default',
         ttl: 3600_000, // 1 hour
-        limit: 30,     // 30 req/hour/IP across onboarding
+        limit: 30, // 30 req/hour/IP across onboarding
       },
     ]),
   ],
   controllers: [OnboardingController],
-  providers: [OnboardingService],
+  providers: [OnboardingService, OnboardingThrottlerGuard],
   exports: [OnboardingService],
 })
 export class OnboardingModule {}

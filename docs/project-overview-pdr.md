@@ -69,7 +69,7 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 |--------|-----------|--------------|
 | **auth/** (27 files) | POST /auth/register, /login, /google, /apple, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | JWT, OAuth auto-linking, password reset |
 | **ai/** (~25 files) | POST /ai/chat, /chat/correct, /translate; SSE /ai/chat/stream | LangChain, multi-provider, translation, correction, rate limiting |
-| **onboarding/** (11 files) | POST /onboarding/start, /chat, /complete | Anonymous chat, session-based (10-turn max, 7d TTL) |
+| **onboarding/** (11 files) | POST /onboarding/chat (create+continue), /complete | Anonymous chat, single-endpoint branching, session-based (8-turn max, 7d TTL) |
 | **language/** (10 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags |
 | **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
 | **subscription/** (6 files) | GET /subscriptions/me, POST /webhooks/revenuecat | RevenueCat webhook, status checks |
