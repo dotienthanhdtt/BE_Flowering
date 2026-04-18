@@ -984,13 +984,13 @@ Start new session or continue existing onboarding conversation.
 - First request: omit `conversation_id`, include `native_language` and `target_language` → AI initiates with greeting
 - Subsequent requests: include `conversation_id` and `message` → AI responds to user input
 - Rate limits: 5/hr for session creation (new `conversation_id`), 30/hr for chat turns
-- Sessions expire after 7 days of inactivity
 - Maximum 10 turns per session
+- Sessions persist indefinitely (no TTL)
 
 **Errors:**
 - 400 (missing required fields, invalid languages)
 - 429 (rate limit exceeded — 5/hr new sessions or 30/hr chat turns)
-- 404 (session not found or expired)
+- 404 (session not found)
 - 503 (AI provider unavailable)
 
 ---

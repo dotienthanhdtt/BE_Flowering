@@ -1,7 +1,7 @@
 # Project Overview & PDR
 
-**Last Updated:** 2026-03-28
-**Version:** 1.3.0
+**Last Updated:** 2026-04-15
+**Version:** 1.8.0
 **Status:** Active Development
 
 ## Executive Summary
@@ -30,9 +30,10 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 
 ### 3. Onboarding (Anonymous)
 - Session-based chat for new users (no auth needed)
-- Profile extraction via AI
-- Scenario generation
+- Profile extraction via AI with idempotent caching
+- Scenario generation with stable UUIDs for resume support
 - Max 10 turns per session
+- Resume UX: fetch conversation transcript via GET /messages endpoint
 
 ### 4. Subscription Management
 - RevenueCat integration for cross-platform subscriptions
@@ -69,7 +70,7 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 |--------|-----------|--------------|
 | **auth/** (27 files) | POST /auth/register, /login, /google, /apple, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | JWT, OAuth auto-linking, password reset |
 | **ai/** (~25 files) | POST /ai/chat, /chat/correct, /translate; SSE /ai/chat/stream | LangChain, multi-provider, translation, correction, rate limiting |
-| **onboarding/** (11 files) | POST /onboarding/chat (create+continue), /complete | Anonymous chat, single-endpoint branching, session-based (8-turn max, 7d TTL) |
+| **onboarding/** (11 files) | POST /onboarding/chat (create+continue), /complete (idempotent), GET /conversations/:id/messages | Anonymous chat, single-endpoint branching, session-based (10-turn max), resume support |
 | **language/** (10 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags |
 | **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
 | **subscription/** (6 files) | GET /subscriptions/me, POST /webhooks/revenuecat | RevenueCat webhook, status checks |
@@ -85,11 +86,12 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 
 **Recent Updates:**
 - Language: `isNativeAvailable`, `isLearningAvailable`, `flagUrl`
-- AiConversation: `type` (ANONYMOUS/AUTHENTICATED), UUID primary key as conversation identifier, `expiresAt`, `messageCount`
+- AiConversation: `type` (ANONYMOUS/AUTHENTICATED), UUID primary key as conversation identifier, `messageCount`, `extractedProfile` + `scenarios` JSONB (idempotent caching for onboarding resume)
 - AiConversationMessage: `translatedContent`, `translatedLang` (sentence translation caching)
 - User: `googleProviderId`, `appleProviderId`
 - PasswordReset: OTP flow support
 - Vocabulary: NEW entity for user's translated words with definition & examples
+- Session expiry (`expiresAt` on ai_conversations) removed (2026-04-14)
 
 ## Product Development Requirements (PDR)
 
@@ -115,7 +117,9 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 **FR-4: Onboarding** (High)
 - Anonymous session-based chat
 - No authentication required
-- Max 10 turns, 7-day TTL
+- Max 10 turns per session
+- Idempotent profile extraction with caching
+- Resume support via transcript fetch endpoint
 
 ### Non-Functional Requirements
 

@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-04-07
+**Last Updated:** 2026-04-15
 
 ## Architecture Overview
 
@@ -180,14 +180,12 @@ AI client factory dynamically selects provider based on configuration.
 ┌──────────────────────────────────────────────────────┐
 │    Subscription Controller & Webhook Controller      │
 │  GET /subscriptions/me                              │
-│  POST /subscriptions/sync (mobile-initiated)        │
 │  POST /webhooks/revenuecat (public, bearer auth)   │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │        Subscription Service                          │
 │  - getUserSubscription()                            │
-│  - syncSubscription() → RevenueCat API              │
 │  - processWebhook()                                 │
 │  - updateSubscriptionStatus()                       │
 └──────────────────────────────────────────────────────┘
@@ -204,13 +202,13 @@ AI client factory dynamically selects provider based on configuration.
 └──────────────────────────────────────────────────────┘
 ```
 
-**Sync Flow (Mobile → Backend):**
+**Webhook Flow (RevenueCat → Backend):**
 ```
-1. Mobile app calls POST /subscriptions/sync
-2. Backend queries RevenueCat API with user's app_user_id
-3. Parse entitlements from RevenueCat response
-4. Upsert local Subscription record
-5. Return updated subscription status to client
+1. RevenueCat sends webhook event (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, PRODUCT_CHANGE)
+2. Backend validates Bearer token (timing-safe)
+3. Check WebhookEvent table for eventId (prevents duplicate processing)
+4. Update local Subscription record with new status
+5. Return 200 to RevenueCat; on failure, return 5xx for retry
 ```
 
 ### Onboarding Module Flow
@@ -218,7 +216,8 @@ AI client factory dynamically selects provider based on configuration.
 ┌──────────────────────────────────────────────────────┐
 │      Onboarding Controller (No Auth Required)        │
 │  POST /onboarding/chat (dual-purpose)              │
-│  POST /onboarding/complete                         │
+│  POST /onboarding/complete (idempotent)            │
+│  GET /onboarding/conversations/:id/messages        │
 └──────────────────────────────────────────────────────┘
                     ↓
         [Request contains conversationId?]
@@ -232,22 +231,28 @@ AI client factory dynamically selects provider based on configuration.
 │        Onboarding Service                            │
 │  - createSession(native_lang, target_lang)         │
 │  - processMessage(conv_id, message)                │
-│  - extractProfile()                                 │
-│  - cleanupExpiredSessions()                         │
+│  - complete(conv_id) — idempotent profile extract   │
+│  - getMessages(conv_id) — fetch transcript          │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │        AI Learning Agent (for Onboarding)           │
 │  - Session-based state management                   │
-│  - Profile extraction via AI                        │
+│  - Profile extraction (cached after first success)  │
+│  - Scenario generation (cached after first success) │
 │  - Max 10 turns per session                         │
-│  - 7-day session TTL                                │
 └──────────────────────────────────────────────────────┘
 ```
 
 **Rate Limiting (OnboardingThrottlerGuard):**
 - New session (no `conversation_id`): 5 req/hr per IP
 - Chat continuation (with `conversation_id`): 30 req/hr per IP
+- Message fetch GET endpoint: 30 req/hr per IP
+
+**Caching (Idempotent /complete):**
+- First successful call: Caches `extracted_profile` + `scenarios` (5 scenario objects with stable UUIDs)
+- Subsequent calls: Return same data without re-invoking LLM (same scenario UUIDs preserved)
+- Partial failures: Skip caching, allow retry on next call
 
 ### Lesson Module Flow
 ```

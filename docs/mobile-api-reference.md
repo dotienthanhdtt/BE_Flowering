@@ -187,29 +187,6 @@ Query: `?type=native|learning`
 }
 ```
 
-### POST /subscriptions/sync *(auth required)*
-Call after purchase and on app open. Empty body.
-```json
-// Response data: same shape as GET /subscriptions/me
-```
-
----
-
-## Notifications
-
-### POST /notifications/devices *(auth required)*
-```json
-// Request
-{ "token": "fcm_token", "platform": "ios|android|web", "device_name": "iPhone 15" }
-
-// Response data: null
-```
-
-### DELETE /notifications/devices/:token *(auth required)*
-```json
-// Response data: null
-```
-
 ---
 
 ## AI
@@ -265,38 +242,6 @@ Call after purchase and on app open. Empty body.
 { "translated_content": "Eso es hermoso." }
 ```
 
-### POST /ai/exercises/generate *(premium)*
-```json
-// Request
-{ "language": "spanish", "level": "beginner", "type": "vocabulary|grammar|conversation" }
-
-// Response data
-[{ "type": "...", "prompt": "...", "expected_answer": "...", "difficulty": "..." }]
-```
-
-### POST /ai/conversations *(premium)*
-```json
-// Request
-{ "language": "spanish", "topic": "daily_life" }
-
-// Response data
-{ "conversation_id": "uuid" }
-```
-
-### GET /ai/conversations/:id/messages *(premium)*
-```json
-// Response data
-[
-  {
-    "role": "user|assistant",
-    "content": "...",
-    "model": "gpt-4o",
-    "tokens_used": 123,
-    "created_at": "2026-03-28T00:00:00Z"
-  }
-]
-```
-
 ---
 
 ## Onboarding — no auth required
@@ -336,6 +281,9 @@ Single endpoint. Omit `conversation_id` on first call to create a session; the r
 ```
 
 ### POST /onboarding/complete
+
+**Idempotent.** First call extracts and caches profile + 5 scenarios. Subsequent calls return same data (with same scenario UUIDs) without re-invoking LLM.
+
 ```json
 // Request
 { "conversation_id": "uuid" }
@@ -349,6 +297,42 @@ Single endpoint. Omit `conversation_id` on first call to create a session; the r
   }
 }
 ```
+
+### GET /onboarding/conversations/:conversationId/messages
+
+Fetch full transcript for an anonymous onboarding conversation (used by mobile on resume to rehydrate chat UI).
+
+**Parameters:**
+- `conversationId` (path, required) — UUID v4
+
+**Throttling:** 30 req/hour/IP
+
+```json
+// Response data
+{
+  "conversation_id": "uuid",
+  "turn_number": 3,
+  "max_turns": 10,
+  "is_last_turn": false,
+  "messages": [
+    {
+      "id": "msg-uuid-1",
+      "role": "assistant",
+      "content": "Hi! What's your current level?",
+      "created_at": "2026-04-15T10:00:00Z"
+    },
+    {
+      "id": "msg-uuid-2",
+      "role": "user",
+      "content": "I'm a beginner",
+      "created_at": "2026-04-15T10:01:00Z"
+    }
+  ]
+}
+```
+
+**Errors:**
+- 404 — conversation not found or not an anonymous onboarding session
 
 ---
 

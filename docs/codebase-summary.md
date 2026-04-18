@@ -1,6 +1,6 @@
 # Codebase Summary
 
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-15
 **Generated from:** repomix-output.xml (updated 2026-04-12)
 
 ## Overview
@@ -94,14 +94,19 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Purpose:** Anonymous session-based chat for new users
 
 **Endpoints:**
-- POST /onboarding/chat (create when no conversationId; otherwise continue), /onboarding/complete
+- POST /onboarding/chat (create when no conversationId; otherwise continue)
+- POST /onboarding/complete (idempotent — caches extracted profile + 5 scenarios)
+- GET /onboarding/conversations/:conversationId/messages (fetch transcript for resume UX)
 
 **Config:**
 - maxTurns: 10
-- sessionTtlDays: 7
 - model: GPT-4o-mini
 - maxTokens: 1024
 - temperature: 0.7
+
+**Rate Limiting (OnboardingThrottlerGuard):**
+- New session creation (no conversationId): 5 req/hr per IP
+- Chat continuation or message fetch (with conversationId): 30 req/hr per IP
 
 **Features:**
 - No authentication required
@@ -133,11 +138,10 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ### 6. Subscription Module (6 files, 404 LOC)
 
-**Purpose:** RevenueCat subscription management with sync endpoint and DB-based idempotency
+**Purpose:** RevenueCat subscription management with DB-based idempotency
 
 **Endpoints:**
 - GET /subscriptions/me (get user's subscription)
-- POST /subscriptions/sync (sync with RevenueCat API, called by mobile)
 - POST /webhooks/revenuecat (public, bearer auth, idempotent)
 
 **Webhook Events:** INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, PRODUCT_CHANGE
@@ -312,10 +316,12 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 ### AiConversation Entity Updates
 - `type` - ANONYMOUS or AUTHENTICATED
 - `id` - UUID primary key (conversation identifier for all sessions)
-- `expiresAt` - Session expiration (7 days)
 - `messageCount` - Turn counter
 - `metadata` - JSONB for flexible data storage
 - `scenarioId` - FK to Scenario (nullable, indicates scenario chat conversation)
+- `extractedProfile` - JSONB, nullable — cached learner profile (added 2026-04-15)
+- `scenarios` - JSONB, nullable — cached 5-scenario array with stable UUIDs (added 2026-04-15)
+- `expiresAt` - DEPRECATED: Session expiry logic removed (2026-04-14)
 
 ### AiConversationMessage Entity Updates
 - `translatedContent` - Cached sentence translation

@@ -1,6 +1,6 @@
 # Project Roadmap
 
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-15
 **Project:** AI Language Learning Backend
 **Status:** Phase 1 Complete, Phase 2 In Progress (95%)
 
@@ -20,7 +20,7 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - NestJS 11 modular architecture (8 modules)
 - Authentication (email/password, Google, Apple with auto-linking)
 - AI features (LangChain, multi-provider, Langfuse tracing)
-- Onboarding (anonymous chat, 10-turn max, 7-day TTL)
+- Onboarding (anonymous chat, 10-turn max)
 - Subscriptions (RevenueCat webhooks)
 - Push notifications (Firebase FCM)
 - Database (14 entities, RLS, 9 migrations)
@@ -85,6 +85,9 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ OnboardingThrottlerGuard: custom throttler with conditional 5/hr (creation) and 30/hr (chat) limits (2026-04-14)
 - ✅ All onboarding tests passing (25/25), backend test suite passing (284/284) (2026-04-14)
 - ✅ Updated docs: api/onboarding-api.md, mobile-api-reference.md, codebase-summary, project-overview-pdr (2026-04-14)
+- ✅ Onboarding resume support: idempotent /complete with cached profile + scenarios; GET /conversations/:id/messages endpoint (2026-04-15)
+- ✅ Removed session expiry logic: 7-day TTL on anonymous onboarding conversations removed; expiresAt column deprecated (2026-04-14)
+- ✅ Updated docs: codebase-summary, system-architecture, project-overview-pdr for resume support + session expiry removal (2026-04-15)
 
 **In Progress:**
 | Feature | Priority | Status | Target Date |

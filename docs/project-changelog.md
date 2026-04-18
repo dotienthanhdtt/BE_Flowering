@@ -1,9 +1,21 @@
 # Project Changelog
 
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-04-15
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-04-15 — Session Expiry Removal
+
+### Changed
+- **Session Expiration Removed:** 7-day TTL on anonymous onboarding sessions removed. Sessions now persist indefinitely.
+- `expiresAt` column on `ai_conversations` table is now deprecated (kept for backward compatibility, never populated).
+
+### Documentation Updates
+- All docs (`codebase-summary.md`, `system-architecture.md`, `project-overview-pdr.md`, `api/onboarding-api.md`, `api-documentation.md`) updated to remove session expiry references.
+- Clarified that sessions persist indefinitely (no TTL).
+
+---
 
 ## 2026-04-14 — Onboarding Resume Support
 
