@@ -17,6 +17,7 @@ import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation, AiConversationType } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
+import { UserLanguage } from '../../database/entities/user-language.entity';
 import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto, FirebaseAuthDto } from './dto';
 import { FirebaseTokenStrategy, OAuthProvider } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
@@ -51,6 +52,8 @@ export class AuthService {
     private conversationRepository: Repository<AiConversation>,
     @InjectRepository(PasswordReset)
     private passwordResetRepository: Repository<PasswordReset>,
+    @InjectRepository(UserLanguage)
+    private userLanguageRepository: Repository<UserLanguage>,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -331,17 +334,66 @@ export class AuthService {
    * Best-effort: logs warning on failure, never throws.
    */
   private async linkOnboardingSession(userId: string, conversationId: string): Promise<void> {
+    let conversation: AiConversation | null = null;
     try {
+      // Load conversation for languageId — filtered by ANONYMOUS type acts as a trust check
+      conversation = await this.conversationRepository.findOne({
+        where: { id: conversationId, type: AiConversationType.ANONYMOUS },
+      });
+      if (!conversation) {
+        this.logger.warn(`No anonymous onboarding session found for id: ${conversationId}`);
+        return;
+      }
+
+      // Atomic conditional update — if affected=0, another auth flow won the race
+      // OR this conversation was already claimed by a different user. Either way,
+      // we must NOT bootstrap this user's language from a conversation we didn't own.
       const result = await this.conversationRepository.update(
         { id: conversationId, type: AiConversationType.ANONYMOUS },
         { userId, type: AiConversationType.AUTHENTICATED },
       );
       if (result.affected === 0) {
-        this.logger.warn(`No anonymous onboarding session found for id: ${conversationId}`);
+        this.logger.warn(
+          `Onboarding session already linked — skipping bootstrap for conversationId: ${conversationId}`,
+        );
+        return;
       }
     } catch (error) {
       this.logger.warn('Failed to link onboarding session', { conversationId, error });
+      return;
     }
+
+    // Bootstrap user_languages in a separate try block so its failures are
+    // distinguishable in logs AND don't leave the conversation-link rolled back.
+    try {
+      await this.bootstrapUserLanguage(userId, conversation.languageId);
+    } catch (error) {
+      this.logger.warn('Failed to bootstrap user language from onboarding', {
+        conversationId,
+        userId,
+        languageId: conversation.languageId,
+        error,
+      });
+    }
+  }
+
+  /**
+   * Idempotently create or reactivate the learner's UserLanguage row based on the
+   * onboarding conversation's language. Mutual exclusivity: all other user_languages
+   * rows for this user are deactivated first. Wrapped in a transaction so a partial
+   * failure cannot leave the user with zero active languages.
+   */
+  private async bootstrapUserLanguage(userId: string, languageId: string): Promise<void> {
+    await this.userLanguageRepository.manager.transaction(async (mgr) => {
+      const repo = mgr.getRepository(UserLanguage);
+      const existing = await repo.findOne({ where: { userId, languageId } });
+      await repo.update({ userId, isActive: true }, { isActive: false });
+      if (existing) {
+        await repo.update(existing.id, { isActive: true });
+      } else {
+        await repo.save(repo.create({ userId, languageId, isActive: true }));
+      }
+    });
   }
 
   private async generateTokens(user: User): Promise<AuthResponseDto> {

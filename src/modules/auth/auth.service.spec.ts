@@ -9,6 +9,7 @@ import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
+import { UserLanguage } from '../../database/entities/user-language.entity';
 import { RegisterDto, LoginDto, FirebaseAuthDto } from './dto';
 import { FirebaseTokenStrategy, FirebaseAuthUser } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
@@ -19,7 +20,8 @@ describe('AuthService', () => {
   let service: AuthService;
   let userRepository: jest.Mocked<Repository<User>>;
   let refreshTokenRepository: jest.Mocked<Repository<RefreshToken>>;
-  let conversationRepository: jest.Mocked<{ update: jest.Mock }>;
+  let conversationRepository: jest.Mocked<{ update: jest.Mock; findOne: jest.Mock }>;
+  let userLanguageRepository: jest.Mocked<{ findOne: jest.Mock; update: jest.Mock; create: jest.Mock; save: jest.Mock }>;
   let jwtService: jest.Mocked<JwtService>;
   let firebaseTokenStrategy: jest.Mocked<FirebaseTokenStrategy>;
   let passwordResetRepository: jest.Mocked<{ count: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock }>;
@@ -82,7 +84,26 @@ describe('AuthService', () => {
           provide: getRepositoryToken(AiConversation),
           useValue: {
             update: jest.fn(),
+            findOne: jest.fn(),
           },
+        },
+        {
+          provide: getRepositoryToken(UserLanguage),
+          useValue: (() => {
+            const repo: any = {
+              findOne: jest.fn(),
+              update: jest.fn(),
+              create: jest.fn().mockImplementation((dto) => dto),
+              save: jest.fn(),
+            };
+            repo.manager = {
+              // Invoke callback with a mock EntityManager whose getRepository returns repo itself
+              transaction: jest.fn((cb: (mgr: { getRepository: () => typeof repo }) => Promise<unknown>) =>
+                cb({ getRepository: () => repo }),
+              ),
+            };
+            return repo;
+          })(),
         },
         {
           provide: getRepositoryToken(PasswordReset),
@@ -110,6 +131,7 @@ describe('AuthService', () => {
     firebaseTokenStrategy = module.get(FirebaseTokenStrategy);
     passwordResetRepository = module.get(getRepositoryToken(PasswordReset));
     emailService = module.get(EmailService);
+    userLanguageRepository = module.get(getRepositoryToken(UserLanguage));
   });
 
   afterEach(() => {
@@ -338,6 +360,7 @@ describe('AuthService', () => {
       jwtService.sign.mockReturnValue('access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.findOne.mockResolvedValue({ id: 'conv-tok', languageId: 'lang-en' } as any);
       conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
 
       await service.firebaseLogin({ idToken: 'firebase-id-token', conversationId: 'conv-tok' } as FirebaseAuthDto);
@@ -490,6 +513,7 @@ describe('AuthService', () => {
       jwtService.sign.mockReturnValue('access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.findOne.mockResolvedValue({ id: 'conv-tok-123', languageId: 'lang-en' } as any);
       conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
 
       await service.register(registerDto);
@@ -710,8 +734,8 @@ describe('AuthService', () => {
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
     });
 
-    it('logs warning when no matching anonymous session found (affected=0)', async () => {
-      conversationRepository.update.mockResolvedValue({ affected: 0 } as any);
+    it('logs warning when no matching anonymous session found', async () => {
+      conversationRepository.findOne.mockResolvedValue(null);
       const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
 
       await service.register({
@@ -723,10 +747,12 @@ describe('AuthService', () => {
       expect(loggerSpy).toHaveBeenCalledWith(
         expect.stringContaining('No anonymous onboarding session found'),
       );
+      // No bootstrap should happen when conversation not found
+      expect(userLanguageRepository.save).not.toHaveBeenCalled();
     });
 
     it('logs warning on error and does not throw', async () => {
-      conversationRepository.update.mockRejectedValue(new Error('DB error'));
+      conversationRepository.findOne.mockRejectedValue(new Error('DB error'));
       const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
 
       await expect(
@@ -740,6 +766,114 @@ describe('AuthService', () => {
       expect(loggerSpy).toHaveBeenCalledWith(
         'Failed to link onboarding session',
         expect.objectContaining({ conversationId: 'conv-id' }),
+      );
+    });
+  });
+
+  describe('bootstrapUserLanguage (via linkOnboardingSession)', () => {
+    beforeEach(() => {
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.findOne.mockResolvedValue({ id: 'conv-1', languageId: 'lang-es' } as any);
+      conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
+    });
+
+    const registerWithConv = () =>
+      service.register({
+        email: 'a@b.com',
+        password: 'Pass123!',
+        conversationId: 'conv-1',
+      });
+
+    it('creates new UserLanguage row when user has none for that language', async () => {
+      userLanguageRepository.findOne.mockResolvedValue(null);
+      userLanguageRepository.update.mockResolvedValue({ affected: 0 } as any);
+      userLanguageRepository.save.mockResolvedValue({ id: 'ul-1' } as any);
+
+      await registerWithConv();
+
+      // Deactivate any existing active row (none here) then create new
+      expect(userLanguageRepository.update).toHaveBeenCalledWith(
+        { userId: mockUser.id, isActive: true },
+        { isActive: false },
+      );
+      expect(userLanguageRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: mockUser.id, languageId: 'lang-es', isActive: true }),
+      );
+    });
+
+    it('reactivates existing row instead of inserting duplicate', async () => {
+      const existing = { id: 'ul-existing', userId: mockUser.id, languageId: 'lang-es', isActive: false };
+      userLanguageRepository.findOne.mockResolvedValue(existing);
+      userLanguageRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      await registerWithConv();
+
+      // Deactivate others first
+      expect(userLanguageRepository.update).toHaveBeenCalledWith(
+        { userId: mockUser.id, isActive: true },
+        { isActive: false },
+      );
+      // Flip existing row to active
+      expect(userLanguageRepository.update).toHaveBeenCalledWith('ul-existing', { isActive: true });
+      expect(userLanguageRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('deactivates other active languages before activating target', async () => {
+      userLanguageRepository.findOne.mockResolvedValue(null);
+      userLanguageRepository.update.mockResolvedValue({ affected: 1 } as any);
+      userLanguageRepository.save.mockResolvedValue({ id: 'ul-new' } as any);
+
+      await registerWithConv();
+
+      // First update call deactivates all active rows for this user
+      const updateCalls = userLanguageRepository.update.mock.calls;
+      expect(updateCalls[0]).toEqual([
+        { userId: mockUser.id, isActive: true },
+        { isActive: false },
+      ]);
+    });
+
+    it('does not touch user_languages when no conversationId provided', async () => {
+      await service.register({
+        email: 'a@b.com',
+        password: 'Pass123!',
+      });
+
+      expect(userLanguageRepository.findOne).not.toHaveBeenCalled();
+      expect(userLanguageRepository.update).not.toHaveBeenCalled();
+      expect(userLanguageRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('swallows bootstrap errors — auth still succeeds', async () => {
+      userLanguageRepository.findOne.mockRejectedValue(new Error('user_languages DB error'));
+      const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
+
+      const result = await registerWithConv();
+
+      expect(result).toHaveProperty('accessToken');
+      expect(loggerSpy).toHaveBeenCalledWith(
+        'Failed to bootstrap user language from onboarding',
+        expect.objectContaining({ conversationId: 'conv-1', userId: mockUser.id, languageId: 'lang-es' }),
+      );
+    });
+
+    it('skips bootstrap when conversation was already linked mid-flight (affected=0)', async () => {
+      conversationRepository.findOne.mockResolvedValue({ id: 'conv-1', languageId: 'lang-es' } as any);
+      conversationRepository.update.mockResolvedValue({ affected: 0 } as any);
+      const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
+
+      await registerWithConv();
+
+      expect(userLanguageRepository.findOne).not.toHaveBeenCalled();
+      expect(userLanguageRepository.update).not.toHaveBeenCalled();
+      expect(userLanguageRepository.save).not.toHaveBeenCalled();
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('already linked — skipping bootstrap'),
       );
     });
   });

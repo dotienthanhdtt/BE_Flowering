@@ -12,12 +12,13 @@ import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
+import { UserLanguage } from '../../database/entities/user-language.entity';
 import { AppConfiguration } from '../../config/app-configuration';
 import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, RefreshToken, AiConversation, PasswordReset]),
+    TypeOrmModule.forFeature([User, RefreshToken, AiConversation, PasswordReset, UserLanguage]),
     EmailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
