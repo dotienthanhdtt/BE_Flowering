@@ -379,17 +379,17 @@ export class AuthService {
 
   /**
    * Idempotently create or reactivate the learner's UserLanguage row based on the
-   * onboarding conversation's language. Mutual exclusivity: all other user_languages
-   * rows for this user are deactivated first. Wrapped in a transaction so a partial
-   * failure cannot leave the user with zero active languages.
+   * onboarding conversation's language. Other active user_languages rows are left
+   * untouched — a user may have multiple active languages simultaneously.
    */
   private async bootstrapUserLanguage(userId: string, languageId: string): Promise<void> {
     await this.userLanguageRepository.manager.transaction(async (mgr) => {
       const repo = mgr.getRepository(UserLanguage);
       const existing = await repo.findOne({ where: { userId, languageId } });
-      await repo.update({ userId, isActive: true }, { isActive: false });
       if (existing) {
-        await repo.update(existing.id, { isActive: true });
+        if (!existing.isActive) {
+          await repo.update(existing.id, { isActive: true });
+        }
       } else {
         await repo.save(repo.create({ userId, languageId, isActive: true }));
       }
