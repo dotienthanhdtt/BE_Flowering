@@ -21,7 +21,7 @@ describe('AuthService', () => {
   let userRepository: jest.Mocked<Repository<User>>;
   let refreshTokenRepository: jest.Mocked<Repository<RefreshToken>>;
   let conversationRepository: jest.Mocked<{ update: jest.Mock; findOne: jest.Mock }>;
-  let userLanguageRepository: jest.Mocked<{ findOne: jest.Mock; update: jest.Mock; create: jest.Mock; save: jest.Mock }>;
+  let userLanguageRepository: jest.Mocked<{ findOne: jest.Mock; update: jest.Mock; create: jest.Mock; save: jest.Mock; find: jest.Mock }>;
   let jwtService: jest.Mocked<JwtService>;
   let firebaseTokenStrategy: jest.Mocked<FirebaseTokenStrategy>;
   let passwordResetRepository: jest.Mocked<{ count: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock }>;
@@ -95,6 +95,7 @@ describe('AuthService', () => {
               update: jest.fn(),
               create: jest.fn().mockImplementation((dto) => dto),
               save: jest.fn(),
+              find: jest.fn().mockResolvedValue([]),
             };
             repo.manager = {
               // Invoke callback with a mock EntityManager whose getRepository returns repo itself

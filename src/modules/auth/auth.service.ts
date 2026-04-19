@@ -19,6 +19,7 @@ import { AiConversation, AiConversationType } from '../../database/entities/ai-c
 import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
 import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto, FirebaseAuthDto } from './dto';
+import { UserLanguageDto } from '../language/dto/user-language.dto';
 import { FirebaseTokenStrategy, OAuthProvider } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 
@@ -419,11 +420,39 @@ export class AuthService {
 
     await this.refreshTokenRepository.save(refreshTokenEntity);
 
+    const languages = await this.getUserLanguages(user.id);
+
     return {
       accessToken,
       refreshToken: rawRefreshToken,
       user: this.mapToUserDto(user),
+      languages,
     };
+  }
+
+  private async getUserLanguages(userId: string): Promise<UserLanguageDto[]> {
+    const userLanguages = await this.userLanguageRepository.find({
+      where: { userId },
+      relations: ['language'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return userLanguages.map((ul) => ({
+      id: ul.id,
+      languageId: ul.languageId,
+      proficiencyLevel: ul.proficiencyLevel,
+      isActive: ul.isActive,
+      createdAt: ul.createdAt,
+      language: {
+        id: ul.language.id,
+        code: ul.language.code,
+        name: ul.language.name,
+        nativeName: ul.language.nativeName,
+        flagUrl: ul.language.flagUrl,
+        isNativeAvailable: ul.language.isNativeAvailable,
+        isLearningAvailable: ul.language.isLearningAvailable,
+      },
+    }));
   }
 
   private mapToUserDto(user: User): UserResponseDto {
