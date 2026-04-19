@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-04-18
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.8.0
+**API Version:** 2.0.0
 
 ## Overview
 
@@ -55,6 +55,34 @@ Authorization: Bearer <jwt_token>
 - Default expiry: 7 days
 - Algorithm: HS256
 - Public routes: Use @Public() decorator
+
+### Language Context Header
+
+**Required for:** All content endpoints (lessons, scenarios, exercises, AI chat)
+
+```
+X-Learning-Language: <language_code>
+```
+
+**Purpose:** Specifies user's active learning language for request-scoped content partitioning.
+
+**Valid values:** ISO 639-1 language codes (e.g., `en`, `es`, `fr`, `ja`, `vi`). Must match a language code in the Language catalog.
+
+**Behavior:**
+- Header is validated and resolved to Language.id on every request
+- Resolved language context is cached (LRU, 60s TTL)
+- Used to filter content (lessons, scenarios, exercises) by language
+- Returns 400 if header missing or language code invalid
+- Cached per language code for performance
+
+**cURL Example:**
+```bash
+curl http://localhost:3000/lessons \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "X-Learning-Language: es"
+```
+
+**Note:** Onboarding endpoints, user profile, subscriptions, and admin endpoints do NOT require this header.
 
 ## Endpoints
 
@@ -908,6 +936,203 @@ Complete a review session. Returns stats.
 - Deleted session cannot be resumed
 
 **Errors:** 401 (unauthorized), 404 (session not found)
+
+---
+
+### Admin Content Management
+
+All admin endpoints require `isAdmin` flag on user account (set via ADMIN_EMAILS env var bootstrap).
+
+#### POST /admin/content/generate
+Generate LLM-powered draft content (scenarios, exercises, or lessons).
+
+**Auth:** Required (Admin) | **Rate Limit:** 5 req/min | **Request:**
+```json
+{
+  "language_id": "uuid",
+  "type": "SCENARIO|EXERCISE|LESSON",
+  "level": "beginner|intermediate|advanced",
+  "count": 5
+}
+```
+
+| Field | Type | Required | Limit | Description |
+|-------|------|----------|-------|-------------|
+| language_id | UUID | Yes | - | Target language for content |
+| type | enum | Yes | - | Content type to generate |
+| level | enum | Yes | - | Difficulty level |
+| count | number | No | max 10, default 5 | Number of items to generate |
+
+**Response (201):**
+```json
+{
+  "code": 1,
+  "message": "Content generated",
+  "data": {
+    "generated": [
+      {
+        "id": "uuid",
+        "type": "SCENARIO",
+        "title": "Restaurant Ordering",
+        "description": "Learn to order food at a restaurant",
+        "status": "draft",
+        "language_id": "uuid",
+        "level": "beginner",
+        "created_at": "2026-04-18T10:00:00Z"
+      }
+    ],
+    "count": 5
+  }
+}
+```
+
+**Behavior:**
+- Invokes LLM to generate structured content
+- All items created with status=draft
+- Items not visible to users until published
+- Throttled to 5 req/min per admin
+
+**Errors:**
+- 400 (invalid type/level)
+- 401 (unauthorized, not admin)
+- 403 (forbidden, not admin)
+- 429 (rate limit exceeded)
+- 503 (AI provider unavailable)
+
+---
+
+#### GET /admin/content
+List content with optional filters.
+
+**Auth:** Required (Admin) | **Query params:**
+- `status` (optional, enum: draft|published|archived) — Filter by status
+- `type` (optional, enum: LESSON|EXERCISE|SCENARIO) — Filter by content type
+- `language_id` (optional, UUID) — Filter by language
+- `page` (optional, integer, min: 1, default: 1) — Page number
+- `limit` (optional, integer, min: 1, max: 100, default: 20) — Items per page
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Content found",
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "type": "SCENARIO",
+        "title": "Restaurant Ordering",
+        "description": "Learn to order food",
+        "status": "draft",
+        "language_id": "uuid",
+        "language_code": "es",
+        "level": "beginner",
+        "created_at": "2026-04-18T10:00:00Z",
+        "updated_at": "2026-04-18T10:00:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 42
+    }
+  }
+}
+```
+
+**Errors:** 401 (unauthorized, not admin)
+
+---
+
+#### PATCH /admin/content/:id/publish
+Promote draft content to published (makes visible to users).
+
+**Auth:** Required (Admin) | **Query param:**
+- `type` (required, enum: LESSON|EXERCISE|SCENARIO) — Content type
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Content published",
+  "data": {
+    "id": "uuid",
+    "status": "published",
+    "updated_at": "2026-04-18T10:05:00Z"
+  }
+}
+```
+
+**Behavior:**
+- Changes status from draft to published
+- Published content now visible to users (with language partitioning)
+- Idempotent: re-publishing published content succeeds silently
+
+**Errors:**
+- 400 (invalid type query param)
+- 401 (unauthorized, not admin)
+- 404 (content not found)
+
+---
+
+#### PATCH /admin/content/:id
+Edit content (title and description only).
+
+**Auth:** Required (Admin) | **Query param:**
+- `type` (required, enum: LESSON|EXERCISE|SCENARIO) — Content type
+
+**Request:**
+```json
+{
+  "title": "Restaurant Ordering",
+  "description": "Learn to order food at a restaurant with confidence"
+}
+```
+
+| Field | Type | Limit | Description |
+|-------|------|-------|-------------|
+| title | string | 255 chars | Content title |
+| description | string | 5000 chars | Content description |
+
+Both fields optional; updates only provided fields.
+
+**Response (200):** Same shape as PATCH /publish
+
+**Errors:**
+- 400 (invalid type query param, empty body)
+- 401 (unauthorized, not admin)
+- 404 (content not found)
+
+---
+
+#### DELETE /admin/content/:id
+Archive content (soft delete, retained in DB with status=archived).
+
+**Auth:** Required (Admin) | **Query param:**
+- `type` (required, enum: LESSON|EXERCISE|SCENARIO) — Content type
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Content archived",
+  "data": {
+    "id": "uuid",
+    "status": "archived",
+    "updated_at": "2026-04-18T10:10:00Z"
+  }
+}
+```
+
+**Behavior:**
+- Changes status to archived (not deleted, record retained)
+- Archived content hidden from users
+- Idempotent: re-archiving succeeds silently
+
+**Errors:**
+- 400 (invalid type query param)
+- 401 (unauthorized, not admin)
+- 404 (content not found)
 
 ---
 

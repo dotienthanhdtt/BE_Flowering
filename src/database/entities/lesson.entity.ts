@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Language } from './language.entity';
+import { ContentStatus } from './content-status.enum';
 
 export enum LessonDifficulty {
   BEGINNER = 'beginner',
@@ -48,6 +49,9 @@ export class Lesson {
 
   @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive!: boolean;
+
+  @Column({ type: 'enum', enum: ContentStatus, default: ContentStatus.PUBLISHED })
+  status!: ContentStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

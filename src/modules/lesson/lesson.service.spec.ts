@@ -3,6 +3,8 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { SelectQueryBuilder } from 'typeorm';
 import { LessonService } from './lesson.service';
 import { Scenario, ScenarioDifficulty } from '../../database/entities/scenario.entity';
+import { ContentStatus } from '../../database/entities/content-status.enum';
+import { Language } from '../../database/entities/language.entity';
 
 import { Subscription, SubscriptionPlan, SubscriptionStatus } from '../../database/entities/subscription.entity';
 import { ScenarioCategory } from '../../database/entities/scenario-category.entity';
@@ -60,6 +62,15 @@ describe('LessonService', () => {
     updatedAt: new Date(),
   });
 
+  const mockLanguage = (): Language => ({
+    id: 'lang-en',
+    code: 'en',
+    name: 'English',
+    isActive: true,
+    isNativeAvailable: true,
+    isLearningAvailable: true,
+  });
+
   // Helper: Create mock scenario
   const mockScenario = (
     id: string = 'scenario-1',
@@ -69,6 +80,8 @@ describe('LessonService', () => {
     id,
     category,
     categoryId: category.id,
+    language: mockLanguage(),
+    languageId: 'lang-en',
     title: 'Test Scenario',
     description: 'Test Description',
     imageUrl: 'https://example.com/image.jpg',
@@ -76,6 +89,7 @@ describe('LessonService', () => {
     isPremium: false,
     isTrial: false,
     isActive: true,
+    status: ContentStatus.PUBLISHED,
     orderIndex: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -112,8 +126,8 @@ describe('LessonService', () => {
   describe('getLessons', () => {
     const userId = 'user-1';
 
-    describe('Visibility - Global Scenarios', () => {
-      it('should return global scenarios (language_id IS NULL)', async () => {
+    describe('Visibility - Language-partitioned Scenarios', () => {
+      it('should return scenarios filtered by languageId', async () => {
         const category = mockCategory('cat-1', 'Conversation');
         const scenarios = [mockScenario('s-1', category), mockScenario('s-2', category)];
         const queryBuilder = createMockQueryBuilder();
@@ -122,10 +136,10 @@ describe('LessonService', () => {
 
         (queryBuilder.getCount as jest.Mock).mockResolvedValue(2);
         (queryBuilder.getMany as jest.Mock).mockResolvedValue(scenarios);
-        subscriptionRepo.findOne.mockResolvedValue(null); // Free user
+        subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(queryBuilder.where).toHaveBeenCalledWith('scenario.is_active = true');
         expect(result.pagination.total).toBe(2);
@@ -133,7 +147,7 @@ describe('LessonService', () => {
         expect(result.categories[0].scenarios).toHaveLength(2);
       });
 
-      it('should apply language filter when provided', async () => {
+      it('should apply languageId filter in andWhere clause (no IS NULL branch)', async () => {
         const category = mockCategory('cat-1', 'Conversation');
         const langId = 'lang-1';
         const scenarios = [mockScenario('s-1', category, { languageId: langId })];
@@ -145,18 +159,17 @@ describe('LessonService', () => {
         (queryBuilder.getMany as jest.Mock).mockResolvedValue(scenarios);
         subscriptionRepo.findOne.mockResolvedValue(null);
 
-        const query: GetLessonsQueryDto = { language: langId, page: 1, limit: 20 };
-        await service.getLessons(userId, query);
+        const query: GetLessonsQueryDto = { page: 1, limit: 20 };
+        await service.getLessons(userId, langId, query);
 
-        // Should apply visibility query with language filter
         expect(queryBuilder.andWhere).toHaveBeenCalled();
         const andWhereCall = (queryBuilder.andWhere as jest.Mock).mock.calls[0];
-        expect(andWhereCall[0]).toContain('language_id IS NULL');
+        expect(andWhereCall[0]).not.toContain('language_id IS NULL');
         expect(andWhereCall[0]).toContain('language_id = :languageId');
         expect(andWhereCall[1]).toEqual({ languageId: langId, userId });
       });
 
-      it('should include user-granted access scenarios without language filter', async () => {
+      it('should include user-granted access scenarios via IN subquery', async () => {
         const category = mockCategory('cat-1', 'Conversation');
         const scenarios = [mockScenario('s-1', category)];
         const queryBuilder = createMockQueryBuilder();
@@ -168,12 +181,11 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        await service.getLessons(userId, query);
+        await service.getLessons(userId, 'lang-en', query);
 
-        // Should apply visibility query that includes user access subquery
         expect(queryBuilder.andWhere).toHaveBeenCalled();
         const andWhereCall = (queryBuilder.andWhere as jest.Mock).mock.calls[0];
-        expect(andWhereCall[0]).toContain('language_id IS NULL');
+        expect(andWhereCall[0]).toContain('language_id = :languageId');
         expect(andWhereCall[0]).toContain('IN (');
       });
     });
@@ -197,7 +209,7 @@ describe('LessonService', () => {
           page: 1,
           limit: 20,
         };
-        await service.getLessons(userId, query);
+        await service.getLessons(userId, 'lang-en', query);
 
         expect(queryBuilder.andWhere).toHaveBeenCalledWith('scenario.difficulty = :level', {
           level: ScenarioDifficulty.INTERMEDIATE,
@@ -216,7 +228,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        await service.getLessons(userId, query);
+        await service.getLessons(userId, 'lang-en', query);
 
         // Should not have called andWhere for difficulty filter
         const andWhereCalls = (queryBuilder.andWhere as jest.Mock).mock.calls;
@@ -238,7 +250,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { search: 'Restaurant', page: 1, limit: 20 };
-        await service.getLessons(userId, query);
+        await service.getLessons(userId, 'lang-en', query);
 
         expect(queryBuilder.andWhere).toHaveBeenCalledWith('scenario.title ILIKE :search', {
           search: '%Restaurant%',
@@ -257,7 +269,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        await service.getLessons(userId, query);
+        await service.getLessons(userId, 'lang-en', query);
 
         const andWhereCalls = (queryBuilder.andWhere as jest.Mock).mock.calls;
         const hasSearchFilter = andWhereCalls.some((call) => call[0]?.includes('ILIKE'));
@@ -276,7 +288,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { search: '', page: 1, limit: 20 };
-        await service.getLessons(userId, query);
+        await service.getLessons(userId, 'lang-en', query);
 
         // Empty string is falsy, so filter should not be applied
         const andWhereCalls = (queryBuilder.andWhere as jest.Mock).mock.calls;
@@ -300,7 +312,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null); // Free user (no subscription)
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.LOCKED);
       });
@@ -323,7 +335,7 @@ describe('LessonService', () => {
         } as Subscription); // Paid user
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.AVAILABLE);
       });
@@ -344,7 +356,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null); // Free user
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.TRIAL);
       });
@@ -367,7 +379,7 @@ describe('LessonService', () => {
         } as Subscription); // Paid user
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.AVAILABLE);
       });
@@ -386,7 +398,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null); // Free user
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         // Should be TRIAL, not LOCKED (isTrial takes precedence)
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.TRIAL);
@@ -408,7 +420,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null); // Free user
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.AVAILABLE);
       });
@@ -432,7 +444,7 @@ describe('LessonService', () => {
         } as Subscription); // Paid user with lifetime
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.AVAILABLE);
         expect(result.categories[0].scenarios[1].status).toBe(ScenarioStatus.AVAILABLE);
@@ -457,7 +469,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories).toHaveLength(2);
         expect(result.categories[0].name).toBe('Conversation');
@@ -478,7 +490,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories[0].id).toBe('cat-1');
         expect(result.categories[0].name).toBe('Advanced Conversations');
@@ -496,7 +508,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories[0].scenarios[0].imageUrl).toBeNull();
       });
@@ -517,7 +529,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = {}; // Defaults applied
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(queryBuilder.skip).toHaveBeenCalledWith(0); // (1-1) * 20
         expect(queryBuilder.take).toHaveBeenCalledWith(20);
@@ -540,7 +552,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 2, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(queryBuilder.skip).toHaveBeenCalledWith(20); // (2-1) * 20
         expect(queryBuilder.take).toHaveBeenCalledWith(20);
@@ -562,7 +574,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 10 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(queryBuilder.skip).toHaveBeenCalledWith(0);
         expect(queryBuilder.take).toHaveBeenCalledWith(10);
@@ -585,7 +597,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 5, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.pagination.total).toBe(100);
         expect(result.categories[0].scenarios).toHaveLength(5); // Only 5 on this page
@@ -612,7 +624,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        await service.getLessons(userId, query);
+        await service.getLessons(userId, 'lang-en', query);
 
         expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cat.orderIndex', 'ASC');
         expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('scenario.orderIndex', 'ASC');
@@ -645,7 +657,7 @@ describe('LessonService', () => {
           page: 1,
           limit: 20,
         };
-        await service.getLessons(userId, query);
+        await service.getLessons(userId, 'lang-en', query);
 
         // Should apply all three filters
         const andWhereCalls = (queryBuilder.andWhere as jest.Mock).mock.calls;
@@ -664,7 +676,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.categories).toEqual([]);
         expect(result.pagination.total).toBe(0);
@@ -682,7 +694,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null); // Null subscription
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         // Null subscription should be treated as free user
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.LOCKED);
@@ -703,7 +715,7 @@ describe('LessonService', () => {
         } as Subscription);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         // FREE plan should be treated as free user
         expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.LOCKED);
@@ -724,7 +736,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         // Should still group correctly despite same order index
         expect(result.categories).toHaveLength(2);
@@ -749,7 +761,7 @@ describe('LessonService', () => {
         subscriptionRepo.findOne.mockResolvedValue(null);
 
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, query);
+        const result = await service.getLessons(userId, 'lang-en', query);
 
         expect(result.pagination.total).toBe(1000);
         expect(result.categories[0].scenarios).toHaveLength(20);

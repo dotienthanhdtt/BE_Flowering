@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Scenario } from '@/database/entities/scenario.entity';
+import { ContentStatus } from '@/database/entities/content-status.enum';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
 import { SubscriptionService } from '@/modules/subscription/subscription.service';
 
@@ -22,16 +23,21 @@ export class ScenarioAccessService {
 
   /**
    * Finds a scenario and verifies the user is allowed to access it.
+   * If languageId is provided, also verifies scenario belongs to that language.
    * Throws NotFoundException or ForbiddenException on failure.
    */
-  async findAccessibleScenario(userId: string, scenarioId: string): Promise<Scenario> {
+  async findAccessibleScenario(userId: string, scenarioId: string, languageId?: string): Promise<Scenario> {
     const scenario = await this.scenarioRepo.findOne({
-      where: { id: scenarioId, isActive: true },
+      where: { id: scenarioId, isActive: true, status: ContentStatus.PUBLISHED },
       relations: ['category'],
     });
 
     if (!scenario) {
       throw new NotFoundException('Scenario not found');
+    }
+
+    if (languageId && scenario.languageId !== languageId) {
+      throw new NotFoundException('Scenario not available for active language');
     }
 
     // Trial scenarios are freely accessible (trial flag overrides premium gate)

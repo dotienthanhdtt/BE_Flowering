@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { ContentStatus } from '../../database/entities/content-status.enum';
 import { Scenario } from '../../database/entities/scenario.entity';
 import { UserScenarioAccess } from '../../database/entities/user-scenario-access.entity';
 import { Subscription, SubscriptionPlan } from '../../database/entities/subscription.entity';
@@ -22,11 +23,11 @@ export class LessonService {
     private readonly subscriptionService: SubscriptionService,
   ) {}
 
-  async getLessons(userId: string, query: GetLessonsQueryDto): Promise<GetLessonsResponseDto> {
-    const { language, level, search, page = 1, limit = 20 } = query;
+  async getLessons(userId: string, languageId: string, query: GetLessonsQueryDto): Promise<GetLessonsResponseDto> {
+    const { level, search, page = 1, limit = 20 } = query;
 
     // Build visibility query
-    const qb = this.buildVisibilityQuery(userId, language);
+    const qb = this.buildVisibilityQuery(userId, languageId);
 
     // Apply filters
     if (level) {
@@ -66,10 +67,10 @@ export class LessonService {
     };
   }
 
-  /** Build query with visibility rules: global + language-specific + user-granted */
+  /** Build query: language-specific + user-granted access. No global (IS NULL) scenarios. */
   private buildVisibilityQuery(
     userId: string,
-    languageId?: string,
+    languageId: string,
   ): SelectQueryBuilder<Scenario> {
     const qb = this.scenarioRepo
       .createQueryBuilder('scenario')
@@ -84,18 +85,11 @@ export class LessonService {
       .where('access.user_id = :userId')
       .getQuery();
 
-    // Visibility: global OR language-match OR user-granted access
-    if (languageId) {
-      qb.andWhere(
-        `(scenario.language_id IS NULL OR scenario.language_id = :languageId OR scenario.id IN ${accessSubQuery})`,
-        { languageId, userId },
-      );
-    } else {
-      qb.andWhere(
-        `(scenario.language_id IS NULL OR scenario.id IN ${accessSubQuery})`,
-        { userId },
-      );
-    }
+    qb.andWhere(
+      `(scenario.language_id = :languageId OR scenario.id IN ${accessSubQuery})`,
+      { languageId, userId },
+    );
+    qb.andWhere('scenario.status = :status', { status: ContentStatus.PUBLISHED });
 
     return qb;
   }

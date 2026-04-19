@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
 import { AiConversation, AiConversationMessage, MessageRole } from '../../database/entities';
 import { AiConversationType } from '../../database/entities/ai-conversation.entity';
+import { Language } from '../../database/entities/language.entity';
 import { UnifiedLLMService } from '../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../ai/services/prompt-loader.service';
 import { onboardingConfig } from './onboarding.config';
@@ -20,6 +21,8 @@ export class OnboardingService {
     private conversationRepo: Repository<AiConversation>,
     @InjectRepository(AiConversationMessage)
     private messageRepo: Repository<AiConversationMessage>,
+    @InjectRepository(Language)
+    private languageRepo: Repository<Language>,
     private llmService: UnifiedLLMService,
     private promptLoader: PromptLoaderService,
   ) {}
@@ -44,9 +47,17 @@ export class OnboardingService {
   }
 
   private async startSession(args: { nativeLanguage: string; targetLanguage: string }) {
+    const language = await this.languageRepo.findOne({
+      where: { code: args.targetLanguage, isActive: true },
+    });
+    if (!language) {
+      throw new BadRequestException(`Unknown or unsupported target language: "${args.targetLanguage}"`);
+    }
+
     const conversation = this.conversationRepo.create({
       type: AiConversationType.ANONYMOUS,
       title: 'Onboarding Chat',
+      languageId: language.id,
       metadata: {
         nativeLanguage: args.nativeLanguage,
         targetLanguage: args.targetLanguage,

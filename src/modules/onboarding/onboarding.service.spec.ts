@@ -8,6 +8,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OnboardingService } from './onboarding.service';
 import { AiConversation, AiConversationMessage } from '../../database/entities';
 import { AiConversationType } from '../../database/entities/ai-conversation.entity';
+import { Language } from '../../database/entities/language.entity';
 import { UnifiedLLMService } from '../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../ai/services/prompt-loader.service';
 import { onboardingConfig } from './onboarding.config';
@@ -25,6 +26,10 @@ const mockConversationRepo = () => ({
 const mockMessageRepo = () => ({
   save: jest.fn(),
   find: jest.fn(),
+});
+
+const mockLanguageRepo = () => ({
+  findOne: jest.fn().mockResolvedValue({ id: 'lang-en', code: 'en', isActive: true }),
 });
 
 const mockLLMService = () => ({
@@ -56,6 +61,7 @@ describe('OnboardingService', () => {
         OnboardingService,
         { provide: getRepositoryToken(AiConversation), useFactory: mockConversationRepo },
         { provide: getRepositoryToken(AiConversationMessage), useFactory: mockMessageRepo },
+        { provide: getRepositoryToken(Language), useFactory: mockLanguageRepo },
         { provide: UnifiedLLMService, useFactory: mockLLMService },
         { provide: PromptLoaderService, useFactory: mockPromptLoader },
       ],

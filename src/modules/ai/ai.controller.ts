@@ -9,6 +9,7 @@ import { TranscriptionService } from './services/transcription.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
 import { RequirePremium } from '../../common/decorators/require-premium.decorator';
+import { ActiveLanguage, ActiveLanguageContext, SkipLanguageContext } from '../../common/decorators/active-language.decorator';
 import { PremiumGuard } from '../../common/guards/premium.guard';
 import { User } from '../../database/entities';
 import {
@@ -41,19 +42,29 @@ export class AiController {
   @Post('chat')
   @ApiOperation({ summary: 'Chat with AI tutor' })
   @ApiResponse({ status: 200, type: ChatResponseDto })
-  async chat(@CurrentUser() user: User, @Body() dto: ChatRequestDto): Promise<ChatResponseDto> {
-    return this.learningAgent.chat(user.id, dto.message, dto.context, dto.model);
+  async chat(
+    @CurrentUser() user: User,
+    @ActiveLanguage() lang: ActiveLanguageContext,
+    @Body() dto: ChatRequestDto,
+  ): Promise<ChatResponseDto> {
+    const context = { ...dto.context, targetLanguage: lang.code };
+    return this.learningAgent.chat(user.id, dto.message, context, dto.model);
   }
 
   @Sse('chat/stream')
   @ApiOperation({ summary: 'Stream chat response (SSE)' })
-  streamChat(@CurrentUser() user: User, @Body() dto: ChatRequestDto): Observable<MessageEvent> {
+  streamChat(
+    @CurrentUser() user: User,
+    @ActiveLanguage() lang: ActiveLanguageContext,
+    @Body() dto: ChatRequestDto,
+  ): Observable<MessageEvent> {
     const subject = new Subject<MessageEvent>();
+    const context = { ...dto.context, targetLanguage: lang.code };
 
     // Start streaming in background
     (async () => {
       try {
-        const stream = this.learningAgent.streamChat(user.id, dto.message, dto.context, dto.model);
+        const stream = this.learningAgent.streamChat(user.id, dto.message, context, dto.model);
 
         for await (const chunk of stream) {
           subject.next({ data: { content: chunk } } as MessageEvent);
@@ -68,6 +79,7 @@ export class AiController {
   }
 
   @OptionalAuth()
+  @SkipLanguageContext()
   @RequirePremium(false)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('chat/correct')
@@ -85,6 +97,7 @@ export class AiController {
   }
 
   @OptionalAuth()
+  @SkipLanguageContext()
   @RequirePremium(false)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('translate')

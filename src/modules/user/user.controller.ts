@@ -4,6 +4,7 @@ import { UserService } from './user.service';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { SkipLanguageContext } from '../../common/decorators/active-language.decorator';
 import { User } from '../../database/entities/user.entity';
 
 /**
@@ -11,6 +12,7 @@ import { User } from '../../database/entities/user.entity';
  */
 @ApiTags('users')
 @ApiBearerAuth('JWT-auth')
+@SkipLanguageContext()
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}

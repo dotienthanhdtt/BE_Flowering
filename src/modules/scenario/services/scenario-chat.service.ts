@@ -46,16 +46,17 @@ export class ScenarioChatService {
     private readonly scenarioAccessService: ScenarioAccessService,
   ) {}
 
-  async chat(userId: string, dto: ScenarioChatRequestDto): Promise<ScenarioChatResponseDto> {
+  async chat(userId: string, dto: ScenarioChatRequestDto, languageId: string): Promise<ScenarioChatResponseDto> {
     // 0. Reject conflicting intent: forceNew + conversationId is ambiguous
     if (dto.forceNew && dto.conversationId) {
       throw new BadRequestException('Cannot combine forceNew with conversationId');
     }
 
-    // 1. Verify scenario access
+    // 1. Verify scenario access + language match
     const scenario = await this.scenarioAccessService.findAccessibleScenario(
       userId,
       dto.scenarioId,
+      languageId,
     );
 
     // 2. If forceNew, mark any active conversation for this (user, scenario) as completed
@@ -147,7 +148,7 @@ export class ScenarioChatService {
   private async findOrCreate(
     userId: string,
     scenarioId: string,
-    languageId: string | undefined,
+    languageId: string,
   ): Promise<AiConversation> {
     const existing = await this.convoRepo
       .createQueryBuilder('c')
@@ -163,7 +164,7 @@ export class ScenarioChatService {
         this.convoRepo.create({
           userId,
           scenarioId,
-          languageId: languageId ?? null,
+          languageId,
           type: AiConversationType.AUTHENTICATED,
           topic: 'scenario_roleplay',
           metadata: { maxTurns: MAX_TURNS, completed: false },

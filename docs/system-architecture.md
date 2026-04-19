@@ -1,10 +1,10 @@
 # System Architecture
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-18
 
 ## Architecture Overview
 
-AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 7 feature modules and clear separation of concerns.
+AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 11 feature modules and clear separation of concerns. Implements language partitioning strategy for multi-language content isolation.
 
 ## Architecture Layers
 
@@ -33,7 +33,7 @@ AI-powered language learning backend following Clean Architecture principles wit
 ## Core Architecture Patterns
 
 ### 1. Modular Architecture
-8 feature modules (auth, ai, user, language, subscription, onboarding, email, lesson) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
+11 feature modules (auth, ai, user, language, subscription, onboarding, email, lesson, scenario-chat, vocabulary, admin-content, language-context) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
 
 **Module Structure:**
 ```
@@ -427,6 +427,103 @@ Incorrect Answer (any box):
 - reviewCount incremented on every rating (correct or wrong)
 - correctCount incremented only on correct ratings
 
+### Language Context Module Flow
+```
+┌──────────────────────────────────────────────────────────┐
+│      Global LanguageContextGuard (on all routes)         │
+│      [bypassed by @SkipLanguageContext()]                │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    1. Extract X-Learning-Language header                 │
+│    2. Query LanguageContextCacheService                  │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+         [Cache hit? → return]
+                 ↓
+    [Cache miss? → query DB]
+                 ↓
+┌──────────────────────────────────────────────────────────┐
+│    Query Language table WHERE code = header value        │
+│    Cache result (LRU, 60s TTL)                           │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    Store {id, code} in req.activeLanguage               │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    @ActiveLanguage() param decorator                     │
+│    injects context into controller method               │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    Service methods filter by language_id automatically   │
+│    (e.g., getLessons filters WHERE language_id = ctx.id) │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Key Invariants:**
+- All content endpoints require language context
+- Language code validated on every request (no stale cache)
+- Missing header → 400 Bad Request
+- Invalid language code → 400 Bad Request
+
+### Admin Content Module Flow
+```
+┌──────────────────────────────────────────────────────────┐
+│    Admin Content Controller                              │
+│    POST /admin/content/generate                         │
+│    GET /admin/content                                   │
+│    PATCH /admin/content/:id/publish                     │
+│    PATCH /admin/content/:id                             │
+│    DELETE /admin/content/:id                            │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    AdminGuard: Check user.isAdmin flag                  │
+│    (bootstrapped via ADMIN_EMAILS env var)              │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    Admin Content Service                                 │
+│    - generateDrafts(adminId, dto)                       │
+│    - listContent(query filters)                         │
+│    - publishContent(id, type)                           │
+│    - updateContent(id, type, updates)                   │
+│    - archiveContent(id, type)                           │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+        [For generateDrafts]
+                 ↓
+┌──────────────────────────────────────────────────────────┐
+│    Unified LLM Service (LangChain)                       │
+│    - Generate structured content in JSON                │
+│    - Batch generation (count parameter)                 │
+│    - LangFuse tracing per invocation                    │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    Insert Lesson/Exercise/Scenario entities              │
+│    - All content created with status=draft               │
+│    - All content includes specified language_id          │
+│    - All content initially hidden from users             │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Content Lifecycle:**
+
+```
+Create (draft) → Edit → Publish (visible to users) → Archive (hidden)
+     ↓
+ [initial state]
+                                                         [soft delete]
+```
+
+**Rate Limiting:**
+- /generate: 5 req/min per admin (Throttle guard)
+- Other endpoints: no specific limit (non-AI)
+
 ## Database Architecture
 
 ### Entity Relationships
@@ -438,10 +535,15 @@ User (1) ──< (N) RefreshToken
 User (1) ──< (N) PasswordReset
 User (1) ──< (N) Vocabulary
 User (1) ──< (N) UserScenarioAccess
+User (1) ──< (N) UserProgress
+User (1) ──< (N) UserExerciseAttempt
 
 Language (1) ──< (N) UserLanguage
-Language (1) ──< (N) Lesson
-Language (1) ──< (N) Scenario  (nullable: scenarios can be global)
+Language (1) ──< (N) Lesson  (non-nullable, language partitioning key)
+Language (1) ──< (N) Exercise  (non-nullable, language partitioning key)
+Language (1) ──< (N) Scenario  (non-nullable, language partitioning key)
+Language (1) ──< (N) UserProgress  (non-nullable, language partitioning key)
+Language (1) ──< (N) UserExerciseAttempt  (non-nullable, language partitioning key)
 
 ScenarioCategory (1) ──< (N) Scenario
 Scenario (1) ──< (N) UserScenarioAccess
@@ -464,6 +566,76 @@ AiConversation (1) ──< (N) AiConversationMessage
 - **Database:** PostgreSQL 14+ (Supabase)
 - **Features:** Row-Level Security (RLS), timestamptz columns, UUID PKs, CASCADE deletion, indexed columns
 - **Connection:** TypeORM connection pool with auto-reconnect
+
+## Multi-Language Content Architecture
+
+### Language Partitioning Strategy
+
+All content entities (Lesson, Exercise, Scenario, etc.) implement language partitioning via non-nullable `language_id` foreign key. This ensures each content row belongs to exactly one language, enabling:
+
+1. **Request-Scoped Language Context:** Every authenticated request includes `X-Learning-Language: <code>` header specifying user's active learning language
+2. **Automatic Content Filtering:** Service methods automatically scope queries by the active language context
+3. **Cache-Efficient Resolution:** Language code → Language.id resolved once per request and cached (LRU, 60s TTL)
+4. **Isolation by Design:** No global/NULL language rows; content is never ambiguous
+
+### Language Context Resolution Flow
+
+```
+HTTP Request
+    ↓
+[LanguageContextGuard]
+    ↓
+Extract X-Learning-Language header
+    ↓
+Check LRU cache for language_code → {id, code}
+    ↓
+Cache hit? Return cached context
+    ↓
+Cache miss? Query Language table, cache result
+    ↓
+Store {id, code} in req.activeLanguage
+    ↓
+@ActiveLanguage() decorator injects language context into controller methods
+    ↓
+Service methods filter results by language_id
+```
+
+### Content Visibility with Language Partitioning
+
+When user requests lessons/scenarios with active language = "es":
+
+```
+1. Service receives @ActiveLanguage() context: {id: "lang-uuid-es", code: "es"}
+2. Query builder filters: WHERE language_id = "lang-uuid-es"
+3. Only Spanish-language content returned
+4. No cross-language data exposure
+5. User content filtered consistently across all endpoints
+```
+
+### @SkipLanguageContext() Routes
+
+Routes that bypass language context requirement (don't return partitioned content):
+
+| Endpoint | Reason |
+|----------|--------|
+| POST /auth/* | Authentication, no content |
+| GET /users/me | User profile, global |
+| PATCH /users/me | User profile update, global |
+| GET /languages | Language catalog, global |
+| POST /languages/user | User preferences, global |
+| GET /subscriptions/me | User subscription, global |
+| POST /admin/content/* | Admin operations, cross-language |
+| GET /admin/content | Admin operations, cross-language |
+| POST /onboarding/chat | Anonymous sessions, no auth context |
+
+### Admin Content Module Integration
+
+Admin endpoints allow admins to:
+1. Generate content for specific languages via `language_id` parameter
+2. List content across languages with language filter
+3. Publish/archive content per language
+
+All generated content includes the specified `language_id`, ensuring proper partitioning.
 
 ## Security Architecture
 

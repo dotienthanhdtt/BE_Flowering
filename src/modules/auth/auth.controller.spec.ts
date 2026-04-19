@@ -35,6 +35,7 @@ describe('AuthController', () => {
     firebaseUid: undefined,
     avatarUrl: undefined,
     nativeLanguageId: undefined,
+    isAdmin: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

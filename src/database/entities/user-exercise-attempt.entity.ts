@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Exercise } from './exercise.entity';
+import { Language } from './language.entity';
 
 @Entity('user_exercise_attempts')
 export class UserExerciseAttempt {
@@ -27,6 +28,13 @@ export class UserExerciseAttempt {
 
   @Column({ type: 'uuid', name: 'exercise_id' })
   exerciseId!: string;
+
+  @ManyToOne(() => Language)
+  @JoinColumn({ name: 'language_id' })
+  language!: Language;
+
+  @Column({ type: 'uuid', name: 'language_id' })
+  languageId!: string;
 
   @Column({ type: 'jsonb', name: 'user_answer' })
   userAnswer!: Record<string, unknown>;

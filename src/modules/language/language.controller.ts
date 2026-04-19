@@ -19,12 +19,14 @@ import { SetNativeLanguageDto } from './dto/set-native-language.dto';
 import { LanguageQueryDto, LanguageType } from './dto/language-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public-route.decorator';
+import { SkipLanguageContext } from '../../common/decorators/active-language.decorator';
 import { User } from '../../database/entities/user.entity';
 
 /**
  * Controller for language endpoints (available languages, user learning languages)
  */
 @ApiTags('languages')
+@SkipLanguageContext()
 @Controller('languages')
 export class LanguageController {
   constructor(private readonly languageService: LanguageService) {}

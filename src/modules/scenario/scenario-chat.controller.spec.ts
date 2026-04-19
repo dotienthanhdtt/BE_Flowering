@@ -41,6 +41,8 @@ describe('ScenarioChatController', () => {
     completed: false,
   };
 
+  const mockLang = { id: 'lang-en', code: 'en' };
+
   describe('chat', () => {
     it('should delegate to service and return response', async () => {
       service.chat.mockResolvedValue(mockResponse);
@@ -51,9 +53,9 @@ describe('ScenarioChatController', () => {
         message: 'Hello',
       };
 
-      const result = await controller.chat(req, dto);
+      const result = await controller.chat(req, mockLang, dto);
 
-      expect(service.chat).toHaveBeenCalledWith(mockUserId, dto);
+      expect(service.chat).toHaveBeenCalledWith(mockUserId, dto, 'lang-en');
       expect(result).toEqual(mockResponse);
     });
 
@@ -63,9 +65,9 @@ describe('ScenarioChatController', () => {
       const req = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId };
 
-      await controller.chat(req, dto);
+      await controller.chat(req, mockLang, dto);
 
-      expect(service.chat).toHaveBeenCalledWith(mockUserId, expect.any(Object));
+      expect(service.chat).toHaveBeenCalledWith(mockUserId, expect.any(Object), 'lang-en');
     });
 
     it('should pass entire DTO to service', async () => {
@@ -78,9 +80,9 @@ describe('ScenarioChatController', () => {
         conversationId: mockConversationId,
       };
 
-      await controller.chat(req, dto);
+      await controller.chat(req, mockLang, dto);
 
-      expect(service.chat).toHaveBeenCalledWith(mockUserId, dto);
+      expect(service.chat).toHaveBeenCalledWith(mockUserId, dto, 'lang-en');
     });
 
     it('should return service response as-is', async () => {
@@ -96,7 +98,7 @@ describe('ScenarioChatController', () => {
       const req = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId };
 
-      const result = await controller.chat(req, dto);
+      const result = await controller.chat(req, mockLang, dto);
 
       expect(result).toBe(customResponse);
     });
@@ -108,7 +110,7 @@ describe('ScenarioChatController', () => {
       const req = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId };
 
-      await expect(controller.chat(req, dto)).rejects.toThrow('Service error');
+      await expect(controller.chat(req, mockLang, dto)).rejects.toThrow('Service error');
     });
 
     it('should pass forceNew flag through to service', async () => {
@@ -116,11 +118,12 @@ describe('ScenarioChatController', () => {
       const req = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId, forceNew: true };
 
-      await controller.chat(req, dto);
+      await controller.chat(req, mockLang, dto);
 
       expect(service.chat).toHaveBeenCalledWith(
         mockUserId,
         expect.objectContaining({ forceNew: true }),
+        'lang-en',
       );
     });
   });

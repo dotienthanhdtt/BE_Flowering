@@ -1,19 +1,19 @@
 # Codebase Summary
 
-**Last Updated:** 2026-04-15
-**Generated from:** repomix-output.xml (updated 2026-04-12)
+**Last Updated:** 2026-04-18
+**Generated from:** repomix-output.xml (updated 2026-04-18)
 
 ## Overview
 
-AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 7 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, and language management.
+AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 11 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, language management, multi-language content partitioning, and admin content seeding.
 
 ## Metrics
 
-- **Total TypeScript Files:** ~160 files in src/
-- **Code Lines:** ~9,500 LOC in src/
-- **Modules:** 10 feature modules (added Lesson, Scenario Chat, and Vocabulary modules)
-- **Database Entities:** 16 TypeORM entities (Vocabulary enhanced with SRS columns)
-- **API Endpoints:** 39 REST endpoints (added 6 vocabulary endpoints: GET /vocabulary, GET /vocabulary/:id, DELETE /vocabulary/:id, POST /vocabulary/review/start, POST /vocabulary/review/:sessionId/rate, POST /vocabulary/review/:sessionId/complete)
+- **Total TypeScript Files:** ~175 files in src/
+- **Code Lines:** ~10,500 LOC in src/
+- **Modules:** 11 feature modules (added Lesson, Scenario Chat, Vocabulary, and Admin Content modules)
+- **Database Entities:** 16 TypeORM entities (with language_id partitioning, ContentStatus enum, isAdmin flag)
+- **API Endpoints:** 45 REST endpoints (added 5 admin-content endpoints + language-context header requirement)
 - **External Integrations:** 7 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
 
 ## Tech Stack
@@ -204,27 +204,53 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Rate Limiting:** Shared with AI endpoints (20 req/min, 100 req/hr)
 
-### 10. Vocabulary Module (16 files, ~800 LOC)
+### 10. Language Context Module (3 files, ~150 LOC)
 
-**Purpose:** Premium scenario roleplay conversation engine with turn-based interactions
+**Purpose:** Request-scoped language context resolution and caching for multi-language content API routes
+
+**Components:**
+- `@ActiveLanguage()` param decorator — extracts resolved language context from request
+- `@SkipLanguageContext()` class/method decorator — marks routes that don't require language context
+- `LanguageContextGuard` — resolves `X-Learning-Language` header to Language entity, caches result
+- `LanguageContextCacheService` — LRU cache (1000 items, 60s TTL) for language_code → {id, code} lookups
+
+**Behavior:**
+- Global guard applies to all authenticated routes (bypassed by `@SkipLanguageContext()`)
+- Reads `X-Learning-Language: <code>` header from request
+- Queries Language table if code not in cache, stores result in request context
+- Throws 400 if header missing or language code invalid
+- Used by content endpoints (Lesson, Scenario Chat, AI) to partition results by user's active language
+
+**Key Convention:** Content API routes decorated with `@ActiveLanguage()` receive language context automatically
+
+### 11. Admin Content Module (8 files, ~600 LOC)
+
+**Purpose:** LLM-powered content generation and lifecycle management for scenarios/exercises/lessons
 
 **Endpoints:**
-- POST /scenario/chat (roleplay conversation with AI)
-
-**Services:**
-- ScenarioChatService: Main conversation logic, turn management, completion tracking
-- ScenarioAccessService: Permission checks for premium scenarios vs. free users
+- `POST /admin/content/generate` — Generate N draft content items (language, type, level)
+- `GET /admin/content` — List content with filters (status, type, language, page)
+- `PATCH /admin/content/:id/publish` — Promote draft to published
+- `PATCH /admin/content/:id` — Edit title/description (text fields)
+- `DELETE /admin/content/:id` — Archive content (soft delete via status=archived)
 
 **Features:**
-- Turn-based roleplay conversations with configurable max turns (default: 10)
-- AI-initiated first turn (omit message parameter)
-- Conversation resumption via conversation_id
-- Premium access control (free users blocked from premium scenarios)
-- AiConversation entity extended with `scenario_id` FK
-- Rate limiting: 20 req/min, 100 req/hr per user
-- Automatic conversation completion tracking
+- AdminGuard checks `user.isAdmin` flag (seeded via ADMIN_EMAILS env var)
+- Supports content types: `LESSON`, `EXERCISE`, `SCENARIO`
+- Uses LLM to generate structured content in batches
+- ContentStatus enum: draft, published, archived (existing content defaults to published)
+- Rate limit: 5 req/min on /generate endpoint (throttle guard)
+- Returns paginated list with total count
+- Implements soft delete (status change, record retention)
 
-**Rate Limiting:** Shared with AI endpoints (20 req/min, 100 req/hr)
+**DTOs:**
+- `GenerateContentDto`: language (UUID), type (enum), level (difficulty), count (default: 5)
+- `ListContentQueryDto`: status (enum), type (enum), language (UUID), page, limit
+- `UpdateContentDto`: title, description
+
+**Security:** Requires isAdmin flag; ADMIN_EMAILS env var bootstraps initial admins
+
+### 12. Vocabulary Module (16 files, ~800 LOC)
 
 **Purpose:** User vocabulary management with Leitner 5-box spaced repetition system (SRS)
 
@@ -268,7 +294,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 ### Scenario Entity
 - `id` - UUID primary key
 - `category_id` - FK to ScenarioCategory (ON DELETE CASCADE)
-- `language_id` - FK to Language (nullable, NULL = global to all languages)
+- `language_id` - FK to Language (non-nullable, each scenario owns exactly one language; partitioning key)
 - `creator_id` - FK to User (nullable, for future KOL support)
 - `gift_code` - String (max 50, nullable, unique)
 - `title` - String (max 255, e.g., "Meet & Greet")
@@ -279,7 +305,48 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `is_trial` - Boolean (default: false, visible to free users)
 - `is_active` - Boolean (default: true)
 - `order_index` - Integer for display ordering within category
+- `status` - ContentStatus enum (draft, published, archived; default: published)
 - Created/updated timestamps
+
+### Lesson Entity
+- `id` - UUID primary key
+- `language_id` - FK to Language (non-nullable, language partitioning key)
+- `title` - String (max 255)
+- `description` - Text (nullable)
+- `order_index` - Integer for display ordering
+- `status` - ContentStatus enum (draft, published, archived; default: published)
+- Created/updated timestamps
+
+### Exercise Entity
+- `id` - UUID primary key
+- `lesson_id` - FK to Lesson (ON DELETE CASCADE)
+- `language_id` - FK to Language (non-nullable, inherited from lesson for direct filtering)
+- `question` - String (max 1000, the exercise question/prompt)
+- `options` - JSONB (array of answer choices)
+- `correctAnswer` - String (the correct answer)
+- `difficulty` - Enum (beginner, intermediate, advanced)
+- `order_index` - Integer for display ordering within lesson
+- `status` - ContentStatus enum (draft, published, archived; default: published)
+- Created/updated timestamps
+
+### UserProgress Entity
+- `id` - UUID primary key
+- `user_id` - FK to User (ON DELETE CASCADE)
+- `language_id` - FK to Language (non-nullable, language partitioning key)
+- `lesson_id` - FK to Lesson (nullable, current lesson context)
+- `completed_lessons` - Integer (count of completed lessons, default: 0)
+- `current_score` - Integer (current session score, default: 0)
+- `total_score` - Integer (lifetime score, default: 0)
+- Created/updated timestamps
+
+### UserExerciseAttempt Entity
+- `id` - UUID primary key
+- `user_id` - FK to User (ON DELETE CASCADE)
+- `exercise_id` - FK to Exercise (ON DELETE CASCADE)
+- `language_id` - FK to Language (non-nullable, language partitioning key)
+- `answer` - String (user's submitted answer)
+- `is_correct` - Boolean (whether answer matches correct_answer)
+- `attempted_at` - Timestamp (when attempt was made)
 
 ### UserScenarioAccess Entity
 - `id` - UUID primary key
@@ -312,6 +379,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 ### User Entity Updates
 - `googleProviderId` - OAuth account linking
 - `appleProviderId` - OAuth account linking
+- `isAdmin` - Boolean (default: false, seeded via ADMIN_EMAILS env var, grants access to admin endpoints)
 
 ### AiConversation Entity Updates
 - `type` - ANONYMOUS or AUTHENTICATED

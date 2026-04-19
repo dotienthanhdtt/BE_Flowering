@@ -75,7 +75,7 @@ describe('ScenarioAccessService', () => {
       const result = await service.findAccessibleScenario(mockUserId, mockFreeScenario.id);
 
       expect(scenarioRepo.findOne).toHaveBeenCalledWith({
-        where: { id: mockFreeScenario.id, isActive: true },
+        where: { id: mockFreeScenario.id, isActive: true, status: 'published' },
         relations: ['category'],
       });
       expect(result).toEqual(mockFreeScenario);
@@ -88,7 +88,7 @@ describe('ScenarioAccessService', () => {
       const result = await service.findAccessibleScenario(mockUserId, mockPremiumScenario.id);
 
       expect(scenarioRepo.findOne).toHaveBeenCalledWith({
-        where: { id: mockPremiumScenario.id, isActive: true },
+        where: { id: mockPremiumScenario.id, isActive: true, status: 'published' },
         relations: ['category'],
       });
       expect(subscriptionService.getUserSubscription).toHaveBeenCalledWith(mockUserId);
@@ -156,7 +156,7 @@ describe('ScenarioAccessService', () => {
       await service.findAccessibleScenario(mockUserId, mockFreeScenario.id);
 
       expect(scenarioRepo.findOne).toHaveBeenCalledWith({
-        where: { id: mockFreeScenario.id, isActive: true },
+        where: { id: mockFreeScenario.id, isActive: true, status: 'published' },
         relations: ['category'],
       });
     });

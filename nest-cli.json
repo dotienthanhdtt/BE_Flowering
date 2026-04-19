@@ -8,6 +8,10 @@
       {
         "include": "modules/ai/prompts/**/*",
         "watchAssets": true
+      },
+      {
+        "include": "modules/admin-content/prompts/**/*",
+        "watchAssets": true
       }
     ]
   }

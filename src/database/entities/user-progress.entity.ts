@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Lesson } from './lesson.entity';
+import { Language } from './language.entity';
 
 export enum ProgressStatus {
   NOT_STARTED = 'not_started',
@@ -36,6 +37,13 @@ export class UserProgress {
 
   @Column({ type: 'uuid', name: 'lesson_id' })
   lessonId!: string;
+
+  @ManyToOne(() => Language)
+  @JoinColumn({ name: 'language_id' })
+  language!: Language;
+
+  @Column({ type: 'uuid', name: 'language_id' })
+  languageId!: string;
 
   @Column({
     type: 'enum',

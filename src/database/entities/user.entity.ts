@@ -39,6 +39,9 @@ export class User {
   @Column({ type: 'boolean', name: 'email_verified', default: false })
   emailVerified!: boolean;
 
+  @Column({ type: 'boolean', name: 'is_admin', default: false })
+  isAdmin!: boolean;
+
   @Column({ type: 'varchar', length: 100, name: 'display_name', nullable: true })
   displayName?: string;
 

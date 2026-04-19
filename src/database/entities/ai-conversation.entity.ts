@@ -28,12 +28,12 @@ export class AiConversation {
   @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId?: string | null;
 
-  @ManyToOne(() => Language, { nullable: true })
+  @ManyToOne(() => Language)
   @JoinColumn({ name: 'language_id' })
-  language?: Language | null;
+  language!: Language;
 
-  @Column({ type: 'uuid', name: 'language_id', nullable: true })
-  languageId?: string | null;
+  @Column({ type: 'uuid', name: 'language_id' })
+  languageId!: string;
 
   @Column({
     type: 'enum',

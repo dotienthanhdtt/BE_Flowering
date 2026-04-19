@@ -10,6 +10,7 @@ import {
 import { ScenarioCategory } from './scenario-category.entity';
 import { Language } from './language.entity';
 import { User } from './user.entity';
+import { ContentStatus } from './content-status.enum';
 
 export enum ScenarioDifficulty {
   BEGINNER = 'beginner',
@@ -29,13 +30,12 @@ export class Scenario {
   @Column({ type: 'uuid', name: 'category_id' })
   categoryId!: string;
 
-  /** NULL = available for all languages (global scenario) */
-  @ManyToOne(() => Language, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Language)
   @JoinColumn({ name: 'language_id' })
-  language?: Language;
+  language!: Language;
 
-  @Column({ type: 'uuid', name: 'language_id', nullable: true })
-  languageId?: string;
+  @Column({ type: 'uuid', name: 'language_id' })
+  languageId!: string;
 
   /** KOL/KOC creator — nullable, reserved for future use */
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
@@ -73,6 +73,9 @@ export class Scenario {
 
   @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive!: boolean;
+
+  @Column({ type: 'enum', enum: ContentStatus, default: ContentStatus.PUBLISHED })
+  status!: ContentStatus;
 
   @Column({ type: 'int', name: 'order_index', default: 0 })
   orderIndex!: number;

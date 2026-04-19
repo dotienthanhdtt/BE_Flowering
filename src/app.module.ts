@@ -16,7 +16,11 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { LessonModule } from './modules/lesson/lesson.module';
 import { ScenarioChatModule } from './modules/scenario/scenario-chat.module';
 import { VocabularyModule } from './modules/vocabulary/vocabulary.module';
+import { ProgressModule } from './modules/progress/progress.module';
+import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { LanguageContextGuard } from './common/guards/language-context.guard';
+import { LanguageContextModule } from './common/language-context.module';
 import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware';
 import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-case.middleware';
 
@@ -31,6 +35,7 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
       },
     }),
     DatabaseModule,
+    LanguageContextModule,
     AuthModule,
     AiModule,
     UserModule,
@@ -40,6 +45,8 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
     LessonModule,
     ScenarioChatModule,
     VocabularyModule,
+    ProgressModule,
+    AdminContentModule,
   ],
   controllers: [AppController],
   providers: [
@@ -48,6 +55,10 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: LanguageContextGuard,
     },
   ],
   exports: [SupabaseStorageService],

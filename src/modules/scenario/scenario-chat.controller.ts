@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ScenarioChatService } from './services/scenario-chat.service';
+import { ActiveLanguage, ActiveLanguageContext } from '../../common/decorators/active-language.decorator';
 import {
   ScenarioChatRequestDto,
   ScenarioChatResponseDto,
@@ -11,6 +12,7 @@ import {
 
 @ApiTags('Scenario Chat')
 @ApiBearerAuth()
+@ApiHeader({ name: 'X-Learning-Language', description: 'Active learning language code', required: true })
 @Controller('scenario')
 @UseGuards(ThrottlerGuard)
 export class ScenarioChatController {
@@ -27,9 +29,10 @@ export class ScenarioChatController {
   @ApiResponse({ status: 403, description: 'Premium subscription required' })
   async chat(
     @Req() req: any,
+    @ActiveLanguage() lang: ActiveLanguageContext,
     @Body() dto: ScenarioChatRequestDto,
   ): Promise<ScenarioChatResponseDto> {
-    return this.service.chat(req.user.id, dto);
+    return this.service.chat(req.user.id, dto, lang.id);
   }
 
   // Declared before `/:scenarioId/conversations` so the static `conversations`

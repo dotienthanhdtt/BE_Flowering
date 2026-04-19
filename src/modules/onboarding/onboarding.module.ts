@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AiConversation, AiConversationMessage } from '../../database/entities';
+import { Language } from '../../database/entities/language.entity';
 import { AiModule } from '../ai/ai.module';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
@@ -9,7 +10,7 @@ import { OnboardingThrottlerGuard } from './onboarding-throttler.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AiConversation, AiConversationMessage]),
+    TypeOrmModule.forFeature([AiConversation, AiConversationMessage, Language]),
     AiModule,
     ThrottlerModule.forRoot([
       {
