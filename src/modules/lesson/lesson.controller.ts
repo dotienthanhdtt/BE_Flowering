@@ -4,12 +4,13 @@ import { LessonService } from './lesson.service';
 import { GetLessonsQueryDto } from './dto/get-lessons-query.dto';
 import { GetLessonsResponseDto } from './dto/lesson-response.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { ActiveLanguage, ActiveLanguageContext } from '../../common/decorators/active-language.decorator';
+import { ActiveLanguage, ActiveLanguageContext, AutoEnrollLanguage } from '../../common/decorators/active-language.decorator';
 import { User } from '../../database/entities/user.entity';
 
 @ApiTags('lessons')
 @ApiBearerAuth('JWT-auth')
 @ApiHeader({ name: 'X-Learning-Language', description: 'Active learning language code (e.g. en, es)', required: true })
+@AutoEnrollLanguage()
 @Controller('lessons')
 export class LessonController {
   constructor(private readonly lessonService: LessonService) {}

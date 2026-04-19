@@ -5,6 +5,47 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-04-20 — Auto-Enroll Language on GET /lessons
+
+### Added
+
+- **@AutoEnrollLanguage() Decorator:** Opt-in per-route decorator to enable auto-enrollment of unenrolled languages
+  - Stored as metadata in `src/common/decorators/active-language.decorator.ts`
+  - Applied to `LessonController` class to auto-enroll users in languages when calling `GET /lessons` with `X-Learning-Language: <new-code>`
+
+- **Auto-Enroll Guard Logic:** Extended `LanguageContextGuard` to auto-create `user_languages` rows on demand
+  - Checks route/class for `@AutoEnrollLanguage()` metadata
+  - If present and user not enrolled: auto-creates inactive `user_languages` row (`isActive: false`, `proficiencyLevel: BEGINNER`)
+  - Validates `Language.isLearningAvailable=true` before insert
+  - Idempotent: race-safe via post-error existence check
+  - Failure-tolerant: logs warning if insert fails but allows request to proceed
+
+- **Test Coverage:** New `language-context.guard.spec.ts` with 12 tests covering:
+  - Existing behavior: enrolled users, unknown codes, anonymous/public routes
+  - Auto-enroll: creates inactive row, validates isLearningAvailable, handles races, prevents deactivation of existing active language
+  - Regression: non-auto-enroll routes still throw 403 for unenrolled languages
+
+### Changed
+
+- **GET /lessons Behavior:** Now allows users to request lessons in any language they haven't enrolled in yet
+  - Transparent auto-enrollment creates temporary (inactive) enrollment
+  - Lessons filtered by requested language code
+  - User's previously-active language remains `isActive: true` (no side effects)
+
+### Documentation
+
+- `codebase-summary.md` — Updated Language Context Module description with auto-enroll pattern
+- `api-documentation.md` — New "Auto-Enroll Behavior" section under Language Context Header with route list
+- Plan `plan.md` — Marked as `completed` with all todo items and success criteria checked
+
+### No Breaking Changes
+- Auto-enroll is opt-in per route via decorator
+- Existing endpoints (AI chat, exercises) unaffected — still throw 403 for unenrolled languages
+- No DTO or mobile contract changes
+- No schema migrations needed
+
+---
+
 ## 2026-04-20 — BREAKING: Content Access Tier Refactor
 
 ### Breaking Changes

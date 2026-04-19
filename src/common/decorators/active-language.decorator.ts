@@ -23,3 +23,7 @@ export const ActiveLanguage = createParamDecorator(
 export const SKIP_LANGUAGE_CONTEXT = 'skipLanguageContext';
 export const SkipLanguageContext = (): ReturnType<typeof SetMetadata> =>
   SetMetadata(SKIP_LANGUAGE_CONTEXT, true);
+
+export const AUTO_ENROLL_LANGUAGE = 'autoEnrollLanguage';
+export const AutoEnrollLanguage = (): ReturnType<typeof SetMetadata> =>
+  SetMetadata(AUTO_ENROLL_LANGUAGE, true);

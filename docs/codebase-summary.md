@@ -211,6 +211,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Components:**
 - `@ActiveLanguage()` param decorator — extracts resolved language context from request
 - `@SkipLanguageContext()` class/method decorator — marks routes that don't require language context
+- `@AutoEnrollLanguage()` class/method decorator — enables auto-creation of UserLanguage row for unenrolled languages (opt-in)
 - `LanguageContextGuard` — resolves `X-Learning-Language` header to Language entity, caches result
 - `LanguageContextCacheService` — LRU cache (1000 items, 60s TTL) for language_code → {id, code} lookups
 
@@ -219,9 +220,13 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Reads `X-Learning-Language: <code>` header from request
 - Queries Language table if code not in cache, stores result in request context
 - Throws 400 if header missing or language code invalid
+- Throws 403 if header language not enrolled by user (unless route has `@AutoEnrollLanguage()`)
+- `@AutoEnrollLanguage()` enabled on specific routes (e.g. LessonController) to auto-create inactive UserLanguage row if missing
+- Auto-enroll only if Language is active and `isLearningAvailable=true`; idempotent (race-safe)
+- Auto-enrolled row is inactive (doesn't affect user's active language); user must explicitly activate via `PATCH /languages/user/:id`
 - Used by content endpoints (Lesson, Scenario Chat, AI) to partition results by user's active language
 
-**Key Convention:** Content API routes decorated with `@ActiveLanguage()` receive language context automatically
+**Key Convention:** Content API routes decorated with `@ActiveLanguage()` receive language context automatically; opt-in with `@AutoEnrollLanguage()` for learning-first UX
 
 ### 11. Admin Content Module (8 files, ~600 LOC)
 

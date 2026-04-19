@@ -71,15 +71,35 @@ X-Learning-Language: <language_code>
 **Behavior:**
 - Header is validated and resolved to Language.id on every request
 - Resolved language context is cached (LRU, 60s TTL)
-- Used to filter content (lessons, scenarios, exercises) by language
+- User must be enrolled in the language (have a `user_languages` row)
 - Returns 400 if header missing or language code invalid
+- Returns 403 (Forbidden) if user not enrolled in the language — **unless the route supports auto-enroll** (see below)
 - Cached per language code for performance
+
+**Auto-Enroll Behavior (Opt-in per route):**
+Some routes (e.g., `GET /lessons`) support automatic enrollment when accessing a language the user is not yet enrolled in:
+- If user sends `X-Learning-Language: <new-code>` but has no `user_languages` row for that language:
+  - Guard auto-creates an inactive `user_languages` row (does not affect user's active language)
+  - Content is filtered by the new language
+  - User can later explicitly activate the language via `PATCH /languages/user/:id`
+- Auto-enroll only succeeds if Language is active and `isLearningAvailable=true`
+- Idempotent: multiple concurrent requests auto-enrolling the same language are race-safe
+- If auto-enroll fails (DB error), request logs a warning but still proceeds (failure-tolerant)
+
+**Routes with Auto-Enroll:**
+- `GET /lessons` — auto-enroll on header language (opt-in via `@AutoEnrollLanguage()` decorator)
+
+**Routes without Auto-Enroll:**
+- `POST /scenario/chat`, `POST /ai/chat`, POST `/ai/chat/stream` — strict 403 if not enrolled
 
 **cURL Example:**
 ```bash
+# Standard enrollment required
 curl http://localhost:3000/lessons \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "X-Learning-Language: es"
+
+# If user not yet enrolled in 'es', auto-enroll happens transparently
 ```
 
 **Note:** Onboarding endpoints, user profile, subscriptions, and admin endpoints do NOT require this header.

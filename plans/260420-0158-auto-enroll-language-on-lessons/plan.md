@@ -1,7 +1,7 @@
 ---
 title: "Auto-enroll UserLanguage when /lessons called with new X-Learning-Language"
 description: "When GET /lessons is called with an X-Learning-Language code the user is not enrolled in, auto-create an inactive UserLanguage row instead of 403, then return lessons filtered by that language. Opt-in per route via @AutoEnrollLanguage() decorator."
-status: in_progress
+status: completed
 priority: P1
 effort: 1.5h
 branch: dev
@@ -188,26 +188,26 @@ Cover — using a mocked `Reflector`, `UserLanguage` repo, `Language` repo, and 
 
 ## Todo
 
-- [ ] Add `AUTO_ENROLL_LANGUAGE` constant + `AutoEnrollLanguage()` decorator
-- [ ] Inject `Language` repo into `LanguageContextGuard`
-- [ ] Replace `assertEnrolled` with `assertOrAutoEnroll` (+ `autoEnroll` helper)
-- [ ] Apply `@AutoEnrollLanguage()` to `LessonController`
-- [ ] Create `language-context.guard.spec.ts` (8+ tests)
-- [ ] `npm run build` clean
-- [ ] `npm test` green
+- [x] Add `AUTO_ENROLL_LANGUAGE` constant + `AutoEnrollLanguage()` decorator
+- [x] Inject `Language` repo into `LanguageContextGuard`
+- [x] Replace `assertEnrolled` with `assertOrAutoEnroll` (+ `autoEnroll` helper)
+- [x] Apply `@AutoEnrollLanguage()` to `LessonController`
+- [x] Create `language-context.guard.spec.ts` (8+ tests)
+- [x] `npm run build` clean
+- [x] `npm test` green
 
 ## Success Criteria
 
-- [ ] Authenticated user sends `GET /lessons` with `X-Learning-Language: <new-code>`:
+- [x] Authenticated user sends `GET /lessons` with `X-Learning-Language: <new-code>`:
   - A `user_languages` row is created with `isActive: false` for that language
   - Response returns lessons filtered by that language
   - Previously-active `user_languages` row remains `isActive: true`
-- [ ] Same request for an already-enrolled language → no new row, lessons returned
-- [ ] Same request for an unknown/inactive code → `BadRequestException` (unchanged)
-- [ ] Same request for a code that exists but `isLearningAvailable=false` → `BadRequestException`
-- [ ] Other protected endpoints (AI chat, exercises) still throw 403 for unenrolled languages (regression guard)
-- [ ] `npm run build` + `npm test` green
-- [ ] No DTO or mobile contract changes
+- [x] Same request for an already-enrolled language → no new row, lessons returned
+- [x] Same request for an unknown/inactive code → `BadRequestException` (unchanged)
+- [x] Same request for a code that exists but `isLearningAvailable=false` → `BadRequestException`
+- [x] Other protected endpoints (AI chat, exercises) still throw 403 for unenrolled languages (regression guard)
+- [x] `npm run build` + `npm test` green
+- [x] No DTO or mobile contract changes
 
 ## Risk Assessment
 

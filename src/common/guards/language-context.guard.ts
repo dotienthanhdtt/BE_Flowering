@@ -9,11 +9,13 @@ import {
 import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserLanguage } from '@/database/entities/user-language.entity';
+import { UserLanguage, ProficiencyLevel } from '@/database/entities/user-language.entity';
+import { Language } from '@/database/entities/language.entity';
 import { User } from '@/database/entities/user.entity';
 import { IS_PUBLIC_KEY } from '@common/decorators/public-route.decorator';
 import {
   SKIP_LANGUAGE_CONTEXT,
+  AUTO_ENROLL_LANGUAGE,
   ActiveLanguageContext,
 } from '@common/decorators/active-language.decorator';
 import { LanguageContextCacheService } from '@common/services/language-context-cache.service';
@@ -27,6 +29,8 @@ export class LanguageContextGuard implements CanActivate {
     private readonly languageCache: LanguageContextCacheService,
     @InjectRepository(UserLanguage)
     private readonly userLanguageRepo: Repository<UserLanguage>,
+    @InjectRepository(Language)
+    private readonly languageRepo: Repository<Language>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -46,7 +50,7 @@ export class LanguageContextGuard implements CanActivate {
       }
 
       if (user) {
-        await this.assertEnrolled(user.id, lang);
+        await this.assertOrAutoEnroll(user.id, lang, context);
       }
 
       request.activeLanguage = lang;
@@ -78,12 +82,54 @@ export class LanguageContextGuard implements CanActivate {
     throw new BadRequestException('X-Learning-Language header required for anonymous requests');
   }
 
-  private async assertEnrolled(userId: string, lang: ActiveLanguageContext): Promise<void> {
+  private async assertOrAutoEnroll(
+    userId: string,
+    lang: ActiveLanguageContext,
+    context: ExecutionContext,
+  ): Promise<void> {
     const enrolled = await this.userLanguageRepo.findOne({
       where: { userId, languageId: lang.id },
     });
-    if (!enrolled) {
+    if (enrolled) return;
+
+    const autoEnroll = this.reflector.getAllAndOverride<boolean>(
+      AUTO_ENROLL_LANGUAGE,
+      [context.getHandler(), context.getClass()],
+    );
+    if (!autoEnroll) {
       throw new ForbiddenException(`Language "${lang.code}" not enrolled for this user`);
+    }
+
+    await this.autoEnroll(userId, lang);
+  }
+
+  private async autoEnroll(userId: string, lang: ActiveLanguageContext): Promise<void> {
+    try {
+      const language = await this.languageRepo.findOne({
+        where: { id: lang.id, isActive: true, isLearningAvailable: true },
+      });
+      if (!language) {
+        throw new BadRequestException(`Language "${lang.code}" is not available for learning`);
+      }
+
+      await this.userLanguageRepo.save(
+        this.userLanguageRepo.create({
+          userId,
+          languageId: lang.id,
+          isActive: false,
+          proficiencyLevel: ProficiencyLevel.BEGINNER,
+        }),
+      );
+      this.logger.log(`Auto-enrolled user ${userId} in language "${lang.code}"`);
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      // Race condition (concurrent request already inserted) or transient failure
+      const exists = await this.userLanguageRepo.findOne({
+        where: { userId, languageId: lang.id },
+      });
+      if (!exists) {
+        this.logger.warn(`Auto-enroll failed for user ${userId}, language "${lang.code}"`, error as Error);
+      }
     }
   }
 }
