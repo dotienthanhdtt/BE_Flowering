@@ -126,10 +126,14 @@ export class LanguageService {
       throw new ConflictException('Language already added to learning list');
     }
 
+    // Deactivate current active language before adding new one as active
+    await this.userLanguageRepo.update({ userId, isActive: true }, { isActive: false });
+
     const userLanguage = this.userLanguageRepo.create({
       userId,
       languageId: dto.languageId,
       proficiencyLevel: dto.proficiencyLevel || ProficiencyLevel.BEGINNER,
+      isActive: true,
     });
 
     const saved = await this.userLanguageRepo.save(userLanguage);
@@ -165,6 +169,13 @@ export class LanguageService {
     }
 
     if (dto.isActive !== undefined) {
+      if (dto.isActive) {
+        // Deactivate all other languages before activating this one
+        await this.userLanguageRepo.update(
+          { userId, isActive: true },
+          { isActive: false },
+        );
+      }
       userLanguage.isActive = dto.isActive;
     }
 
