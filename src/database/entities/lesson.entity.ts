@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Language } from './language.entity';
 import { ContentStatus } from './content-status.enum';
+import { AccessTier } from './access-tier.enum';
 
 export enum LessonDifficulty {
   BEGINNER = 'beginner',
@@ -44,11 +45,8 @@ export class Lesson {
   @Column({ type: 'int', name: 'order_index', default: 0 })
   orderIndex!: number;
 
-  @Column({ type: 'boolean', name: 'is_premium', default: false })
-  isPremium!: boolean;
-
-  @Column({ type: 'boolean', name: 'is_active', default: true })
-  isActive!: boolean;
+  @Column({ type: 'enum', enum: AccessTier, default: AccessTier.FREE, name: 'access_tier' })
+  accessTier!: AccessTier;
 
   @Column({ type: 'enum', enum: ContentStatus, default: ContentStatus.PUBLISHED })
   status!: ContentStatus;

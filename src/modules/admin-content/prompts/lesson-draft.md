@@ -6,9 +6,9 @@ Return a JSON array (no markdown fences) with exactly {{count}} objects, each wi
 - description: string (1–2 sentence overview, max 300 chars)
 - difficulty: "{{level}}"
 - orderIndex: number (0-based, increment per item)
-- isPremium: boolean (true for advanced grammar/vocabulary)
+- accessTier: "free" | "premium" (use "premium" for advanced grammar/vocabulary)
 
 Example:
-[{"title":"Greetings and Introductions","description":"Learn basic greetings and how to introduce yourself in {{languageName}}.","difficulty":"{{level}}","orderIndex":0,"isPremium":false}]
+[{"title":"Greetings and Introductions","description":"Learn basic greetings and how to introduce yourself in {{languageName}}.","difficulty":"{{level}}","orderIndex":0,"accessTier":"free"}]
 
 Return ONLY the JSON array. No explanation.

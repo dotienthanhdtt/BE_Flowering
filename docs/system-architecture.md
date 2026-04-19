@@ -289,7 +289,7 @@ AI client factory dynamically selects provider based on configuration.
 **Visibility Filter Logic:**
 ```
 Scenario is visible if:
-  (is_active = true) AND
+  (status = 'published') AND
   (
     language_id IS NULL OR
     language_id = requested_language_id OR
@@ -301,8 +301,7 @@ Scenario is visible if:
 ```
 scenario_status = {
   'learned'   if user completed scenario (future: UserProgress lookup)
-  'locked'    if is_premium && user.subscription.plan == 'free' && !is_trial
-  'trial'     if is_trial && user.subscription.plan == 'free'
+  'locked'    if access_tier == 'premium' && user.subscription.plan == 'free'
   'available' otherwise
 }
 ```
@@ -324,7 +323,7 @@ scenario_status = {
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │      Scenario Access Service                         │
-│  - checkPremiumAccess()                             │
+│  - checkAccessTierAccess()                          │
 │  - verifyScenarioExists()                           │
 └──────────────────────────────────────────────────────┘
                     ↓
@@ -338,10 +337,15 @@ scenario_status = {
 │      Database Operations                             │
 │  - AiConversation (with scenarioId FK)              │
 │  - AiConversationMessage (turn history)             │
-│  - Subscription (premium check)                     │
-│  - Scenario (premium/trial flags)                   │
+│  - Subscription (active status check)               │
+│  - Scenario (access_tier + content_status)          │
 └──────────────────────────────────────────────────────┘
 ```
+
+**Access Control:**
+- Free users cannot start scenarios with `access_tier = 'premium'`
+- Premium users (active subscription) can access all scenarios
+- User-granted access (via `user_scenario_access`) overrides tier restrictions
 
 **Turn-Based Conversation Flow:**
 ```

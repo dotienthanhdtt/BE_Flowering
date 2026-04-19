@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { SelectQueryBuilder } from 'typeorm';
 import { LessonService } from './lesson.service';
 import { Scenario, ScenarioDifficulty } from '../../database/entities/scenario.entity';
+import { AccessTier } from '../../database/entities/access-tier.enum';
 import { ContentStatus } from '../../database/entities/content-status.enum';
 import { Language } from '../../database/entities/language.entity';
 
@@ -86,9 +87,7 @@ describe('LessonService', () => {
     description: 'Test Description',
     imageUrl: 'https://example.com/image.jpg',
     difficulty: ScenarioDifficulty.BEGINNER,
-    isPremium: false,
-    isTrial: false,
-    isActive: true,
+    accessTier: AccessTier.FREE,
     status: ContentStatus.PUBLISHED,
     orderIndex: 0,
     createdAt: new Date(),
@@ -141,7 +140,7 @@ describe('LessonService', () => {
         const query: GetLessonsQueryDto = { page: 1, limit: 20 };
         const result = await service.getLessons(userId, 'lang-en', query);
 
-        expect(queryBuilder.where).toHaveBeenCalledWith('scenario.is_active = true');
+        expect(queryBuilder.where).toHaveBeenCalledWith('scenario.status = :status', { status: ContentStatus.PUBLISHED });
         expect(result.pagination.total).toBe(2);
         expect(result.categories).toHaveLength(1);
         expect(result.categories[0].scenarios).toHaveLength(2);
@@ -298,10 +297,10 @@ describe('LessonService', () => {
     });
 
     describe('Status - Locked (Premium + Free User)', () => {
-      it('should return LOCKED status for premium scenario with free user (non-trial)', async () => {
+      it('should return LOCKED status for premium scenario with free user', async () => {
         const category = mockCategory('cat-1', 'Conversation');
         const scenarios = [
-          mockScenario('s-1', category, { isPremium: true, isTrial: false }),
+          mockScenario('s-1', category, { accessTier: AccessTier.PREMIUM }),
         ];
         const queryBuilder = createMockQueryBuilder();
 
@@ -320,7 +319,7 @@ describe('LessonService', () => {
       it('should not lock premium scenario for paid user', async () => {
         const category = mockCategory('cat-1', 'Conversation');
         const scenarios = [
-          mockScenario('s-1', category, { isPremium: true, isTrial: false }),
+          mockScenario('s-1', category, { accessTier: AccessTier.PREMIUM }),
         ];
         const queryBuilder = createMockQueryBuilder();
 
@@ -341,75 +340,11 @@ describe('LessonService', () => {
       });
     });
 
-    describe('Status - Trial', () => {
-      it('should return TRIAL status for trial scenario with free user', async () => {
-        const category = mockCategory('cat-1', 'Conversation');
-        const scenarios = [
-          mockScenario('s-1', category, { isPremium: false, isTrial: true }),
-        ];
-        const queryBuilder = createMockQueryBuilder();
-
-        scenarioRepo.createQueryBuilder.mockReturnValue(queryBuilder);
-
-        (queryBuilder.getCount as jest.Mock).mockResolvedValue(1);
-        (queryBuilder.getMany as jest.Mock).mockResolvedValue(scenarios);
-        subscriptionRepo.findOne.mockResolvedValue(null); // Free user
-
-        const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, 'lang-en', query);
-
-        expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.TRIAL);
-      });
-
-      it('should return AVAILABLE (not TRIAL) for trial scenario with paid user', async () => {
-        const category = mockCategory('cat-1', 'Conversation');
-        const scenarios = [
-          mockScenario('s-1', category, { isPremium: false, isTrial: true }),
-        ];
-        const queryBuilder = createMockQueryBuilder();
-
-        scenarioRepo.createQueryBuilder.mockReturnValue(queryBuilder);
-
-        (queryBuilder.getCount as jest.Mock).mockResolvedValue(1);
-        (queryBuilder.getMany as jest.Mock).mockResolvedValue(scenarios);
-        subscriptionRepo.findOne.mockResolvedValue({
-          userId,
-          plan: SubscriptionPlan.YEARLY,
-          status: SubscriptionStatus.ACTIVE,
-        } as Subscription); // Paid user
-
-        const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, 'lang-en', query);
-
-        expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.AVAILABLE);
-      });
-
-      it('should return TRIAL (not LOCKED) for premium+trial scenario with free user', async () => {
-        const category = mockCategory('cat-1', 'Conversation');
-        const scenarios = [
-          mockScenario('s-1', category, { isPremium: true, isTrial: true }),
-        ];
-        const queryBuilder = createMockQueryBuilder();
-
-        scenarioRepo.createQueryBuilder.mockReturnValue(queryBuilder);
-
-        (queryBuilder.getCount as jest.Mock).mockResolvedValue(1);
-        (queryBuilder.getMany as jest.Mock).mockResolvedValue(scenarios);
-        subscriptionRepo.findOne.mockResolvedValue(null); // Free user
-
-        const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        const result = await service.getLessons(userId, 'lang-en', query);
-
-        // Should be TRIAL, not LOCKED (isTrial takes precedence)
-        expect(result.categories[0].scenarios[0].status).toBe(ScenarioStatus.TRIAL);
-      });
-    });
-
     describe('Status - Available', () => {
-      it('should return AVAILABLE for non-premium scenario', async () => {
+      it('should return AVAILABLE for free scenario', async () => {
         const category = mockCategory('cat-1', 'Conversation');
         const scenarios = [
-          mockScenario('s-1', category, { isPremium: false, isTrial: false }),
+          mockScenario('s-1', category, { accessTier: AccessTier.FREE }),
         ];
         const queryBuilder = createMockQueryBuilder();
 
@@ -428,8 +363,8 @@ describe('LessonService', () => {
       it('should return AVAILABLE for any scenario with lifetime subscription', async () => {
         const category = mockCategory('cat-1', 'Conversation');
         const scenarios = [
-          mockScenario('s-1', category, { isPremium: true, isTrial: false }),
-          mockScenario('s-2', category, { isPremium: false, isTrial: true }),
+          mockScenario('s-1', category, { accessTier: AccessTier.PREMIUM }),
+          mockScenario('s-2', category, { accessTier: AccessTier.FREE }),
         ];
         const queryBuilder = createMockQueryBuilder();
 
@@ -684,7 +619,7 @@ describe('LessonService', () => {
 
       it('should handle null subscription (free user)', async () => {
         const category = mockCategory('cat-1', 'Conversation');
-        const scenarios = [mockScenario('s-1', category, { isPremium: true })];
+        const scenarios = [mockScenario('s-1', category, { accessTier: AccessTier.PREMIUM })];
         const queryBuilder = createMockQueryBuilder();
 
         scenarioRepo.createQueryBuilder.mockReturnValue(queryBuilder);
@@ -702,7 +637,7 @@ describe('LessonService', () => {
 
       it('should treat subscription with plan=FREE as free user', async () => {
         const category = mockCategory('cat-1', 'Conversation');
-        const scenarios = [mockScenario('s-1', category, { isPremium: true })];
+        const scenarios = [mockScenario('s-1', category, { accessTier: AccessTier.PREMIUM })];
         const queryBuilder = createMockQueryBuilder();
 
         scenarioRepo.createQueryBuilder.mockReturnValue(queryBuilder);

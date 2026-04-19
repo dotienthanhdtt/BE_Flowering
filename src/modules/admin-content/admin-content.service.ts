@@ -17,6 +17,7 @@ import { Exercise } from '@/database/entities/exercise.entity';
 import { Scenario } from '@/database/entities/scenario.entity';
 import { User } from '@/database/entities/user.entity';
 import { ContentStatus } from '@/database/entities/content-status.enum';
+import { AccessTier } from '@/database/entities/access-tier.enum';
 import { UnifiedLLMService } from '@/modules/ai/services/unified-llm.service';
 import { LLMModel } from '@/modules/ai/providers/llm-models.enum';
 import { GenerateContentDto, ContentType } from './dto/generate-content.dto';
@@ -177,7 +178,7 @@ export class AdminContentService implements OnModuleInit {
       status: ContentStatus.DRAFT,
     };
     if (type === ContentType.LESSON) {
-      return { ...base, isPremium: item.isPremium === true };
+      return { ...base, accessTier: item.accessTier === 'premium' ? AccessTier.PREMIUM : AccessTier.FREE };
     }
     if (type === ContentType.EXERCISE) {
       return {
@@ -192,8 +193,7 @@ export class AdminContentService implements OnModuleInit {
     // scenario
     return {
       ...base,
-      isPremium: item.isPremium === true,
-      isTrial: item.isTrial === true,
+      accessTier: item.accessTier === 'premium' ? AccessTier.PREMIUM : AccessTier.FREE,
     };
   }
 

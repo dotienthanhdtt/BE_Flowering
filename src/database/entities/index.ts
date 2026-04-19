@@ -1,3 +1,4 @@
+export * from './access-tier.enum';
 export * from './language.entity';
 export * from './user.entity';
 export * from './user-language.entity';

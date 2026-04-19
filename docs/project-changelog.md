@@ -1,9 +1,77 @@
 # Project Changelog
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-20
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-04-20 — BREAKING: Content Access Tier Refactor
+
+### Breaking Changes
+
+**Scenario & Lesson Entity Refactor:**
+- **Removed fields:**
+  - `is_premium` (boolean) — replaced by `access_tier` enum
+  - `is_trial` (boolean) — trial status removed; content lifecycle now handled by `status` field
+  - `is_active` (boolean) — removed; use `status = 'published'` to indicate active content
+- **Added fields:**
+  - `access_tier` (enum: `free | premium`) — determines subscription requirement; default `free`
+  - `status` (ContentStatus enum: `draft | published | archived`) — now owns lifecycle (published = active, archived = inactive)
+- **ScenarioStatus DTO enum:** `TRIAL` value removed from mobile-facing response; remaining: `available | locked | learned`
+
+### Status Computation Changes
+
+Old logic:
+```
+status = 'trial' (free users only) | 'locked' (is_premium && free users) | 'available' (others)
+```
+
+New logic:
+```
+status = 'locked' (access_tier == 'premium' && free users) | 'available' (otherwise)
+```
+
+### Database Migration
+
+- Migration `src/database/migrations/1777001000000-refactor-content-access-tier.ts`
+  - Backfills `access_tier = 'free'` for all scenarios/lessons
+  - Drops `is_premium`, `is_trial`, `is_active` columns
+  - Adds `access_tier` and `status` columns
+
+### API Changes
+
+**GET /lessons response:**
+- Scenario status values now: `available | locked | learned` (no `trial`)
+- Visibility rules: only `status = 'published'` scenarios returned
+- Free users blocked from `access_tier = 'premium'` scenarios
+
+**PATCH /admin/content/:id:**
+- Now accepts optional `access_tier` field in request body
+- Example: `{ "title": "Updated", "access_tier": "premium" }`
+
+### Service Updates
+
+- `scenario-access.service.ts` — renamed `checkPremiumAccess()` → `checkAccessTierAccess()`
+- `lesson.service.ts` — updated visibility filter to use `status = 'published'`
+- `admin-content.service.ts` — now accepts and saves `accessTier` field
+- Seed data — updated to emit `accessTier` instead of `isPremium/isTrial`
+- LLM prompts — updated to generate `accessTier` field instead of legacy boolean flags
+
+### Documentation Updates
+
+- `codebase-summary.md` — Entity field lists updated
+- `system-architecture.md` — Data model & status computation logic updated
+- `api-documentation.md` — Scenario status values and visibility rules updated
+- `project-changelog.md` (this file) — New entry added
+
+### Migration Path
+
+**No backward compatibility (pre-release):**
+- App not yet released; no mobile client migration needed
+- Old boolean flags completely removed from schema
+- Services refactored to use new enum-based model
+
+---
 
 ## 2026-04-15 — Session Expiry Removal
 

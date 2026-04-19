@@ -11,6 +11,7 @@ import { User } from '@/database/entities/user.entity';
 import { ContentStatus } from '@/database/entities/content-status.enum';
 import { UnifiedLLMService } from '@/modules/ai/services/unified-llm.service';
 import { ContentType, ContentLevel } from './dto/generate-content.dto';
+import { AccessTier } from '@/database/entities/access-tier.enum';
 
 const makeRepo = () => ({
   findOne: jest.fn(),
@@ -89,8 +90,8 @@ describe('AdminContentService', () => {
     it('should call LLM, parse response, and save drafts', async () => {
       languageRepo.findOne.mockResolvedValue(mockLanguage);
       const llmResponse = JSON.stringify([
-        { title: 'Greetings', description: 'Basic greetings', difficulty: 'beginner', orderIndex: 0, isPremium: false },
-        { title: 'Numbers', description: 'Count to 10', difficulty: 'beginner', orderIndex: 1, isPremium: false },
+        { title: 'Greetings', description: 'Basic greetings', difficulty: 'beginner', orderIndex: 0, accessTier: 'free' },
+        { title: 'Numbers', description: 'Count to 10', difficulty: 'beginner', orderIndex: 1, accessTier: 'free' },
       ]);
       llm.chat.mockResolvedValue(llmResponse);
       const saved = [{ id: 'l1' }, { id: 'l2' }];
@@ -101,7 +102,7 @@ describe('AdminContentService', () => {
       expect(llm.chat).toHaveBeenCalled();
       expect(lessonRepo.save).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ languageId: 'lang-es', status: ContentStatus.DRAFT }),
+          expect.objectContaining({ languageId: 'lang-es', status: ContentStatus.DRAFT, accessTier: AccessTier.FREE }),
         ]),
       );
       expect(result.ids).toEqual(['l1', 'l2']);

@@ -3,6 +3,8 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ScenarioAccessService } from './scenario-access.service';
 import { Scenario } from '../../../database/entities/scenario.entity';
+import { AccessTier } from '../../../database/entities/access-tier.enum';
+import { ContentStatus } from '../../../database/entities/content-status.enum';
 import { UserScenarioAccess } from '../../../database/entities/user-scenario-access.entity';
 import { SubscriptionService } from '../../subscription/subscription.service';
 
@@ -49,8 +51,8 @@ describe('ScenarioAccessService', () => {
     id: 'scenario-uuid-1',
     title: 'Ordering Food',
     description: 'Learn how to order at a restaurant',
-    isPremium: false,
-    isActive: true,
+    accessTier: AccessTier.FREE,
+    status: ContentStatus.PUBLISHED,
     category: mockCategory,
   };
 
@@ -58,8 +60,8 @@ describe('ScenarioAccessService', () => {
     id: 'scenario-uuid-2',
     title: 'Luxury Hotel',
     description: 'Premium hotel scenario',
-    isPremium: true,
-    isActive: true,
+    accessTier: AccessTier.PREMIUM,
+    status: ContentStatus.PUBLISHED,
     category: mockCategory,
   };
 
@@ -75,7 +77,7 @@ describe('ScenarioAccessService', () => {
       const result = await service.findAccessibleScenario(mockUserId, mockFreeScenario.id);
 
       expect(scenarioRepo.findOne).toHaveBeenCalledWith({
-        where: { id: mockFreeScenario.id, isActive: true, status: 'published' },
+        where: { id: mockFreeScenario.id, status: ContentStatus.PUBLISHED },
         relations: ['category'],
       });
       expect(result).toEqual(mockFreeScenario);
@@ -88,7 +90,7 @@ describe('ScenarioAccessService', () => {
       const result = await service.findAccessibleScenario(mockUserId, mockPremiumScenario.id);
 
       expect(scenarioRepo.findOne).toHaveBeenCalledWith({
-        where: { id: mockPremiumScenario.id, isActive: true, status: 'published' },
+        where: { id: mockPremiumScenario.id, status: ContentStatus.PUBLISHED },
         relations: ['category'],
       });
       expect(subscriptionService.getUserSubscription).toHaveBeenCalledWith(mockUserId);
@@ -150,13 +152,26 @@ describe('ScenarioAccessService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
+    it('should throw NotFoundException when scenario status is archived (status filter returns null)', async () => {
+      // Archived scenario is excluded by the status=published WHERE clause → findOne returns null
+      scenarioRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.findAccessibleScenario(mockUserId, 'archived-scenario-id'),
+      ).rejects.toThrow(NotFoundException);
+      expect(scenarioRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'archived-scenario-id', status: ContentStatus.PUBLISHED },
+        relations: ['category'],
+      });
+    });
+
     it('should fetch scenario with category relation', async () => {
       scenarioRepo.findOne.mockResolvedValue(mockFreeScenario);
 
       await service.findAccessibleScenario(mockUserId, mockFreeScenario.id);
 
       expect(scenarioRepo.findOne).toHaveBeenCalledWith({
-        where: { id: mockFreeScenario.id, isActive: true, status: 'published' },
+        where: { id: mockFreeScenario.id, status: ContentStatus.PUBLISHED },
         relations: ['category'],
       });
     });

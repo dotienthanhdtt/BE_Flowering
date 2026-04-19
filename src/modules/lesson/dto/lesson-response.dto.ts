@@ -3,7 +3,6 @@ import { ScenarioDifficulty } from '../../../database/entities/scenario.entity';
 
 export enum ScenarioStatus {
   AVAILABLE = 'available',
-  TRIAL = 'trial',
   LOCKED = 'locked',
   LEARNED = 'learned',
 }

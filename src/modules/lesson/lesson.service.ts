@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { ContentStatus } from '../../database/entities/content-status.enum';
+import { AccessTier } from '../../database/entities/access-tier.enum';
 import { Scenario } from '../../database/entities/scenario.entity';
 import { UserScenarioAccess } from '../../database/entities/user-scenario-access.entity';
 import { Subscription, SubscriptionPlan } from '../../database/entities/subscription.entity';
@@ -75,7 +76,7 @@ export class LessonService {
     const qb = this.scenarioRepo
       .createQueryBuilder('scenario')
       .innerJoin('scenario.category', 'cat', 'cat.is_active = true')
-      .where('scenario.is_active = true');
+      .where('scenario.status = :status', { status: ContentStatus.PUBLISHED });
 
     // Subquery: scenarios user has been granted access to
     const accessSubQuery = qb
@@ -89,7 +90,6 @@ export class LessonService {
       `(scenario.language_id = :languageId OR scenario.id IN ${accessSubQuery})`,
       { languageId, userId },
     );
-    qb.andWhere('scenario.status = :status', { status: ContentStatus.PUBLISHED });
 
     return qb;
   }
@@ -123,13 +123,10 @@ export class LessonService {
     return Array.from(categoryMap.values());
   }
 
-  /** Compute scenario status based on subscription tier */
+  /** Compute scenario status based on access tier and subscription */
   private computeStatus(scenario: Scenario, isFreeUser: boolean): ScenarioStatus {
-    if (scenario.isPremium && isFreeUser && !scenario.isTrial) {
+    if (scenario.accessTier === AccessTier.PREMIUM && isFreeUser) {
       return ScenarioStatus.LOCKED;
-    }
-    if (scenario.isTrial && isFreeUser) {
-      return ScenarioStatus.TRIAL;
     }
     return ScenarioStatus.AVAILABLE;
   }

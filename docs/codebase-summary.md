@@ -172,8 +172,8 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Global scenarios (language_id = NULL) visible to all users
 - Language-specific scenarios filtered by user language preference
 - User-granted access via user_scenario_access table
-- Scenario status computation: available, trial, locked, learned (based on subscription)
-- Premium subscription enforcement (free users see trial-only scenarios)
+- Scenario status computation: available, locked, learned (based on access_tier and subscription)
+- Premium subscription enforcement (free users cannot access premium scenarios)
 - Search, difficulty level filtering
 - Pagination with total count
 
@@ -301,11 +301,9 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `description` - Text (nullable)
 - `image_url` - Text (nullable)
 - `difficulty` - Enum (beginner, intermediate, advanced)
-- `is_premium` - Boolean (default: false, requires paid subscription)
-- `is_trial` - Boolean (default: false, visible to free users)
-- `is_active` - Boolean (default: true)
+- `access_tier` - Enum (free, premium; default: free) — determines subscription requirement
+- `status` - ContentStatus enum (draft, published, archived; default: published) — published = active, archived = inactive
 - `order_index` - Integer for display ordering within category
-- `status` - ContentStatus enum (draft, published, archived; default: published)
 - Created/updated timestamps
 
 ### Lesson Entity
@@ -313,8 +311,10 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `language_id` - FK to Language (non-nullable, language partitioning key)
 - `title` - String (max 255)
 - `description` - Text (nullable)
+- `difficulty` - Enum (beginner, intermediate, advanced)
+- `access_tier` - Enum (free, premium; default: free) — determines subscription requirement
+- `status` - ContentStatus enum (draft, published, archived; default: published) — published = active, archived = inactive
 - `order_index` - Integer for display ordering
-- `status` - ContentStatus enum (draft, published, archived; default: published)
 - Created/updated timestamps
 
 ### Exercise Entity

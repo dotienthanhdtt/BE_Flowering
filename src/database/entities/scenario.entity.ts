@@ -11,6 +11,7 @@ import { ScenarioCategory } from './scenario-category.entity';
 import { Language } from './language.entity';
 import { User } from './user.entity';
 import { ContentStatus } from './content-status.enum';
+import { AccessTier } from './access-tier.enum';
 
 export enum ScenarioDifficulty {
   BEGINNER = 'beginner',
@@ -65,14 +66,8 @@ export class Scenario {
   })
   difficulty!: ScenarioDifficulty;
 
-  @Column({ type: 'boolean', name: 'is_premium', default: false })
-  isPremium!: boolean;
-
-  @Column({ type: 'boolean', name: 'is_trial', default: false })
-  isTrial!: boolean;
-
-  @Column({ type: 'boolean', name: 'is_active', default: true })
-  isActive!: boolean;
+  @Column({ type: 'enum', enum: AccessTier, default: AccessTier.FREE, name: 'access_tier' })
+  accessTier!: AccessTier;
 
   @Column({ type: 'enum', enum: ContentStatus, default: ContentStatus.PUBLISHED })
   status!: ContentStatus;

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Scenario } from '@/database/entities/scenario.entity';
 import { ContentStatus } from '@/database/entities/content-status.enum';
+import { AccessTier } from '@/database/entities/access-tier.enum';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
 import { SubscriptionService } from '@/modules/subscription/subscription.service';
 
@@ -28,7 +29,7 @@ export class ScenarioAccessService {
    */
   async findAccessibleScenario(userId: string, scenarioId: string, languageId?: string): Promise<Scenario> {
     const scenario = await this.scenarioRepo.findOne({
-      where: { id: scenarioId, isActive: true, status: ContentStatus.PUBLISHED },
+      where: { id: scenarioId, status: ContentStatus.PUBLISHED },
       relations: ['category'],
     });
 
@@ -40,8 +41,7 @@ export class ScenarioAccessService {
       throw new NotFoundException('Scenario not available for active language');
     }
 
-    // Trial scenarios are freely accessible (trial flag overrides premium gate)
-    if (scenario.isPremium && !scenario.isTrial) {
+    if (scenario.accessTier === AccessTier.PREMIUM) {
       await this.assertPremiumAccess(userId, scenarioId);
     }
 

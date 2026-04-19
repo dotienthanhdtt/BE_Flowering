@@ -411,17 +411,17 @@ Get home screen lessons grouped by category with filtering.
 ```
 
 **Scenario Status Values:**
-- `available` — Scenario is accessible
-- `trial` — Trial scenario (free users only)
-- `locked` — Premium scenario (requires active subscription)
+- `available` — Scenario is accessible (free or user has premium subscription)
+- `locked` — Premium-only scenario (access_tier = 'premium', requires active subscription)
 - `learned` — User has completed scenario
 
 **Visibility Rules:**
 - Global scenarios (language_id = NULL) visible to all users
 - Language-specific scenarios visible only if matching user's requested language
 - User-granted scenarios (via user_scenario_access table) always visible
-- Only active scenarios (is_active = true) returned
+- Only published scenarios (status = 'published') returned
 - Empty categories excluded from response
+- Free users cannot access scenarios with access_tier = 'premium'
 
 **Errors:** 400 (invalid query params), 401 (unauthorized)
 
