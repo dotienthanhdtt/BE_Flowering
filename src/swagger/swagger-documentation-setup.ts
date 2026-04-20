@@ -22,6 +22,8 @@ export function setupSwaggerDocumentation(app: INestApplication): void {
     .addTag('Users', 'User management endpoints')
     .addTag('Lessons', 'Language lesson endpoints')
     .addTag('AI', 'AI-powered learning features')
+    .addTag('scenarios', 'Scenario listing and gift code redemption')
+    .addTag('admin-kol-bundles', 'Admin: KOL bundle management')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
