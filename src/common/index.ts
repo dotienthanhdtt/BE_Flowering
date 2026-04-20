@@ -6,6 +6,7 @@ export * from './decorators/active-language.decorator';
 export * from './middleware/http-logger.middleware';
 export * from './middleware/snake-to-camel-case.middleware';
 export * from './guards/language-context.guard';
-export * from './guards/admin.guard';
+export * from './guards/roles.guard';
+export * from './decorators/roles.decorator';
 export * from './services/language-context-cache.service';
 export * from './language-context.module';

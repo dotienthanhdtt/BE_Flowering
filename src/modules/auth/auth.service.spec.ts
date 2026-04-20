@@ -41,7 +41,7 @@ describe('AuthService', () => {
     appleProviderId: undefined,
     firebaseUid: undefined,
     nativeLanguageId: undefined,
-    isAdmin: false,
+    roles: ['user'],
     createdAt: new Date(),
     updatedAt: new Date(),
   };

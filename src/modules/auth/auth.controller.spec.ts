@@ -20,6 +20,7 @@ describe('AuthController', () => {
       avatarUrl: undefined,
       authProvider: 'email',
     },
+    languages: [],
   };
 
   const mockUser: User = {
@@ -35,7 +36,7 @@ describe('AuthController', () => {
     firebaseUid: undefined,
     avatarUrl: undefined,
     nativeLanguageId: undefined,
-    isAdmin: false,
+    roles: ['user'],
     createdAt: new Date(),
     updatedAt: new Date(),
   };

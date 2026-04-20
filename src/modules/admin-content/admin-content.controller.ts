@@ -13,7 +13,8 @@ import {
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { AdminGuard } from '@common/guards/admin.guard';
+import { RolesGuard } from '@common/guards/roles.guard';
+import { Roles } from '@common/decorators/roles.decorator';
 import { SkipLanguageContext } from '@common/decorators/active-language.decorator';
 import { AdminContentService } from './admin-content.service';
 import { GenerateContentDto, ContentType } from './dto/generate-content.dto';
@@ -23,7 +24,8 @@ import { UpdateContentDto } from './dto/update-content.dto';
 @ApiTags('admin-content')
 @ApiHeader({ name: 'Authorization', required: true })
 @Controller('admin/content')
-@UseGuards(AdminGuard)
+@UseGuards(RolesGuard)
+@Roles('admin')
 @SkipLanguageContext()
 export class AdminContentController {
   constructor(private readonly adminContentService: AdminContentService) {}

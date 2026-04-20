@@ -375,6 +375,58 @@ AI-powered language learning backend following Clean Architecture principles wit
 
 **Lifecycle:** draft → publish (visible) → archive (soft delete). **Rate Limit:** /generate 5 req/min (Throttle guard); others: none.
 
+### KOL Bundle Module Flow
+```
+┌──────────────────────────────────────────────────────────┐
+│    KOL Bundle Controller                                 │
+│    POST /admin/kol-bundles                              │
+│    GET /admin/kol-bundles                               │
+│    POST /admin/kol-bundles/:id/scenarios                │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    RolesGuard: Check 'admin' in user.roles               │
+│    (bootstrapped via ADMIN_EMAILS env var)              │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    KOL Bundle Service                                    │
+│    - create(dto) — create bundle with scenarios          │
+│    - list(query) — paginated bundle list                │
+│    - attachScenarios(bundleId, dto) — add scenarios     │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+        ┌───────────────────────────────┐
+        ↓                               ↓
+┌──────────────────────────────┐  ┌──────────────────────────┐
+│  KolBundle Entity            │  │  KolBundleScenario Table │
+│  - gift_code (unique)        │  │  (join table)            │
+│  - name, description         │  │  - Unique(bundle,        │
+│  - is_active flag            │  │    scenario) for         │
+│  - created/updated timestamps│  │    idempotent attach     │
+└──────────────────────────────┘  └──────────────────────────┘
+        ↓                               ↑
+        └───────────────────────────────┘
+```
+
+**Redemption Flow (User):**
+```
+User POST /scenarios/redeem {gift_code}
+        ↓
+ScenariosRedeemService.redeem()
+        ↓
+Validate gift_code exists in KolBundle
+        ↓
+Query KolBundleScenario.scenarios via bundle_id
+        ↓
+For each scenario: upsert UserAiScenario
+        (idempotent: duplicate codes safe)
+        ↓
+Return redeemed_count + scenario list
+```
+
+**Rate Limit:** None on bundle management. 5 req/min on redeem endpoint. **Idempotency:** Gift code uniqueness + UserAiScenario unique constraint ensure safe retries.
+
 ## Database Architecture
 
 ### Entity Relationships
@@ -386,6 +438,7 @@ User (1) ──< (N) RefreshToken
 User (1) ──< (N) PasswordReset
 User (1) ──< (N) Vocabulary
 User (1) ──< (N) UserScenarioAccess
+User (1) ──< (N) UserAiScenario  (personal scenarios: AI-generated or KOL-granted)
 User (1) ──< (N) UserProgress
 User (1) ──< (N) UserExerciseAttempt
 
@@ -398,8 +451,12 @@ Language (1) ──< (N) UserExerciseAttempt  (non-nullable, language partitioni
 
 ScenarioCategory (1) ──< (N) Scenario
 Scenario (1) ──< (N) UserScenarioAccess
+Scenario (1) ──< (N) UserAiScenario  (links to user's personal scenarios)
+Scenario (1) ──< (N) KolBundleScenario  (links to KOL bundle distribution)
 Scenario (1) ──< (N) AiConversation  (for scenario chat)
 User (1) ──< (N) Scenario  (as creator, nullable)
+
+KolBundle (1) ──< (N) KolBundleScenario  (gift code distribution)
 
 Lesson (1) ──< (N) Exercise
 Exercise (1) ──< (N) UserExerciseAttempt
@@ -491,6 +548,8 @@ All generated content includes the specified `language_id`, ensuring proper part
 ## Security Architecture
 
 **Firebase Flow:** Client obtains token (Google/Apple) → POST /auth/firebase → verify token → extract email/profile → check exists → auto-link or create → return JWT + refresh token.
+
+**Role-Based Access Control (RBAC):** RolesGuard checks `user.roles` array (replaces AdminGuard). Decorator: `@Roles('admin')`. Default: ['user']. Admin users: ['user', 'admin'] seeded via ADMIN_EMAILS env var.
 
 **Password Reset (Disabled):** Endpoints return 410 Gone; code preserved for future migration.
 

@@ -12,6 +12,7 @@ import { Language } from './language.entity';
 import { User } from './user.entity';
 import { ContentStatus } from './content-status.enum';
 import { AccessTier } from './access-tier.enum';
+import { ScenarioType } from './scenario-type.enum';
 
 export enum ScenarioDifficulty {
   BEGINNER = 'beginner',
@@ -46,9 +47,8 @@ export class Scenario {
   @Column({ type: 'uuid', name: 'creator_id', nullable: true })
   creatorId?: string;
 
-  /** Gift link code — nullable, reserved for future use */
-  @Column({ type: 'varchar', length: 50, name: 'gift_code', nullable: true, unique: true })
-  giftCode?: string;
+  @Column({ type: 'enum', enum: ScenarioType, default: ScenarioType.DEFAULT })
+  type!: ScenarioType;
 
   @Column({ type: 'varchar', length: 255 })
   title!: string;

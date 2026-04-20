@@ -5,15 +5,15 @@
 
 ## Overview
 
-AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 11 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, language management, multi-language content partitioning, and admin content seeding.
+AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 13 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, language management, multi-language content partitioning, scenario management, KOL bundle distribution, and admin content management.
 
 ## Metrics
 
-- **Total TypeScript Files:** ~175 files in src/
-- **Code Lines:** ~10,500 LOC in src/
-- **Modules:** 12 feature modules (auth, user, language, ai, onboarding, subscription, email, lesson, scenario, vocabulary, admin-content, progress)
-- **Database Entities:** 18 TypeORM entities + 2 enums (AccessTier, ContentStatus)
-- **API Endpoints:** 45+ REST endpoints across all modules
+- **Total TypeScript Files:** ~190 files in src/
+- **Code Lines:** ~11,500 LOC in src/
+- **Modules:** 13 feature modules (auth, user, language, ai, onboarding, subscription, email, lesson, scenario, kol-bundle, vocabulary, admin-content, progress)
+- **Database Entities:** 21 TypeORM entities + 4 enums (AccessTier, ContentStatus, ScenarioType, UserRole)
+- **API Endpoints:** 51+ REST endpoints across all modules
 - **External Integrations:** 8 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry, Firebase)
 
 ## Tech Stack
@@ -258,7 +258,48 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Security:** Requires isAdmin flag; ADMIN_EMAILS env var bootstraps initial admins
 
-### 12. Progress Module (3 files, ~80 LOC)
+### 12. Scenario Module (17 files, ~900 LOC)
+
+**Purpose:** Default + personalized scenario listing and KOL gift code redemption
+
+**Endpoints:**
+- GET /scenarios/default — list default scenarios for active language (paginated, auto-enroll)
+- GET /scenarios/personal — list user's AI-generated + KOL-granted scenarios (merged)
+- POST /scenarios/redeem — redeem KOL gift code, grant scenarios (throttled 5/min)
+
+**Services:**
+- ScenariosListingService: Query default scenarios, merge AI + KOL grants
+- ScenariosRedeemService: Validate gift code, create UserAiScenario grants (idempotent)
+
+**DTOs:** ListScenariosQueryDto (page, limit), RedeemScenarioDto (giftCode)
+
+**Key Features:**
+- Type filtering: default vs kol scenario variants
+- Idempotent redemption (duplicate codes safe)
+- Auto-enrollment in language via @AutoEnrollLanguage()
+
+### 13. KOL Bundle Module (7 files, ~350 LOC)
+
+**Purpose:** Admin-only KOL bundle creation and scenario attachment for gift code distribution
+
+**Endpoints:**
+- POST /admin/kol-bundles — create bundle with gift code + scenarios (admin-only)
+- GET /admin/kol-bundles — list bundles paginated (admin-only)
+- POST /admin/kol-bundles/:id/scenarios — attach scenarios to bundle (admin-only, idempotent)
+
+**Services:**
+- KolBundleService: Bundle CRUD, scenario attachment with unique constraint
+
+**DTOs:** CreateKolBundleDto (name, gift_code, scenario_ids), AttachScenariosDto (scenario_ids)
+
+**Security:** @Roles('admin') decorator enforces admin-only access via RolesGuard
+
+**Key Features:**
+- Gift code uniqueness enforced at DB level
+- Scenario attachment idempotent via unique constraint
+- Scenario count computed from KolBundleScenario join
+
+### 14. Progress Module (3 files, ~80 LOC)
 
 **Purpose:** Internal progress tracking (no HTTP endpoints; used by scenario/lesson completion flows)
 
@@ -267,7 +308,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - UserExerciseAttempt entity: records exercise answers
 - Completion tracking for lessons and scenarios (internal service calls)
 
-### 13. Vocabulary Module (16 files, ~800 LOC)
+### 15. Vocabulary Module (16 files, ~800 LOC)
 
 **Purpose:** User vocabulary management with Leitner 5-box spaced repetition system (SRS)
 
@@ -292,14 +333,15 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Full test coverage (4 spec files): unit tests for CRUD, Leitner transitions, session store, review service
 - No rate limits on review endpoints (not AI-powered)
 
-## Database Schema (18 Entities + 2 Enums)
+## Database Schema (21 Entities + 4 Enums)
 
 **Core:** User, Language, UserLanguage
 **Content:** Lesson, Exercise, ScenarioCategory, Scenario, UserScenarioAccess
+**Scenarios:** UserAiScenario, KolBundle, KolBundleScenario
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation, AiConversationMessage, Vocabulary
 **Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent, DeviceToken
-**Enums:** AccessTier (free|premium), ContentStatus (draft|published|archived)
+**Enums:** AccessTier (free|premium), ContentStatus (draft|published|archived), ScenarioType (default|kol), UserRole (user|admin)
 
 ### ScenarioCategory Entity
 - `id` - UUID primary key
@@ -314,7 +356,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `category_id` - FK to ScenarioCategory (ON DELETE CASCADE)
 - `language_id` - FK to Language (non-nullable, each scenario owns exactly one language; partitioning key)
 - `creator_id` - FK to User (nullable, for future KOL support)
-- `gift_code` - String (max 50, nullable, unique)
+- `type` - ScenarioType enum (default, kol; default: default) — categorizes scenarios by origin
 - `title` - String (max 255, e.g., "Meet & Greet")
 - `description` - Text (nullable)
 - `image_url` - Text (nullable)
@@ -323,6 +365,32 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `status` - ContentStatus enum (draft, published, archived; default: published) — published = active, archived = inactive
 - `order_index` - Integer for display ordering within category
 - Created/updated timestamps
+
+### UserAiScenario Entity (New)
+- `id` - UUID primary key
+- `user_id` - FK to User (ON DELETE CASCADE)
+- `scenario_id` - FK to Scenario (ON DELETE CASCADE)
+- `source` - String (max 50; 'ai_generated', 'kol_granted', or other; indicates how user gained access)
+- `granted_at` - Timestamp (when access was granted, default: NOW())
+- Unique constraint: (user_id, scenario_id) for one-to-one access per user
+- **Purpose:** Tracks user's personal scenarios beyond default public ones (AI-generated or KOL-granted)
+
+### KolBundle Entity (New)
+- `id` - UUID primary key
+- `name` - String (max 255, bundle name for tracking)
+- `description` - Text (nullable, bundle description)
+- `gift_code` - String (max 50, nullable, unique) — code users redeem to access bundle scenarios
+- `is_active` - Boolean (default: true, soft disable without deletion)
+- `created_at` - Timestamp
+- `updated_at` - Timestamp
+- **Purpose:** Represents a collection of scenarios distributed via gift codes (Key Opinion Leader distribution)
+
+### KolBundleScenario Entity (New)
+- `id` - UUID primary key
+- `bundle_id` - FK to KolBundle (ON DELETE CASCADE)
+- `scenario_id` - FK to Scenario (ON DELETE CASCADE)
+- Unique constraint: (bundle_id, scenario_id) for idempotent attachment
+- **Purpose:** Join table linking scenarios to KOL bundles for batch distribution
 
 ### Lesson Entity
 - `id` - UUID primary key
@@ -397,7 +465,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 ### User Entity Updates
 - `googleProviderId` - OAuth account linking
 - `appleProviderId` - OAuth account linking
-- `isAdmin` - Boolean (default: false, seeded via ADMIN_EMAILS env var, grants access to admin endpoints)
+- `roles` - text[] (default: ['user'], replaces isAdmin boolean; includes 'admin' for admin users, seeded via ADMIN_EMAILS env var)
 
 ### AiConversation Entity Updates
 - `type` - ANONYMOUS or AUTHENTICATED

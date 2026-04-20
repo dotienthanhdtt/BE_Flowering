@@ -59,10 +59,10 @@ export class AdminContentService implements OnModuleInit {
       await this.userRepo
         .createQueryBuilder()
         .update(User)
-        .set({ isAdmin: true })
+        .set({ roles: () => "array_append(array_remove(roles, 'admin'), 'admin')" })
         .where('email = ANY(:emails)', { emails })
         .execute();
-      this.logger.log(`Admin bootstrap: set is_admin=true for ${emails.length} email(s)`);
+      this.logger.log(`Admin bootstrap: added 'admin' role for ${emails.length} email(s)`);
     } catch (err) {
       this.logger.error('Admin bootstrap failed', err);
     }

@@ -23,7 +23,7 @@ export class UserScenarioAccess {
   @Column({ type: 'uuid', name: 'user_id' })
   userId!: string;
 
-  @ManyToOne(() => Scenario, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Scenario, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'scenario_id' })
   scenario!: Scenario;
 

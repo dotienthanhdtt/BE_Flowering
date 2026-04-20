@@ -360,6 +360,29 @@ Get lessons grouped by category. **Auth:** Required | **Query:** language (uuid)
 
 ---
 
+### Scenarios
+
+#### GET /scenarios/default
+List default scenarios for active language (paginated). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page` (1+, default 1), `limit` (1-50, default 20) | **Response (200):** `{code: 1, message: "Scenarios found", data: {items: [{id, title, description, image_url, difficulty, type: "default", status}], total, page, limit}}`
+
+**Type:** Only returns scenarios with `type='default'`. Automatically enrolls user in language if not yet enrolled. **Errors:** 400 (missing header), 401 (unauthorized), 403 (inactive language)
+
+---
+
+#### GET /scenarios/personal
+List user's AI-generated + KOL-granted scenarios (merged). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page`, `limit` | **Response (200):** `{code: 1, message: "Personal scenarios found", data: {items: [{id, title, source: "ai_generated"|"kol_granted", granted_at?, status}], total, page, limit}}`
+
+**Merges:** UserAiScenario rows (AI-generated) + KolBundleScenario grant rows (KOL-granted). Sorted by granted_at descending. **Errors:** 400, 401, 403
+
+---
+
+#### POST /scenarios/redeem
+Redeem a KOL gift code to grant access to scenarios. **Auth:** Required | **Rate Limit:** 5 req/min | **Request:** `{gift_code: "string"}` | **Response (200):** `{code: 1, message: "Scenarios redeemed", data: {redeemed_count: int, scenarios: [{id, title}]}}`
+
+**Behavior:** Validates gift code exists + is active in KolBundle. For each bundle scenario, creates UserAiScenario row if user doesn't already have access. Idempotent (duplicate codes succeed without double-grants). **Errors:** 404 (code not found), 400 (invalid), 429 (throttled)
+
+---
+
 ### AI Features
 
 Chat endpoint requires active premium subscription. Translation and correction endpoints are public but support optional premium. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
@@ -466,6 +489,29 @@ Edit content (title/description only). **Auth:** Required (Admin) | **Query:** t
 
 #### DELETE /admin/content/:id
 Archive content (soft delete). **Auth:** Required (Admin) | **Query:** type | **Response:** `{data: {id, status: archived, updated_at}}` | Idempotent. **Errors:** 400, 401, 404
+
+---
+
+### Admin KOL Bundle Management
+
+#### POST /admin/kol-bundles
+Create a new KOL bundle with gift code and scenarios. **Auth:** Required (Admin role) | **Request:** `{name: "string", description?: "string", gift_code: "string", scenario_ids: ["uuid1", "uuid2"]}` | **Response (201):** `{code: 1, message: "Bundle created", data: {id, name, gift_code, scenario_count, created_at}}`
+
+**Role:** Admin-only (checked via `@Roles('admin')` decorator on RolesGuard). Gift code must be unique. Scenarios must exist. **Errors:** 401, 403 (not admin), 400 (validation), 409 (duplicate code)
+
+---
+
+#### GET /admin/kol-bundles
+List all KOL bundles (paginated). **Auth:** Required (Admin role) | **Query:** `page` (1+, default 1), `limit` (1-100, default 20) | **Response (200):** `{code: 1, message: "Bundles found", data: {items: [{id, name, gift_code, scenario_count, created_at}], total, page, limit}}`
+
+**No filter logic.** Lists all bundles across all languages. **Errors:** 401, 403 (not admin)
+
+---
+
+#### POST /admin/kol-bundles/:id/scenarios
+Attach scenarios to an existing bundle. **Auth:** Required (Admin role) | **Request:** `{scenario_ids: ["uuid1", "uuid2"]}` | **Response (200):** `{code: 1, message: "Scenarios attached", data: {bundle_id, attached_count, total_scenarios}}`
+
+**Idempotent:** Re-attaching same scenarios succeeds without duplicates (database unique constraint on (bundle_id, scenario_id)). **Errors:** 401, 403 (not admin), 404 (bundle not found), 400 (scenario not found)
 
 ---
 

@@ -15,6 +15,8 @@ import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { LessonModule } from './modules/lesson/lesson.module';
 import { ScenarioChatModule } from './modules/scenario/scenario-chat.module';
+import { ScenariosModule } from './modules/scenario/scenarios.module';
+import { KolBundleModule } from './modules/kol-bundle/kol-bundle.module';
 import { VocabularyModule } from './modules/vocabulary/vocabulary.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
@@ -44,6 +46,8 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
     OnboardingModule,
     LessonModule,
     ScenarioChatModule,
+    ScenariosModule,
+    KolBundleModule,
     VocabularyModule,
     ProgressModule,
     AdminContentModule,

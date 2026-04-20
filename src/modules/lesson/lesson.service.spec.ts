@@ -5,6 +5,7 @@ import { LessonService } from './lesson.service';
 import { Scenario, ScenarioDifficulty } from '../../database/entities/scenario.entity';
 import { AccessTier } from '../../database/entities/access-tier.enum';
 import { ContentStatus } from '../../database/entities/content-status.enum';
+import { ScenarioType } from '../../database/entities/scenario-type.enum';
 import { Language } from '../../database/entities/language.entity';
 
 import { Subscription, SubscriptionPlan, SubscriptionStatus } from '../../database/entities/subscription.entity';
@@ -83,6 +84,7 @@ describe('LessonService', () => {
     categoryId: category.id,
     language: mockLanguage(),
     languageId: 'lang-en',
+    type: ScenarioType.DEFAULT,
     title: 'Test Scenario',
     description: 'Test Description',
     imageUrl: 'https://example.com/image.jpg',
