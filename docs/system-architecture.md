@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-04-18
+**Last Updated:** 2026-04-20
 
 ## Architecture Overview
 
@@ -33,33 +33,15 @@ AI-powered language learning backend following Clean Architecture principles wit
 ## Core Architecture Patterns
 
 ### 1. Modular Architecture
-11 feature modules (auth, ai, user, language, subscription, onboarding, email, lesson, scenario-chat, vocabulary, admin-content, language-context) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
+12 feature modules with NestJS DI; each self-contained. **Critical:** Register all entities in BOTH:
+1. `database.module.ts` (global entities array)
+2. Feature module's `TypeOrmModule.forFeature([...])` (@InjectRepository)
 
-**Module Structure:**
-```
-module/
-├── dto/                    # Data Transfer Objects
-├── module.controller.ts    # HTTP endpoints
-├── module.service.ts       # Business logic
-├── module.module.ts        # NestJS module definition (with TypeOrmModule.forFeature())
-└── [additional services]   # Feature-specific services
-```
-
-**Critical:** All entities must be registered in BOTH:
-1. `database.module.ts` (global entities array for DataSource)
-2. Feature module's `TypeOrmModule.forFeature([...])` (for @InjectRepository)
-
-### 2. Dependency Injection
-NestJS IoC container manages all dependencies for testability and loose coupling.
-
-### 3. Repository Pattern
-TypeORM provides repository abstraction for database operations.
-
-### 4. Strategy Pattern
-AI module uses strategy pattern for multi-provider support (OpenAI, Anthropic, Google AI).
-
-### 5. Factory Pattern
-AI client factory dynamically selects provider based on configuration.
+### 2. Design Patterns
+- **DI:** NestJS IoC manages all dependencies
+- **Repository:** TypeORM abstracts DB operations
+- **Strategy:** AI module multi-provider (OpenAI, Anthropic, Google)
+- **Factory:** Provider selection per request
 
 ## Module Architecture Details
 
@@ -95,12 +77,7 @@ AI client factory dynamically selects provider based on configuration.
 └──────────────────────────────────────────────────────┘
 ```
 
-**Key Features:**
-- **Sole auth method: `POST /auth/firebase`** — accepts Firebase ID token; auto-detects Google or Apple provider
-- Composite refresh tokens (uuid:hex) for O(1) validation
-- OAuth auto-linking to existing email accounts (legacy password accounts are migrated on first OAuth sign-in matching the email)
-- Provider-specific IDs prevent duplicates
-- **Email/password endpoints disabled (410 Gone):** `/auth/register`, `/auth/login`, `/auth/forgot-password`, `/auth/verify-otp`, `/auth/reset-password` return HTTP 410. Service code and DB records preserved for future migration if needed.
+**Key Features:** Sole method: `POST /auth/firebase` (auto-detects Google/Apple). Composite refresh tokens (uuid:hex, 90d expiry). OAuth auto-links existing emails. Email/password disabled (410 Gone). Firebase gracefully degrades on init failure.
 
 ### AI Module Flow
 ```
@@ -121,21 +98,20 @@ AI client factory dynamically selects provider based on configuration.
         ┌───────────┴────────────────────────────────┐
         ↓                                            ↓
 ┌──────────────────────────────┐      ┌──────────────────────┐
-│  Unified LLM Service          │      │  Transcription Svc   │
-│  - selectProvider()           │      │  (STT)               │
-│  - callLLM()                  │      │  - validateFile()    │
-│  - handleFallback()           │      │  - uploadAudio()     │
-│  LLM Providers:               │      │  - transcribe()      │
-│  ├─ OpenAI (3 models)         │      └──────────────────────┘
-│  ├─ Anthropic (2 models)      │             ↓
-│  └─ Google AI (5 models)      │      STT Providers:
-└──────────────────────────────┘      ├─ OpenAI Whisper (primary)
-        ↓                             └─ Gemini Multimodal (fallback)
-┌──────────────────────────────┐             ↓
-│   Langfuse Observability     │      Supabase Storage
-│   - Trace AI requests        │      (Audio persistence)
-│   - Log prompts & responses  │
-│   - Track usage metrics      │
+│  Unified LLM Service          │      │  Transcription Service    │
+│  - selectProvider()           │      │  (STT with Signed URLs)   │
+│  - callLLM()                  │      │  - validateFile()          │
+│  - handleFallback()           │      │  - uploadAudio() → bucket  │
+│  LLM Providers:               │      │  - transcribe()            │
+│  ├─ OpenAI (3 models)         │      │  - generateSignedUrl(1h)   │
+│  ├─ Anthropic (2 models)      │      └────────────────────────────┘
+│  └─ Google AI (3 models)      │             ↓
+└──────────────────────────────┘      STT Providers:
+        ↓                             ├─ OpenAI Whisper (primary)
+┌──────────────────────────────┐      └─ Gemini Multimodal (fallback)
+│   Langfuse Tracing           │             ↓
+│ (per-invocation handlers)    │      Supabase Private Bucket
+│   await handler.flushAsync() │      (Presigned URLs for mobile)
 └──────────────────────────────┘
         ↓
 ┌──────────────────────────────┐
@@ -146,34 +122,11 @@ AI client factory dynamically selects provider based on configuration.
 └──────────────────────────────┘
 ```
 
-**AI Provider Selection:** Load balancing with fallback, cost optimization per request type
+**Translation:** Word (LLM → Vocabulary) | Sentence (fetch & cache). Model: GPT4-1-NANO (temp 0.1)
 
-**Translation Service:**
-- Word translation: LLM call → save to Vocabulary entity for user recall
-- Sentence translation: Fetch AiConversationMessage by ID → cache on message entity
-- Model: OPENAI_GPT4_1_NANO (temp 0.1)
+**Correction:** Input: prev AI msg + user msg + lang. Output: correctedText (null if no errors). Public endpoint, optional premium. Model: GPT4-1-NANO (temp 0.3)
 
-**Correction Check:**
-- Input: Previous AI message + user message + target language
-- LLM prompt: correction-check-prompt.md (ignores punctuation/capitalization, bolds corrections)
-- Output: correctedText (null if no errors, handles gibberish/emoji input)
-- Model: OPENAI_GPT4_1_NANO (temp 0.3)
-- Access: Public endpoint with optional premium (both authenticated and anonymous)
-
-**Speech-to-Text (STT) Transcription:**
-- Endpoint: POST /ai/transcribe (premium-only, JWT required)
-- Input: multipart/form-data with audio file (M4A, MP4, MPEG, WAV, max 10MB)
-- Flow:
-  1. Validate file type and size
-  2. Persist audio to Supabase storage (user_audio/ bucket)
-  3. Select preferred STT provider (configurable via STT_PROVIDER env var)
-  4. Transcribe audio to text
-  5. Return transcribed text in response
-  6. If primary provider fails, fallback to secondary provider
-- **Primary Provider:** OpenAI Whisper (high accuracy, broader language support)
-- **Fallback Provider:** Google Gemini multimodal (graceful degradation)
-- **Configuration:** STT_PROVIDER env var (default: "openai", options: "openai" | "gemini")
-- **Rate Limiting:** Inherits AI module throttling (20 req/min, 100 req/hr per user)
+**STT:** POST /ai/transcribe (premium). Input: M4A/MP4/MPEG/WAV (max 10MB). Providers: OpenAI Whisper → Gemini (fallback). Config: STT_PROVIDER env var.
 
 ### Subscription Module Flow
 ```
@@ -202,14 +155,6 @@ AI client factory dynamically selects provider based on configuration.
 └──────────────────────────────────────────────────────┘
 ```
 
-**Webhook Flow (RevenueCat → Backend):**
-```
-1. RevenueCat sends webhook event (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, PRODUCT_CHANGE)
-2. Backend validates Bearer token (timing-safe)
-3. Check WebhookEvent table for eventId (prevents duplicate processing)
-4. Update local Subscription record with new status
-5. Return 200 to RevenueCat; on failure, return 5xx for retry
-```
 
 ### Onboarding Module Flow
 ```
@@ -249,10 +194,7 @@ AI client factory dynamically selects provider based on configuration.
 - Chat continuation (with `conversation_id`): 30 req/hr per IP
 - Message fetch GET endpoint: 30 req/hr per IP
 
-**Caching (Idempotent /complete):**
-- First successful call: Caches `extracted_profile` + `scenarios` (5 scenario objects with stable UUIDs)
-- Subsequent calls: Return same data without re-invoking LLM (same scenario UUIDs preserved)
-- Partial failures: Skip caching, allow retry on next call
+**First-Turn Detection:** Via `messageCount` on AiConversation (authoritative). **Caching:** /complete caches profile + scenarios (5 items, stable UUIDs); idempotent. **Resume:** GET messages fetches transcript for mobile rehydration.
 
 ### Lesson Module Flow
 ```
@@ -286,25 +228,7 @@ AI client factory dynamically selects provider based on configuration.
 └──────────────────────────────────────────────────────┘
 ```
 
-**Visibility Filter Logic:**
-```
-Scenario is visible if:
-  (status = 'published') AND
-  (
-    language_id IS NULL OR
-    language_id = requested_language_id OR
-    scenario_id IN user_scenario_access(user_id)
-  )
-```
-
-**Status Computation:**
-```
-scenario_status = {
-  'learned'   if user completed scenario (future: UserProgress lookup)
-  'locked'    if access_tier == 'premium' && user.subscription.plan == 'free'
-  'available' otherwise
-}
-```
+**Visibility:** (status = 'published') AND (language_id NULL OR matches context OR user_scenario_access). **Status:** learned / locked (premium, free user) / available.
 
 ### Scenario Chat Module Flow
 ```
@@ -342,19 +266,9 @@ scenario_status = {
 └──────────────────────────────────────────────────────┘
 ```
 
-**Access Control:**
-- Free users cannot start scenarios with `access_tier = 'premium'`
-- Premium users (active subscription) can access all scenarios
-- User-granted access (via `user_scenario_access`) overrides tier restrictions
+**Access:** Free users cannot access premium tier. Premium can access all. User-granted access (user_scenario_access) overrides tier.
 
-**Turn-Based Conversation Flow:**
-```
-1. User sends first message (without message parameter) → AI initiates
-2. User sends subsequent messages → AI responds based on conversation history
-3. Each turn increments turn counter
-4. When turn == maxTurns → completed: true
-5. Completed conversations cannot accept new messages
-```
+**Turns:** First msg (no `message` param) → AI initiates. Subsequent → AI responds. Max turns reached → completed: true (immutable).
 
 ### Vocabulary & Leitner SRS Module Flow
 ```
@@ -411,67 +325,11 @@ scenario_status = {
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Leitner Box Transitions:**
-```
-Correct Answer:
-  Box 1 → Box 2: due_at += 3 days
-  Box 2 → Box 3: due_at += 7 days
-  Box 3 → Box 4: due_at += 14 days
-  Box 4 → Box 5: due_at += 30 days
-  Box 5 → Box 5: due_at += 30 days (cap, no promotion)
+**Leitner:** Box 1→2 (+3d), 2→3 (+7d), 3→4 (+14d), 4→5 (+30d), 5→5 (+30d). Wrong: any→1 (+1d).
 
-Incorrect Answer (any box):
-  → Box 1: due_at += 1 day
-```
+**Invariants:** Card cannot re-rate in same session. Session expiry doesn't delete vocab. dueAt query: `<= NOW()`. reviewCount increments always; correctCount only on correct.
 
-**Key Invariants:**
-- Once session created, card cannot be re-rated in same session
-- Session expiry does NOT auto-delete vocabulary (session store only)
-- dueAt is exclusive: due cards query uses `due_at <= NOW()`
-- reviewCount incremented on every rating (correct or wrong)
-- correctCount incremented only on correct ratings
-
-### Language Context Module Flow
-```
-┌──────────────────────────────────────────────────────────┐
-│      Global LanguageContextGuard (on all routes)         │
-│      [bypassed by @SkipLanguageContext()]                │
-└──────────────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────────────┐
-│    1. Extract X-Learning-Language header                 │
-│    2. Query LanguageContextCacheService                  │
-└──────────────────────────────────────────────────────────┘
-                    ↓
-         [Cache hit? → return]
-                 ↓
-    [Cache miss? → query DB]
-                 ↓
-┌──────────────────────────────────────────────────────────┐
-│    Query Language table WHERE code = header value        │
-│    Cache result (LRU, 60s TTL)                           │
-└──────────────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────────────┐
-│    Store {id, code} in req.activeLanguage               │
-└──────────────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────────────┐
-│    @ActiveLanguage() param decorator                     │
-│    injects context into controller method               │
-└──────────────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────────────┐
-│    Service methods filter by language_id automatically   │
-│    (e.g., getLessons filters WHERE language_id = ctx.id) │
-└──────────────────────────────────────────────────────────┘
-```
-
-**Key Invariants:**
-- All content endpoints require language context
-- Language code validated on every request (no stale cache)
-- Missing header → 400 Bad Request
-- Invalid language code → 400 Bad Request
+**Language Context Flow:** Guard extracts X-Learning-Language header → LRU cache (60s TTL) → store in req.activeLanguage → services filter by language_id. **Invariants:** All content routes require context. Missing/invalid header → 400.
 
 ### Admin Content Module Flow
 ```
@@ -515,18 +373,7 @@ Incorrect Answer (any box):
 └──────────────────────────────────────────────────────────┘
 ```
 
-**Content Lifecycle:**
-
-```
-Create (draft) → Edit → Publish (visible to users) → Archive (hidden)
-     ↓
- [initial state]
-                                                         [soft delete]
-```
-
-**Rate Limiting:**
-- /generate: 5 req/min per admin (Throttle guard)
-- Other endpoints: no specific limit (non-AI)
+**Lifecycle:** draft → publish (visible) → archive (soft delete). **Rate Limit:** /generate 5 req/min (Throttle guard); others: none.
 
 ## Database Architecture
 
@@ -643,108 +490,11 @@ All generated content includes the specified `language_id`, ensuring proper part
 
 ## Security Architecture
 
-### Authentication Flow
-```
-1. User Login/Register
-   ↓
-2. Validate Credentials (bcrypt hash comparison)
-   ↓
-3. Generate JWT Token (HS256 signed, 7d expiry)
-   ↓
-4. Store Refresh Token (composite format, device info)
-   ↓
-5. Return Token Pair to Client
-   ↓
-6. Client Includes JWT in Authorization Header
-   ↓
-7. JwtAuthGuard Validates Token
-   ↓
-8. Extract User from Payload
-   ↓
-9. Attach User to Request Context
-   ↓
-10. Controller Access via @CurrentUser() Decorator
-```
+**Firebase Flow:** Client obtains token (Google/Apple) → POST /auth/firebase → verify token → extract email/profile → check exists → auto-link or create → return JWT + refresh token.
 
-### Google OAuth Flow (ID Token)
-```
-1. Client Obtains Google ID Token (via SDK)
-   ↓
-2. Client Sends POST /auth/google with idToken
-   ↓
-3. Backend Verifies ID Token (google-auth-library)
-   ↓
-4. Extract User Email & Profile from Token Payload
-   ↓
-5. Check if User Exists (by email)
-   ↓
-6. If Exists: Auto-link account (store googleProviderId)
-   ↓
-7. If Not Exists: Create new user
-   ↓
-8. Generate JWT Token
-   ↓
-9. Return Access Token to Client
-```
+**Password Reset (Disabled):** Endpoints return 410 Gone; code preserved for future migration.
 
-### Apple OAuth Flow
-```
-1. Client Obtains Apple Identity Token (via SDK)
-   ↓
-2. Client Sends POST /auth/apple with identityToken
-   ↓
-3. Backend Verifies Token (apple-signin-auth library)
-   ↓
-4. Extract User Email & Profile from Token Payload
-   ↓
-5. Check if User Exists (by email)
-   ↓
-6. If Exists: Auto-link account (store appleProviderId)
-   ↓
-7. If Not Exists: Create new user
-   ↓
-8. Generate JWT Token
-   ↓
-9. Return Access Token to Client
-```
-
-### Password Reset Flow
-```
-1. User requests password reset via /forgot-password
-   ↓
-2. Generate OTP (10-minute expiry)
-   ↓
-3. Send OTP via email (Nodemailer)
-   ↓
-4. User verifies OTP via /verify-otp
-   ↓
-5. Generate reset token (15-minute expiry)
-   ↓
-6. User resets password via /reset-password
-   ↓
-7. Update password hash, invalidate reset token
-```
-
-### Webhook Security (RevenueCat)
-```
-1. RevenueCat Sends Webhook with Bearer Token
-   ↓
-2. Extract Authorization Header
-   ↓
-3. Timing-Safe Comparison with Secret
-   ↓
-4. Reject if Invalid (UnauthorizedException)
-   ↓
-5. Validate Payload Schema (DTO validation)
-   ↓
-6. Respond Immediately (< 60s)
-   ↓
-7. Process Asynchronously (setImmediate)
-   ↓
-8. Update Database
-   ↓
-9. Log Errors (no retry)
-```
+**Webhook Security:** Bearer token (timing-safe) validation → DTO schema → respond <60s → async process via setImmediate → update DB → log errors.
 
 ### Database Security
 - Row-Level Security (RLS) on all tables
@@ -912,30 +662,12 @@ All responses wrapped in standard format:
 - Never exposes raw exceptions to frontend
 - Consistent error format with meaningful messages
 
-## Technology Decisions
+**Tech Stack Justification:**
+- **NestJS:** Enterprise DI + TypeScript
+- **TypeORM:** TS-first ORM, migrations, Repository pattern
+- **Supabase:** PostgreSQL + RLS + storage
+- **RevenueCat:** Cross-platform subs + webhook-based
+- **Firebase:** Industry FCM, reliable delivery
+- **LangChain:** Multi-provider AI abstraction
 
-**Why NestJS?** Enterprise architecture, TypeScript support, DI, extensive ecosystem
-
-**Why TypeORM?** TypeScript-first ORM, migration support, Active Record & Repository patterns
-
-**Why Supabase?** Managed PostgreSQL, RLS, real-time ready, generous free tier
-
-**Why RevenueCat?** Cross-platform subscriptions, handles App Store/Play Store, webhook-based
-
-**Why Firebase?** Industry-standard FCM, multi-platform, reliable delivery, free tier
-
-**Why LangChain?** Multi-provider AI abstraction, agent framework, production-ready
-
-## Constraints & Trade-offs
-
-**Current Limitations:**
-- No distributed caching (single instance)
-- No background job processing (all synchronous)
-- No GraphQL (REST only)
-- No real-time features (REST polling)
-
-**Trade-offs Made:**
-- **Simplicity vs. Performance:** Chose simpler architecture for faster development
-- **Cost vs. Features:** Using free tiers where possible
-- **Monolith vs. Microservices:** Monolithic for easier development
-- **SQL vs. NoSQL:** PostgreSQL for ACID compliance and relational data
+**Constraints:** No distributed cache, no async jobs, REST-only, no real-time. **Trade-offs:** Monolith for speed, free tiers for cost, PostgreSQL for ACID.

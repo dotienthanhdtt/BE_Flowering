@@ -1,8 +1,8 @@
 # Project Roadmap
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-20
 **Project:** AI Language Learning Backend
-**Status:** Phase 1 Complete, Phase 2 In Progress (95%)
+**Status:** Phase 1 Complete, Phase 2 Near-Complete (99%)
 
 ## Vision
 
@@ -36,12 +36,12 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 ---
 
-### Phase 2: Production Hardening 🔄 (In Progress)
+### Phase 2: Production Hardening ✅ (Near-Complete)
 
-**Duration:** 6 weeks
-**Status:** 🔄 In Progress
-**Progress:** 98% (HTTP logger, Sentry, language flags, prompts, translation, correction, vocabulary, premium features, grammar consolidation, Langfuse fixes, code cleanup, API standardization, scenario chat, vocabulary SRS, documentation done)
-**Target Completion:** 2026-03-31
+**Duration:** 10 weeks (extended for hardening scope)
+**Status:** ✅ 99% Complete
+**Progress:** Vocabulary/SRS, scenario chat, signed URLs, graceful inits, email/password 410 Gone, first-turn detection, resume support, security hardening all complete
+**Target Completion:** 2026-04-25
 
 **Completed:**
 - ✅ HTTP logger middleware (2026-03-07)
@@ -88,16 +88,19 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ Onboarding resume support: idempotent /complete with cached profile + scenarios; GET /conversations/:id/messages endpoint (2026-04-15)
 - ✅ Removed session expiry logic: 7-day TTL on anonymous onboarding conversations removed; expiresAt column deprecated (2026-04-14)
 - ✅ Updated docs: codebase-summary, system-architecture, project-overview-pdr for resume support + session expiry removal (2026-04-15)
+- ✅ Content access tier refactor: `access_tier` enum (free|premium) replaces `is_premium`; `status` enum replaces `is_active` (2026-04-18)
+- ✅ Admin content generation: POST /admin/content/generate (LLM-powered batch), GET/PATCH/DELETE endpoints with status lifecycle (2026-04-18)
+- ✅ Email service graceful init: Nodemailer init failure no longer crashes app boot; endpoints return errors if needed (2026-04-19)
+- ✅ Signed URLs for private audio bucket: STT outputs presigned (1h expiry) for secure mobile download (2026-04-19)
+- ✅ Onboarding first-turn detection: via message count (not presence); supports resume across server restarts (2026-04-19)
+- ✅ Firebase graceful init: ID token verification try-catches; endpoints degrade if unavailable (2026-04-19)
+- ✅ Email/password endpoints 410 Gone: /auth/register, /login, /forgot-password, /verify-otp, /reset-password all disabled (2026-04-19)
+- ✅ Updated all documentation: codebase-summary, code-standards, system-architecture, project-overview-pdr, mobile-api-reference (2026-04-20)
 
-**In Progress:**
-| Feature | Priority | Status | Target Date |
-|---------|----------|--------|-------------|
-| Unit test coverage (>80%) | High | 🔄 30% | 2026-02-20 |
-| E2E test suite | High | 📋 Planned | 2026-02-25 |
-| Redis caching layer | High | 📋 Planned | 2026-03-01 |
-| Per-user rate limiting | High | 📋 Planned | 2026-03-05 |
-| Health check endpoints | Medium | 📋 Planned | 2026-03-08 |
-| Database query optimization | High | 📋 Planned | 2026-03-12 |
+**Remaining (< 1%):**
+| Feature | Priority | Status | Note |
+|---------|----------|--------|------|
+| Final E2E tests | Medium | 📋 Deferred | Vocabulary/Scenario E2E coverage; planned for Phase 3 |
 | Response caching strategy | Medium | 📋 Planned | 2026-03-15 |
 | API versioning | Low | 📋 Planned | 2026-03-18 |
 

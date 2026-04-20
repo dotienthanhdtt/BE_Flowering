@@ -94,12 +94,9 @@ Some routes (e.g., `GET /lessons`) support automatic enrollment when accessing a
 
 **cURL Example:**
 ```bash
-# Standard enrollment required
 curl http://localhost:3000/lessons \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "X-Learning-Language: es"
-
-# If user not yet enrolled in 'es', auto-enroll happens transparently
 ```
 
 **Note:** Onboarding endpoints, user profile, subscriptions, and admin endpoints do NOT require this header.
@@ -127,28 +124,8 @@ Liveness/health probe. Used by load balancers and Railway deploy checks.
 
 ### Authentication (POST /auth/*)
 
-#### POST /auth/register
-> **DISABLED — returns 410 Gone.** Email/password auth is soft-disabled. Use `POST /auth/firebase` instead.
-
-Register new user account.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "SecurePassword123!",
-  "name": "John Doe"
-}
-```
-
-**Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
-
----
-
-#### POST /auth/login
-> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase` instead.
-
-Login with email and password.
+#### POST /auth/register | POST /auth/login
+> **DISABLED — returns 410 Gone.** Email/password auth is no longer supported. Use `POST /auth/firebase`.
 
 **Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
 
@@ -202,24 +179,8 @@ Invalidate refresh token.
 
 ---
 
-#### POST /auth/forgot-password
-> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase` instead.
-
-Request password reset via OTP.
-
-**Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
-
----
-
-#### POST /auth/verify-otp
-> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase` instead.
-
-**Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
-
----
-
-#### POST /auth/reset-password
-> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase` instead.
+#### POST /auth/forgot-password | /verify-otp | /reset-password
+> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase`.
 
 **Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
 
@@ -391,59 +352,11 @@ Remove language.
 ### Lessons
 
 #### GET /lessons
-Get home screen lessons grouped by category with filtering.
+Get lessons grouped by category. **Auth:** Required | **Query:** language (uuid), level (beginner|intermediate|advanced), search (string), page (1+), limit (1-50, default 20).
 
-**Auth:** Required | **Query params:**
-- `language` (optional, UUID) — Filter by specific language
-- `level` (optional, enum: beginner|intermediate|advanced) — Filter by difficulty
-- `search` (optional, string) — Search scenario title (case-insensitive)
-- `page` (optional, integer, min: 1, default: 1) — Page number
-- `limit` (optional, integer, min: 1, max: 50, default: 20) — Items per page
+**Response:** `{data: {categories: [{id, name, scenarios: [{id, title, image_url, difficulty, status}]}], pagination}}`
 
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Success",
-  "data": {
-    "categories": [
-      {
-        "id": "uuid",
-        "name": "Greetings",
-        "scenarios": [
-          {
-            "id": "uuid",
-            "title": "Meet & Greet",
-            "image_url": "url or null",
-            "difficulty": "beginner",
-            "status": "available"
-          }
-        ]
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "total": 45
-    }
-  }
-}
-```
-
-**Scenario Status Values:**
-- `available` — Scenario is accessible (free or user has premium subscription)
-- `locked` — Premium-only scenario (access_tier = 'premium', requires active subscription)
-- `learned` — User has completed scenario
-
-**Visibility Rules:**
-- Global scenarios (language_id = NULL) visible to all users
-- Language-specific scenarios visible only if matching user's requested language
-- User-granted scenarios (via user_scenario_access table) always visible
-- Only published scenarios (status = 'published') returned
-- Empty categories excluded from response
-- Free users cannot access scenarios with access_tier = 'premium'
-
-**Errors:** 400 (invalid query params), 401 (unauthorized)
+**Status:** available | locked (premium, free user) | learned. **Visibility:** published + (global OR matching language OR user_scenario_access). **Errors:** 400, 401
 
 ---
 
@@ -452,147 +365,25 @@ Get home screen lessons grouped by category with filtering.
 Chat endpoint requires active premium subscription. Translation and correction endpoints are public but support optional premium. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
 
 #### POST /ai/chat
-Chat with AI tutor.
-
-**Auth:** Required (Premium) | **Rate Limit:** default global throttler | **Request:**
-```json
-{
-  "message": "How do I use the past tense in Spanish?",
-  "context": {
-    "conversation_id": "uuid",
-    "target_language": "Spanish",
-    "native_language": "English",
-    "proficiency_level": "beginner",
-    "lesson_topic": "Past tense"
-  },
-  "model": "gpt-4o"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| message | string | Yes | User message (max 4000 chars) |
-| context.conversation_id | UUID | Yes | Conversation session id |
-| context.target_language | string | Yes | Language being learned |
-| context.native_language | string | Yes | User's native language |
-| context.proficiency_level | string | Yes | `beginner|elementary|intermediate|upper-intermediate|advanced` |
-| context.lesson_topic | string | No | Current lesson topic |
-| model | enum | No | Override default LLM (see `LLMModel` enum) |
-
-**Response (200):** `{code: 1, message: "Success", data: {message, conversation_id}}`
-
----
+Chat with AI tutor. **Auth:** Required (Premium) | **Request:** `{message, context: {conversation_id, target_language, native_language, proficiency_level, lesson_topic?, model?}}` | **Response:** `{data: {message, conversation_id}}`
 
 #### SSE /ai/chat/stream
-Stream chat response (Server-Sent Events).
-
-**Auth:** Required (Premium) | **Request:** Same shape as `POST /ai/chat`
-
-**Response:** text/event-stream. Each event payload: `{ "data": { "content": "<chunk>" } }`.
+Stream chat (Server-Sent Events). **Auth:** Required (Premium) | **Response:** `text/event-stream` with chunks in `{data: {content: "..."}}` format.
 
 ---
 
 #### POST /ai/chat/correct
-Check grammar/vocabulary of user's chat reply in context of previous AI message.
-
-**Auth:** Optional (Public) | **Rate Limit:** 5 req/min | **Request:**
-```json
-{
-  "previous_ai_message": "How was your weekend?",
-  "user_message": "I go to park yesterday",
-  "target_language": "en",
-  "conversation_id": "optional-uuid"
-}
-```
-
-| Field | Type | Required | Limit | Description |
-|-------|------|----------|-------|-------------|
-| previous_ai_message | string | Yes | 4000 chars | AI tutor's previous message (context) |
-| user_message | string | Yes | 4000 chars | User's reply to check |
-| target_language | string | Yes | 10 chars | Target language code (e.g., "en", "ja", "vi") |
-| conversation_id | UUID | No | - | Optional conversation context |
-
-**Response (200) — errors found:** `{code: 1, message: "Success", data: {corrected_text: "I went to the park yesterday."}}`
-
-**Response (200) — no errors:** `{code: 1, message: "Success", data: {corrected_text: null}}`
-
-**Errors:** 400 (missing/empty fields), 429 (rate limit)
+Check grammar/vocabulary. **Auth:** Optional (Public) | **Rate Limit:** 5 req/min | **Request:** `{previous_ai_message, user_message, target_language, conversation_id?}` | **Response:** `{data: {corrected_text: "..." or null}}`
 
 ---
 
 #### POST /ai/translate
-Translate words or sentences with vocabulary persistence for words.
-
-**Auth:** Optional (Public) | **Rate Limit:** 5 req/min | **Request:**
-```json
-{
-  "type": "WORD",
-  "text": "beautiful",
-  "source_lang": "en",
-  "target_lang": "es"
-}
-```
-
-**OR (sentence translation by messageId):**
-```json
-{
-  "type": "SENTENCE",
-  "message_id": "uuid",
-  "source_lang": "en",
-  "target_lang": "es",
-  "conversation_id": "optional_conversation_id"
-}
-```
-
-| Field | Type | Required | Limit | Description |
-|-------|------|----------|-------|-------------|
-| type | enum | Yes | - | `WORD` or `SENTENCE` |
-| text | string | No | 255 chars | Word/phrase to translate (WORD only) |
-| message_id | UUID | No | - | Conversation message ID (SENTENCE only) |
-| source_lang | string | Yes | 10 chars | Source language code (e.g., "en", "ja") |
-| target_lang | string | Yes | 10 chars | Target language code (e.g., "es", "vi") |
-| conversation_id | UUID | No | - | Optional conversation ID for anonymous users |
-
-**Response (200) — word translation:** `{code: 1, message: "Success", data: {translation: "hermoso", word: "beautiful", pronunciation: "er-MO-so"}}`
-
-**Response (200) — sentence translation:** `{code: 1, message: "Success", data: {translated_content: "Eso es hermoso."}}`
-
-**Errors:** 400 (invalid type/missing fields), 404 (message not found), 429 (rate limit)
+Translate WORD or SENTENCE. **Auth:** Optional | **Rate Limit:** 5 req/min | **Request (WORD):** `{type: "WORD", text, source_lang, target_lang}` → **Response:** `{data: {translation, word, pronunciation}}` | **Request (SENTENCE):** `{type: "SENTENCE", message_id, source_lang, target_lang, conversation_id?}` → **Response:** `{data: {translated_content}}`
 
 ---
 
 #### POST /ai/transcribe
-Transcribe audio to text using Speech-to-Text (STT) services.
-
-**Auth:** Required (Premium) | **Request:** multipart/form-data
-
-| Field | Type | Required | Limit | Description |
-|-------|------|----------|-------|-------------|
-| audio | file | Yes | 10MB | Audio file (M4A, MP4, MPEG, WAV) |
-
-**cURL Example:**
-```bash
-curl -X POST http://localhost:3000/ai/transcribe \
-  -H "Authorization: Bearer <jwt_token>" \
-  -F "audio=@/path/to/audio.m4a"
-```
-
-**Supported Audio Formats:** M4A, MP4, MPEG, WAV (max 10MB)
-
-**Response (200):** `{code: 1, message: "Success", data: {text: "Hello, how are you?"}}`
-
-**Provider Details:**
-- **Primary:** OpenAI Whisper (configurable via STT_PROVIDER=openai)
-- **Fallback:** Gemini multimodal (if primary unavailable)
-- **Configuration:** STT_PROVIDER env var (default: openai)
-
-**Audio Storage:** Audio files persisted to Supabase storage before transcription
-
-**Errors:** 
-- 400 (missing file, unsupported format, exceeds size limit)
-- 401 (unauthorized, not premium)
-- 429 (rate limit)
-- 503 (no STT provider available)
+Transcribe audio (M4A/MP4/MPEG/WAV, max 10MB). **Auth:** Required (Premium) | **Request:** multipart/form-data with `audio` field | **Response:** `{data: {text: "..."}}` | **Providers:** OpenAI Whisper → Gemini (fallback)
 
 ---
 
@@ -601,137 +392,13 @@ curl -X POST http://localhost:3000/ai/transcribe \
 Engage in roleplay conversations within scenario-based learning activities.
 
 #### POST /scenario/chat
-Conduct a turn in a scenario roleplay conversation.
-
-**Auth:** Required (Premium) | **Rate Limit:** 20 req/min, 100 req/hr | **Request:**
-```json
-{
-  "scenario_id": "uuid",
-  "message": "I need a table for two",
-  "conversation_id": "uuid",
-  "force_new": false
-}
-```
-
-| Field | Type | Required | Limit | Description |
-|-------|------|----------|-------|-------------|
-| scenario_id | UUID | Yes | - | ID of scenario to engage with |
-| message | string | No | 2000 chars | User's roleplay response (omit on first turn to let AI open) |
-| conversation_id | UUID | No | - | Conversation ID to resume existing session |
-| force_new | boolean | No | - | Abandon any active conversation for this scenario and start fresh. Cannot combine with `conversation_id`. |
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Success",
-  "data": {
-    "reply": "Of course! A table for two right away. This way, please.",
-    "conversation_id": "uuid",
-    "turn": 1,
-    "max_turns": 12,
-    "completed": false
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| reply | string | AI roleplay response |
-| conversation_id | UUID | Conversation session ID |
-| turn | number | Current turn number (1-based) |
-| max_turns | number | Maximum turns for this conversation |
-| completed | boolean | True when max turns reached |
-
-**Behavior:**
-- First turn: Omit `message` parameter; AI initiates the roleplay
-- Subsequent turns: Include `message` parameter
-- Resume conversation: Provide `conversation_id` from previous turn
-- Conversation ends when `completed: true`
-- Re-practice: send `force_new: true` to abandon the active conversation and start fresh
-- Premium subscription required
-
-**Errors:**
-- 400 (conversation completed, invalid body, scenario not found, or `force_new` combined with `conversation_id`)
-- 401 (missing/invalid JWT)
-- 403 (free user trying premium scenario)
-- 404 (scenario not found)
+Roleplay in scenario. **Auth:** Required (Premium) | **Rate Limit:** 20 req/min, 100 req/hr | **Request:** `{scenario_id, message?, conversation_id?, force_new?}` | **Response:** `{data: {reply, conversation_id, turn, max_turns, completed}}` | **First turn:** omit message. **Resume:** provide conversation_id. **Re-practice:** force_new=true. **Errors:** 400, 401, 403, 404
 
 #### GET /scenario/:scenarioId/conversations
-List the caller's past conversations for one scenario (newest first).
-
-**Auth:** Required | **Rate Limit:** none (non-AI endpoint)
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Success",
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "started_at": "2026-04-14T09:00:00.000Z",
-        "last_turn_at": "2026-04-14T09:15:00.000Z",
-        "turn_count": 5,
-        "completed": false,
-        "max_turns": 12
-      }
-    ]
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| id | UUID | Conversation id |
-| started_at | ISO date | When the conversation was created |
-| last_turn_at | ISO date | Timestamp of the most recent activity |
-| turn_count | number | Completed user/assistant turn pairs so far |
-| completed | boolean | True when the turn cap has been reached |
-| max_turns | number | Turn cap for this conversation |
-
-**Behavior:**
-- Owner-filter only: returns only conversations owned by the caller
-- No premium gate: downgraded users can still review their own history
-- Empty array when the user has never engaged with the scenario
-
-**Errors:**
-- 401 (missing/invalid JWT)
+List past conversations (newest first). **Auth:** Required | **Response:** `{data: {items: [{id, started_at, last_turn_at, turn_count, completed, max_turns}]}}` | Owner-filter only. No premium gate. **Errors:** 401
 
 #### GET /scenario/conversations/:id
-Fetch a single conversation transcript (owner only).
-
-**Auth:** Required | **Rate Limit:** none (non-AI endpoint)
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Success",
-  "data": {
-    "id": "uuid",
-    "scenario_id": "uuid",
-    "completed": true,
-    "turn": 12,
-    "max_turns": 12,
-    "messages": [
-      { "role": "assistant", "content": "Welcome!", "created_at": "2026-04-14T09:00:00.000Z" },
-      { "role": "user", "content": "Thanks", "created_at": "2026-04-14T09:00:05.000Z" }
-    ]
-  }
-}
-```
-
-**Behavior:**
-- Owner-check: 403 if the conversation belongs to another user
-- Returns full transcript in chronological order
-- Filters out any `system` role messages
-
-**Errors:**
-- 401 (missing/invalid JWT)
-- 403 (conversation owned by another user)
-- 404 (conversation not found)
+Fetch conversation transcript (owner only, chronological). **Auth:** Required | **Response:** `{data: {id, scenario_id, completed, turn, max_turns, messages: [{role, content, created_at}]}}` | **Errors:** 401, 403 (not owner), 404
 
 ---
 
@@ -740,80 +407,12 @@ Fetch a single conversation transcript (owner only).
 **Auth:** Required | **Rate Limit:** None (non-AI endpoint)
 
 #### GET /vocabulary
-List user's vocabulary with optional filters and pagination.
-
-**Query params:**
-- `language_code` (optional) — Filter by source/target language (e.g., "en", "es")
-- `box` (optional, 1-5) — Filter by Leitner box number
-- `search` (optional) — Search word or translation (substring)
-- `page` (optional, default: 1) — Page number
-- `limit` (optional, default: 20, max: 100) — Items per page
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Success",
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "word": "beautiful",
-        "translation": "hermoso",
-        "source_lang": "en",
-        "target_lang": "es",
-        "part_of_speech": "adjective",
-        "pronunciation": "byoo-tuh-fuhl",
-        "definition": "pleasing to look at",
-        "examples": ["It was a beautiful day.", "She looked beautiful."],
-        "box": 2,
-        "due_at": "2026-04-15T10:00:00Z",
-        "last_reviewed_at": "2026-04-12T10:00:00Z",
-        "review_count": 5,
-        "correct_count": 4,
-        "created_at": "2026-03-28T10:00:00Z"
-      }
-    ],
-    "total": 42,
-    "page": 1,
-    "limit": 20
-  }
-}
-```
-
-**Errors:** 401 (unauthorized)
+List user's vocabulary. **Auth:** Required | **Query:** language_code, box (1-5), search, page (default 1), limit (default 20, max 100) | **Response:** `{data: {items: [{id, word, translation, source_lang, target_lang, part_of_speech, pronunciation, definition, examples, box, due_at, last_reviewed_at, review_count, correct_count, created_at}], total, page, limit}}`
 
 ---
 
 #### GET /vocabulary/:id
-Get a single vocabulary item.
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Success",
-  "data": {
-    "id": "uuid",
-    "word": "beautiful",
-    "translation": "hermoso",
-    "source_lang": "en",
-    "target_lang": "es",
-    "part_of_speech": "adjective",
-    "pronunciation": "byoo-tuh-fuhl",
-    "definition": "pleasing to look at",
-    "examples": ["It was a beautiful day."],
-    "box": 2,
-    "due_at": "2026-04-15T10:00:00Z",
-    "last_reviewed_at": "2026-04-12T10:00:00Z",
-    "review_count": 5,
-    "correct_count": 4,
-    "created_at": "2026-03-28T10:00:00Z"
-  }
-}
-```
-
-**Errors:** 401 (unauthorized), 404 (not found or not owned)
+Get a single vocabulary item. Same response shape as GET /vocabulary list items. **Errors:** 401, 404
 
 ---
 
@@ -827,135 +426,17 @@ Delete a vocabulary item.
 ---
 
 #### POST /vocabulary/review/start
-Start a Leitner SRS review session. Returns due vocabulary cards for review.
-
-**Auth:** Required | **Request:**
-```json
-{
-  "language_code": "en",
-  "limit": 10
-}
-```
-
-| Field | Type | Required | Limit | Description |
-|-------|------|----------|-------|-------------|
-| language_code | string | No | 10 chars | Filter cards by language; defaults to all |
-| limit | number | No | max 100 | Max cards per session (default: 20) |
-
-**Response (201):**
-```json
-{
-  "code": 1,
-  "message": "Session started",
-  "data": {
-    "session_id": "session-uuid-1234",
-    "cards": [
-      {
-        "vocab_id": "uuid",
-        "word": "beautiful",
-        "translation": "hermoso",
-        "pronunciation": "byoo-tuh-fuhl",
-        "part_of_speech": "adjective",
-        "definition": "pleasing to look at",
-        "examples": ["It was a beautiful day."],
-        "box": 1,
-        "source_lang": "en",
-        "target_lang": "es"
-      }
-    ],
-    "total": 3
-  }
-}
-```
-
-**Behavior:**
-- Session TTL: 1 hour
-- Returns cards where `due_at <= NOW()` ordered by box priority
-- Session ID used for rating and completion endpoints
-
-**Errors:** 401 (unauthorized)
+Start Leitner review session. **Auth:** Required | **Request:** `{language_code?, limit?}` (limit max 100, default 20) | **Response (201):** `{data: {session_id, cards: [{vocab_id, word, translation, pronunciation, part_of_speech, definition, examples, box, source_lang, target_lang}], total}}` | Session TTL: 1h. Cards ordered by box priority where due_at <= NOW().
 
 ---
 
 #### POST /vocabulary/review/:sessionId/rate
-Rate a card in a review session (correct/incorrect).
-
-**Auth:** Required | **Request:**
-```json
-{
-  "vocab_id": "uuid",
-  "correct": true
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| vocab_id | UUID | Yes | Vocabulary ID from session cards |
-| correct | boolean | Yes | true = correct, false = incorrect |
-
-**Response (201):**
-```json
-{
-  "code": 1,
-  "message": "Card rated",
-  "data": {
-    "updated": {
-      "box": 2,
-      "due_at": "2026-04-15T10:00:00Z"
-    },
-    "remaining": 2
-  }
-}
-```
-
-**Leitner Transitions:**
-| From Box | Correct | New Box | Interval |
-|----------|---------|---------|----------|
-| 1 | yes | 2 | +3 days |
-| 2 | yes | 3 | +7 days |
-| 3 | yes | 4 | +14 days |
-| 4 | yes | 5 | +30 days |
-| 5 | yes | 5 | +30 days |
-| 1-5 | no | 1 | +1 day |
-
-**Errors:**
-- 400 (vocab not in session, already rated, invalid body)
-- 401 (unauthorized)
-- 403 (vocab not owned)
-- 404 (session expired, vocab missing)
+Rate card (correct/incorrect). **Auth:** Required | **Request:** `{vocab_id, correct}` | **Response (201):** `{data: {updated: {box, due_at}, remaining}}` | **Leitner:** Box 1→2 (+3d), 2→3 (+7d), 3→4 (+14d), 4→5 (+30d), 5→5 (+30d). Wrong: any→1 (+1d). **Errors:** 400, 401, 403, 404
 
 ---
 
 #### POST /vocabulary/review/:sessionId/complete
-Complete a review session. Returns stats.
-
-**Auth:** Required | **Response (201):**
-```json
-{
-  "code": 1,
-  "message": "Review completed",
-  "data": {
-    "total": 5,
-    "correct": 4,
-    "wrong": 1,
-    "accuracy": 80,
-    "box_distribution": [
-      { "box": 1, "count": 0 },
-      { "box": 2, "count": 2 },
-      { "box": 3, "count": 1 },
-      { "box": 4, "count": 1 },
-      { "box": 5, "count": 1 }
-    ]
-  }
-}
-```
-
-**Behavior:**
-- Session is deleted after completion
-- boxDistribution shows final box counts of all reviewed cards
-- Deleted session cannot be resumed
-
-**Errors:** 401 (unauthorized), 404 (session not found)
+Complete review session (returns stats). **Auth:** Required | **Response (201):** `{data: {total, correct, wrong, accuracy, box_distribution: [{box, count}]}}` | Session deleted after completion. **Errors:** 401, 404
 
 ---
 
@@ -964,324 +445,42 @@ Complete a review session. Returns stats.
 All admin endpoints require `isAdmin` flag on user account (set via ADMIN_EMAILS env var bootstrap).
 
 #### POST /admin/content/generate
-Generate LLM-powered draft content (scenarios, exercises, or lessons).
-
-**Auth:** Required (Admin) | **Rate Limit:** 5 req/min | **Request:**
-```json
-{
-  "language_id": "uuid",
-  "type": "SCENARIO|EXERCISE|LESSON",
-  "level": "beginner|intermediate|advanced",
-  "count": 5
-}
-```
-
-| Field | Type | Required | Limit | Description |
-|-------|------|----------|-------|-------------|
-| language_id | UUID | Yes | - | Target language for content |
-| type | enum | Yes | - | Content type to generate |
-| level | enum | Yes | - | Difficulty level |
-| count | number | No | max 10, default 5 | Number of items to generate |
-
-**Response (201):**
-```json
-{
-  "code": 1,
-  "message": "Content generated",
-  "data": {
-    "generated": [
-      {
-        "id": "uuid",
-        "type": "SCENARIO",
-        "title": "Restaurant Ordering",
-        "description": "Learn to order food at a restaurant",
-        "status": "draft",
-        "language_id": "uuid",
-        "level": "beginner",
-        "created_at": "2026-04-18T10:00:00Z"
-      }
-    ],
-    "count": 5
-  }
-}
-```
-
-**Behavior:**
-- Invokes LLM to generate structured content
-- All items created with status=draft
-- Items not visible to users until published
-- Throttled to 5 req/min per admin
-
-**Errors:**
-- 400 (invalid type/level)
-- 401 (unauthorized, not admin)
-- 403 (forbidden, not admin)
-- 429 (rate limit exceeded)
-- 503 (AI provider unavailable)
+Generate draft content via LLM. **Auth:** Required (Admin) | **Rate Limit:** 5 req/min | **Request:** `{language_id, type: SCENARIO|EXERCISE|LESSON, level: beginner|intermediate|advanced, count?: 1-10 default 5}` | **Response (201):** `{data: {generated: [{id, type, title, description, status: draft, language_id, level, created_at}], count}}` | **Errors:** 400, 401, 403, 429, 503
 
 ---
 
 #### GET /admin/content
-List content with optional filters.
-
-**Auth:** Required (Admin) | **Query params:**
-- `status` (optional, enum: draft|published|archived) — Filter by status
-- `type` (optional, enum: LESSON|EXERCISE|SCENARIO) — Filter by content type
-- `language_id` (optional, UUID) — Filter by language
-- `page` (optional, integer, min: 1, default: 1) — Page number
-- `limit` (optional, integer, min: 1, max: 100, default: 20) — Items per page
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Content found",
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "type": "SCENARIO",
-        "title": "Restaurant Ordering",
-        "description": "Learn to order food",
-        "status": "draft",
-        "language_id": "uuid",
-        "language_code": "es",
-        "level": "beginner",
-        "created_at": "2026-04-18T10:00:00Z",
-        "updated_at": "2026-04-18T10:00:00Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "total": 42
-    }
-  }
-}
-```
-
-**Errors:** 401 (unauthorized, not admin)
+List content with filters. **Auth:** Required (Admin) | **Query:** status (draft|published|archived), type, language_id, page (1+), limit (1-100, default 20) | **Response:** `{data: {items: [{id, type, title, description, status, language_id, language_code, level, created_at, updated_at}], pagination}}`
 
 ---
 
 #### PATCH /admin/content/:id/publish
-Promote draft content to published (makes visible to users).
-
-**Auth:** Required (Admin) | **Query param:**
-- `type` (required, enum: LESSON|EXERCISE|SCENARIO) — Content type
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Content published",
-  "data": {
-    "id": "uuid",
-    "status": "published",
-    "updated_at": "2026-04-18T10:05:00Z"
-  }
-}
-```
-
-**Behavior:**
-- Changes status from draft to published
-- Published content now visible to users (with language partitioning)
-- Idempotent: re-publishing published content succeeds silently
-
-**Errors:**
-- 400 (invalid type query param)
-- 401 (unauthorized, not admin)
-- 404 (content not found)
+Publish draft content. **Auth:** Required (Admin) | **Query:** type (LESSON|EXERCISE|SCENARIO) | **Response:** `{data: {id, status: published, updated_at}}` | Idempotent. **Errors:** 400, 401, 404
 
 ---
 
 #### PATCH /admin/content/:id
-Edit content (title and description only).
-
-**Auth:** Required (Admin) | **Query param:**
-- `type` (required, enum: LESSON|EXERCISE|SCENARIO) — Content type
-
-**Request:**
-```json
-{
-  "title": "Restaurant Ordering",
-  "description": "Learn to order food at a restaurant with confidence"
-}
-```
-
-| Field | Type | Limit | Description |
-|-------|------|-------|-------------|
-| title | string | 255 chars | Content title |
-| description | string | 5000 chars | Content description |
-
-Both fields optional; updates only provided fields.
-
-**Response (200):** Same shape as PATCH /publish
-
-**Errors:**
-- 400 (invalid type query param, empty body)
-- 401 (unauthorized, not admin)
-- 404 (content not found)
+Edit content (title/description only). **Auth:** Required (Admin) | **Query:** type | **Request:** `{title?, description?}` (title max 255 chars, description max 5000) | **Response:** `{data: {id, status, updated_at}}` | **Errors:** 400, 401, 404
 
 ---
 
 #### DELETE /admin/content/:id
-Archive content (soft delete, retained in DB with status=archived).
-
-**Auth:** Required (Admin) | **Query param:**
-- `type` (required, enum: LESSON|EXERCISE|SCENARIO) — Content type
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Content archived",
-  "data": {
-    "id": "uuid",
-    "status": "archived",
-    "updated_at": "2026-04-18T10:10:00Z"
-  }
-}
-```
-
-**Behavior:**
-- Changes status to archived (not deleted, record retained)
-- Archived content hidden from users
-- Idempotent: re-archiving succeeds silently
-
-**Errors:**
-- 400 (invalid type query param)
-- 401 (unauthorized, not admin)
-- 404 (content not found)
+Archive content (soft delete). **Auth:** Required (Admin) | **Query:** type | **Response:** `{data: {id, status: archived, updated_at}}` | Idempotent. **Errors:** 400, 401, 404
 
 ---
 
 ### Onboarding (No Auth Required)
 
 #### POST /onboarding/chat
-Start new session or continue existing onboarding conversation.
-
-**Auth:** Not required | **Rate Limit:** 5 req/hr (new session), 30 req/hr (chat continuation)
-
-**Create New Session — Request:**
-```json
-{
-  "native_language": "english",
-  "target_language": "spanish"
-}
-```
-
-**Create New Session — Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Session started",
-  "data": {
-    "conversation_id": "uuid",
-    "reply": "Welcome! I'm excited to help you learn...",
-    "message_id": "uuid",
-    "turn_number": 1,
-    "is_last_turn": false
-  }
-}
-```
-
-**Continue Existing Session — Request:**
-```json
-{
-  "conversation_id": "uuid",
-  "message": "I want to focus on speaking skills"
-}
-```
-
-**Continue Existing Session — Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Response generated",
-  "data": {
-    "conversation_id": "uuid",
-    "reply": "Great choice! Speaking is crucial...",
-    "message_id": "uuid",
-    "turn_number": 2,
-    "is_last_turn": false
-  }
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| native_language | string | Yes (new) | User's native language (required for new session only) |
-| target_language | string | Yes (new) | Language user wants to learn (required for new session only) |
-| conversation_id | UUID | Yes (resume) | Existing session ID (required to continue) |
-| message | string | No (resume) | User's response (omit to skip turn) |
-
-**Response Fields:**
-| Field | Type | Description |
-|-------|------|-------------|
-| conversation_id | UUID | Unique session identifier |
-| reply | string | AI tutor's response (greeting on turn 1) |
-| message_id | UUID | ID of AI's message |
-| turn_number | number | Current turn (1-based) |
-| is_last_turn | boolean | True when max 10 turns reached |
-
-**Behavior:**
-- First request: omit `conversation_id`, include `native_language` and `target_language` → AI initiates with greeting
-- Subsequent requests: include `conversation_id` and `message` → AI responds to user input
-- Rate limits: 5/hr for session creation (new `conversation_id`), 30/hr for chat turns
-- Maximum 10 turns per session
-- Sessions persist indefinitely (no TTL)
-
-**Errors:**
-- 400 (missing required fields, invalid languages)
-- 429 (rate limit exceeded — 5/hr new sessions or 30/hr chat turns)
-- 404 (session not found)
-- 503 (AI provider unavailable)
+Start new or resume session. **Auth:** Not required | **Rate Limit:** 5 req/hr (new), 30 req/hr (continue) | **New:** `{native_language, target_language}` → Response: `{data: {conversation_id, reply, message_id, turn_number, is_last_turn}}` | **Resume:** `{conversation_id, message?}` → Same response. Max 10 turns/session. **Errors:** 400, 429, 404, 503
 
 ---
 
 #### GET /onboarding/conversations/:conversationId/messages
-
-**Auth:** public. **Throttler:** 30/hr per IP.
-
-Fetch full transcript for an anonymous onboarding conversation. Used by mobile to rehydrate chat UI on resume.
-
-**Path param:** `conversationId` (UUID v4).
-
-**Response (200):**
-```json
-{
-  "code": 1,
-  "message": "Success",
-  "data": {
-    "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
-    "turn_number": 3,
-    "max_turns": 10,
-    "is_last_turn": false,
-    "messages": [
-      {"id": "...", "role": "assistant", "content": "Hello!", "created_at": "2026-04-14T23:20:00Z"},
-      {"id": "...", "role": "user", "content": "I want to learn English", "created_at": "2026-04-14T23:21:00Z"}
-    ]
-  }
-}
-```
-
-**Errors:**
-- 404 — conversation not found or not an anonymous onboarding session
-
----
+Fetch transcript for mobile rehydration. **Auth:** Not required | **Rate Limit:** 30 req/hr per IP | **Response:** `{data: {conversation_id, turn_number, max_turns, is_last_turn, messages: [{id, role, content, created_at}]}}` | **Errors:** 404
 
 #### POST /onboarding/complete
-Complete onboarding and extract profile.
-
-**Auth:** Not required | **Idempotent.** Second+ calls with same `conversation_id` return cached profile + scenarios (same scenario UUIDs) without re-invoking the LLM. Cache is populated on the first successful call (structured profile + 5 scenarios); partial failures skip caching and retry next call. | **Request:**
-```json
-{
-  "conversation_id": "conversation_uuid"
-}
-```
-
-**Response (200):** `{code: 1, message: "Onboarding completed", data: {extracted_profile: {languages, interests, level}}}`
+Extract onboarding profile (idempotent, caches on first success). **Auth:** Not required | **Request:** `{conversation_id}` | **Response:** `{data: {extracted_profile: {languages, interests, level}}}`
 
 ---
 
@@ -1327,54 +526,21 @@ curl -X POST http://localhost:3000/auth/firebase \
   -d '{"id_token":"<firebase_id_token>","display_name":"Jane"}'
 ```
 
-**cURL - Get Profile:**
+**cURL Examples (see Swagger at `/api/docs` for more):**
 ```bash
-curl http://localhost:3000/users/me \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
+# Get profile
+curl http://localhost:3000/users/me -H "Authorization: Bearer YOUR_JWT_TOKEN"
 
-**cURL - AI Chat:**
-```bash
+# AI chat
 curl -X POST http://localhost:3000/ai/chat \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message":"Hello!","context":{"conversation_id":"<uuid>","target_language":"Spanish","native_language":"English","proficiency_level":"beginner"}}'
-```
+  -d '{"message":"Hello!","context":{"conversation_id":"uuid","target_language":"Spanish"}}'
 
-**cURL - Scenario Chat (first turn):**
-```bash
+# Scenario chat (first turn)
 curl -X POST http://localhost:3000/scenario/chat \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
   -d '{"scenario_id":"550e8400-e29b-41d4-a716-446655440000"}'
-```
-
-**cURL - Scenario Chat (subsequent turn):**
-```bash
-curl -X POST http://localhost:3000/scenario/chat \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"scenario_id":"550e8400-e29b-41d4-a716-446655440000","message":"I need a table for two","conversation_id":"660e8400-e29b-41d4-a716-446655440000"}'
-```
-
-**cURL - Scenario Chat (re-practice / force new):**
-```bash
-curl -X POST http://localhost:3000/scenario/chat \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"scenario_id":"550e8400-e29b-41d4-a716-446655440000","force_new":true}'
-```
-
-**cURL - List past scenario conversations:**
-```bash
-curl http://localhost:3000/scenario/550e8400-e29b-41d4-a716-446655440000/conversations \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
-
-**cURL - Fetch a scenario conversation transcript:**
-```bash
-curl http://localhost:3000/scenario/conversations/660e8400-e29b-41d4-a716-446655440000 \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 ## Interactive Documentation
@@ -1389,25 +555,10 @@ Access: `http://localhost:3000/api/docs`
 
 ## Troubleshooting
 
-**401 Unauthorized:**
-- Verify JWT token is valid and not expired
-- Check Authorization header format: `Bearer <token>`
-- Ensure token from login/signup endpoint
+| Issue | Solution |
+|-------|----------|
+| 401 Unauthorized | Verify JWT token valid/not expired; check `Authorization: Bearer <token>` format |
+| 400 Bad Request | Verify body schema, required fields, data types |
+| 503 Service Unavailable | Check AI provider API keys; review Langfuse logs |
 
-**400 Bad Request:**
-- Verify request body matches schema
-- Check all required fields present
-- Validate data types and formats
-
-**503 Service Unavailable:**
-- AI providers may be temporarily down
-- Check API keys in environment variables
-- Review Langfuse logs for provider errors
-
-## Support
-
-For API issues:
-- Check Swagger documentation at `/api/docs`
-- Review error messages and status codes
-- Check application logs
-- Contact development team via GitHub Issues
+**More:** Swagger at `/api/docs` for interactive testing.

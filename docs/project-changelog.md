@@ -5,6 +5,47 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-04-20 — Security Hardening Sprint (Final)
+
+### Added
+
+- **Graceful Service Initialization:** Firebase Admin SDK and Nodemailer SMTP now initialize with try-catch
+  - `initialized` flag on services; endpoints return proper errors if unavailable
+  - App boot never crashes due to misconfigured external services
+
+- **Signed URLs for Private Audio Bucket:** STT output audio files now use presigned URLs (1h expiry)
+  - Supabase private bucket for `audio-files` (requires RLS deny public reads in console)
+  - Response includes presigned URL for secure mobile download
+
+- **First-Turn Detection Refactor:** Onboarding first-turn now via authoritative `messageCount` 
+  - Supports resume across server restarts and connection interruptions
+  - Fixes retry edge case from previous message-presence logic
+
+### Changed
+
+- **Conversationid Requirement:** Learning agent chat methods now require `conversationId` (previously optional)
+  - Enforces conversation context for all AI interactions
+  - Removes ambiguous state
+
+### Database
+
+- No new migrations (signed URLs, graceful init, first-turn detection are logical changes)
+
+### Documentation
+
+- `codebase-summary.md` — Module count (12), entity count (18+2), STT signed URLs, onboarding first-turn detection
+- `code-standards.md` — New section: "External Service Integration Patterns" (graceful init, signed URLs, rate limiting tiers)
+- `system-architecture.md` — Updated AI flow diagram, Firebase graceful init, signed URL details, onboarding first-turn
+- `mobile-api-reference.md` — Email/password endpoints marked 410 Gone; added Lessons, Scenarios, Vocabulary endpoints
+- `project-overview-pdr.md` — 12 modules, 20 entities (18+2 enums), updated success metrics, recent updates summary
+- `project-changelog.md` — This entry
+
+### Breaking Changes
+
+**None.** All changes are backward compatible or non-breaking.
+
+---
+
 ## 2026-04-20 — Auto-Enroll Language on GET /lessons
 
 ### Added

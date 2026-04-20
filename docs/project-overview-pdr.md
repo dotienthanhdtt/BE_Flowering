@@ -1,6 +1,6 @@
 # Project Overview & PDR
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-20
 **Version:** 1.8.0
 **Status:** Active Development
 
@@ -64,34 +64,41 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - **Langfuse** - AI observability
 - **Sentry** - Error tracking (5xx exceptions)
 
-## API Modules
+## API Modules (12 Total)
 
 | Module | Endpoints | Key Features |
 |--------|-----------|--------------|
-| **auth/** (27 files) | POST /auth/register, /login, /google, /apple, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | JWT, OAuth auto-linking, password reset |
-| **ai/** (~25 files) | POST /ai/chat, /chat/correct, /translate; SSE /ai/chat/stream | LangChain, multi-provider, translation, correction, rate limiting |
-| **onboarding/** (11 files) | POST /onboarding/chat (create+continue), /complete (idempotent), GET /conversations/:id/messages | Anonymous chat, single-endpoint branching, session-based (10-turn max), resume support |
-| **language/** (10 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags |
+| **auth/** (27 files) | POST /auth/firebase, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | Firebase unified OAuth, JWT, password reset; email/password endpoints disabled (410 Gone) |
+| **ai/** (~30 files) | POST /ai/chat, /chat/correct, /translate, /transcribe; SSE /ai/chat/stream | LangChain multi-provider, STT with signed URLs, vocabulary storage, rate limiting |
+| **onboarding/** (11 files) | POST /onboarding/chat (create+continue), /complete (idempotent), GET /conversations/:id/messages | Anonymous chat, first-turn via message count, resume support with caching |
+| **language/** (9 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags, language context guard |
 | **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
-| **subscription/** (6 files) | GET /subscriptions/me, POST /webhooks/revenuecat | RevenueCat webhook, status checks |
-| **email/** (2 files) | Internal service | Nodemailer SMTP for OTP delivery |
+| **subscription/** (6 files) | GET /subscriptions/me, POST /webhooks/revenuecat | RevenueCat webhook, DB idempotency |
+| **email/** (2 files) | Internal service | Nodemailer SMTP with graceful init |
+| **lesson/** (6 files) | GET /lessons (paginated, language-partitioned) | Scenario grouping, status computation, premium gating |
+| **scenario/** (7 files) | POST /scenario/chat (turn-based roleplay) | Roleplay conversations, premium access control |
+| **vocabulary/** (16 files) | CRUD + Leitner SRS review endpoints | Spaced repetition with 5-box system, review sessions |
+| **admin-content/** (8 files) | POST /admin/content/generate, GET /admin/content, PATCH/DELETE | LLM content generation, lifecycle (draft→published→archived) |
+| **progress/** (3 files) | Internal service | Lesson/exercise progress tracking |
 
-## Database Schema (13 Entities)
+## Database Schema (20 Entities: 18 + 2 Enums)
 
 **Core:** User, Language, UserLanguage
-**Content:** Lesson, Exercise
+**Content:** Lesson, Exercise, Scenario, ScenarioCategory, UserScenarioAccess
 **Progress:** UserProgress, UserExerciseAttempt
-**AI:** AiConversation (anonymous/authenticated), AiConversationMessage, Vocabulary
-**Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent
+**AI:** AiConversation, AiConversationMessage, Vocabulary
+**Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent, DeviceToken
+**Enums:** AccessTier (free|premium), ContentStatus (draft|published|archived)
 
-**Recent Updates:**
-- Language: `isNativeAvailable`, `isLearningAvailable`, `flagUrl`
-- AiConversation: `type` (ANONYMOUS/AUTHENTICATED), UUID primary key as conversation identifier, `messageCount`, `extractedProfile` + `scenarios` JSONB (idempotent caching for onboarding resume)
-- AiConversationMessage: `translatedContent`, `translatedLang` (sentence translation caching)
-- User: `googleProviderId`, `appleProviderId`
-- PasswordReset: OTP flow support
-- Vocabulary: NEW entity for user's translated words with definition & examples
-- Session expiry (`expiresAt` on ai_conversations) removed (2026-04-14)
+**Recent Updates (Apr 2026):**
+- **AccessTier refactor:** `access_tier` enum replaces `is_premium`; default: free
+- **ContentStatus lifecycle:** `status` enum (draft|published|archived) replaces `is_active`; published = active
+- **Admin flag:** User.isAdmin for admin-content endpoints
+- **Onboarding caching:** AiConversation.extractedProfile + scenarios JSONB for idempotent resume
+- **First-turn detection:** Via messageCount (not presence); supports restart resilience
+- **Signed URLs:** Private audio bucket with presigned 1h-expiry URLs for STT outputs
+- **Graceful init:** Firebase, Email services degrade gracefully on misconfiguration
+- **Session expiry removed:** No TTL; onboarding sessions persist indefinitely
 
 ## Product Development Requirements (PDR)
 
@@ -144,11 +151,13 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 
 ## Success Metrics
 
-- 34 API endpoints operational
-- 8 modules implemented (138 TS files, ~8,330 LOC)
-- 14 database entities with RLS
-- 12 AI models supported
+- 45+ API endpoints operational
+- 12 modules implemented (~175 TS files, ~10,500 LOC)
+- 18 database entities + 2 enums with RLS
+- 8 AI models supported (3 OpenAI, 2 Anthropic, 3 Google)
+- 2 STT providers (OpenAI Whisper primary, Gemini fallback)
 - Zero critical security vulnerabilities
+- Email/password auth disabled (410 Gone); Firebase unified OAuth only
 
 ## Deployment
 

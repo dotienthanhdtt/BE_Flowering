@@ -20,41 +20,44 @@ All responses follow this format:
 
 ## Auth
 
-### POST /auth/register
+### POST /auth/register — DISABLED (410 Gone)
+Email/password authentication is no longer supported. Use Firebase sign-in instead.
+
+### POST /auth/login — DISABLED (410 Gone)
+Email/password authentication is no longer supported. Use Firebase sign-in instead.
+
+### POST /auth/firebase — UNIFIED OAuth
+Accepts Firebase ID token from either Google or Apple. Backend auto-detects provider.
+
 ```json
 // Request
-{ "email": "user@example.com", "password": "Pass123!", "name": "John" }
+{ "id_token": "firebase_id_token" }
 
 // Response data
-{ "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
+{
+  "access_token": "jwt_token",
+  "refresh_token": "uuid:hex",
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "name": "John Doe",
+    "profile_picture": "url"
+  }
+}
 ```
 
-### POST /auth/login
-```json
-// Request
-{ "email": "user@example.com", "password": "Pass123!" }
+**Provider Detection:**
+- Google ID tokens: `aud` claim matches Google client ID
+- Apple ID tokens: `iss` claim contains `appleid.apple.com`
 
-// Response data
-{ "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
-```
+### POST /auth/forgot-password — DISABLED (410 Gone)
+Email/password reset no longer supported.
 
-### POST /auth/google
-```json
-// Request
-{ "id_token": "google_id_token", "display_name": "John", "conversation_id": "optional" }
+### POST /auth/verify-otp — DISABLED (410 Gone)
+OTP verification no longer supported.
 
-// Response data
-{ "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
-```
-
-### POST /auth/apple
-```json
-// Request
-{ "identity_token": "apple_token", "user": { "email": "...", "name": "..." } }
-
-// Response data
-{ "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
-```
+### POST /auth/reset-password — DISABLED (410 Gone)
+Password reset no longer supported.
 
 ### POST /auth/refresh
 ```json
@@ -184,6 +187,157 @@ Query: `?type=native|learning`
   "current_period_start": "2026-03-01T00:00:00Z",
   "current_period_end": "2026-04-01T00:00:00Z",
   "cancel_at_period_end": false
+}
+```
+
+---
+
+## Lessons
+
+### GET /lessons *(auth required)*
+Query: `?language=<language_uuid>&level=beginner|intermediate|advanced&search=<term>&page=1&limit=10`
+```json
+// Response data
+{
+  "total": 45,
+  "page": 1,
+  "limit": 10,
+  "categories": [
+    {
+      "id": "uuid",
+      "name": "Greetings",
+      "icon": "url",
+      "scenarios": [
+        {
+          "id": "uuid",
+          "title": "Meet & Greet",
+          "difficulty": "beginner",
+          "status": "available|locked|learned",
+          "access_tier": "free|premium"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Status Values:**
+- `available` — accessible to user (free scenario or premium with active subscription)
+- `locked` — premium scenario but user lacks active subscription
+- `learned` — user has completed scenario
+
+---
+
+## Scenarios
+
+### POST /scenario/chat *(premium)*
+Turn-based roleplay conversation.
+
+**First turn** (omit message to get AI greeting):
+```json
+// Request
+{ "scenario_id": "uuid", "language": "spanish" }
+
+// Response data
+{
+  "conversation_id": "uuid",
+  "turn_number": 1,
+  "max_turns": 10,
+  "message": "Hola! Bienvenido al café. Qué deseas?",
+  "completed": false
+}
+```
+
+**Continue turn**:
+```json
+// Request
+{ "conversation_id": "uuid", "scenario_id": "uuid", "message": "Quisiera un café, por favor" }
+
+// Response data
+{
+  "conversation_id": "uuid",
+  "turn_number": 2,
+  "max_turns": 10,
+  "message": "Excelente! Un café para ti. Algo más?",
+  "completed": false
+}
+```
+
+---
+
+## Vocabulary *(auth required)*
+
+### GET /vocabulary
+Query: `?language=<language_code>&box=1-5&search=<term>&page=1&limit=20`
+```json
+// Response data
+{
+  "total": 150,
+  "page": 1,
+  "limit": 20,
+  "items": [
+    {
+      "id": "uuid",
+      "word": "beautiful",
+      "translation": "hermoso",
+      "source_lang": "en",
+      "target_lang": "es",
+      "pronunciation": "er-MO-so",
+      "box": 1,
+      "due_at": "2026-04-21T00:00:00Z",
+      "review_count": 5,
+      "correct_count": 4
+    }
+  ]
+}
+```
+
+### GET /vocabulary/:id
+```json
+// Response data: single vocabulary item (same shape as GET /vocabulary item)
+```
+
+### DELETE /vocabulary/:id
+```json
+// Response: null
+```
+
+### POST /vocabulary/review/start *(auth required)*
+```json
+// Request
+{ "language": "es" }
+
+// Response data
+{
+  "session_id": "uuid",
+  "cards": [
+    { "id": "vocab-uuid", "word": "hermoso", "translation": "beautiful" }
+  ]
+}
+```
+
+### POST /vocabulary/review/:sessionId/rate *(auth required)*
+```json
+// Request
+{ "vocab_id": "uuid", "correct": true }
+
+// Response data
+{
+  "session_id": "uuid",
+  "next_card": { "id": "vocab-uuid", "word": "..." }
+}
+```
+
+### POST /vocabulary/review/:sessionId/complete *(auth required)*
+```json
+// Request: (empty body)
+
+// Response data
+{
+  "accuracy": 0.85,
+  "total_cards": 20,
+  "correct": 17,
+  "box_distribution": { "1": 10, "2": 5, "3": 3, "4": 2, "5": 0 }
 }
 ```
 

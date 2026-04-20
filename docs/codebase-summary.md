@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-04-18
-**Generated from:** repomix-output.xml (updated 2026-04-18)
+**Last Updated:** 2026-04-20
+**Generated from:** repomix-output.xml (updated 2026-04-20)
 
 ## Overview
 
@@ -11,10 +11,10 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 - **Total TypeScript Files:** ~175 files in src/
 - **Code Lines:** ~10,500 LOC in src/
-- **Modules:** 11 feature modules (added Lesson, Scenario Chat, Vocabulary, and Admin Content modules)
-- **Database Entities:** 16 TypeORM entities (with language_id partitioning, ContentStatus enum, isAdmin flag)
-- **API Endpoints:** 45 REST endpoints (added 5 admin-content endpoints + language-context header requirement)
-- **External Integrations:** 7 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
+- **Modules:** 12 feature modules (auth, user, language, ai, onboarding, subscription, email, lesson, scenario, vocabulary, admin-content, progress)
+- **Database Entities:** 18 TypeORM entities + 2 enums (AccessTier, ContentStatus)
+- **API Endpoints:** 45+ REST endpoints across all modules
+- **External Integrations:** 8 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry, Firebase)
 
 ## Tech Stack
 
@@ -82,6 +82,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Translation service (word/sentence) with vocabulary storage
 - Correction check endpoint with context awareness, ignores punctuation/capitalization
 - Transcription service with audio persistence (Supabase storage) and multi-provider fallback
+- **Signed URLs for private audio bucket:** STT outputs persisted to private bucket; presigned URLs (1h expiry) returned to mobile for secure access
 
 **STT Configuration:**
 - `STT_PROVIDER` env var: `openai` (default) or `gemini`
@@ -110,9 +111,11 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Features:**
 - No authentication required
-- Profile extraction via AI
-- Scenario generation
+- Profile extraction via AI with idempotent caching (cached on ai_conversations)
+- Scenario generation with stable UUIDs for resume support
 - Session-based state management
+- **First-turn detection:** via authoritative message count (not presence); supports resume across server restarts
+- **Resume support:** GET /onboarding/conversations/:conversationId/messages fetches transcript for UX
 
 ### 4. Language Module (9 files, 570 LOC)
 
@@ -255,7 +258,16 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Security:** Requires isAdmin flag; ADMIN_EMAILS env var bootstraps initial admins
 
-### 12. Vocabulary Module (16 files, ~800 LOC)
+### 12. Progress Module (3 files, ~80 LOC)
+
+**Purpose:** Internal progress tracking (no HTTP endpoints; used by scenario/lesson completion flows)
+
+**Key Features:**
+- UserProgress entity: tracks completed lessons, scores per language
+- UserExerciseAttempt entity: records exercise answers
+- Completion tracking for lessons and scenarios (internal service calls)
+
+### 13. Vocabulary Module (16 files, ~800 LOC)
 
 **Purpose:** User vocabulary management with Leitner 5-box spaced repetition system (SRS)
 
@@ -280,13 +292,14 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Full test coverage (4 spec files): unit tests for CRUD, Leitner transitions, session store, review service
 - No rate limits on review endpoints (not AI-powered)
 
-## Database Schema (16 Entities)
+## Database Schema (18 Entities + 2 Enums)
 
 **Core:** User, Language, UserLanguage
 **Content:** Lesson, Exercise, ScenarioCategory, Scenario, UserScenarioAccess
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation, AiConversationMessage, Vocabulary
-**Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent
+**Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent, DeviceToken
+**Enums:** AccessTier (free|premium), ContentStatus (draft|published|archived)
 
 ### ScenarioCategory Entity
 - `id` - UUID primary key

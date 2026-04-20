@@ -1,6 +1,6 @@
-# Code Standards
+w# Code Standards
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-20
 
 ## Project Structure
 
@@ -17,19 +17,23 @@ src/
 │   ├── app-configuration.ts  # Config interface & factory
 │   └── environment-validation-schema.ts  # Joi validation
 ├── database/                  # Database layer
-│   ├── entities/             # TypeORM entities (14 total)
-│   ├── migrations/           # Database migrations (9 total, timestamped)
-│   ├── database.module.ts    # TypeORM module configuration (14 entities registered)
+│   ├── entities/             # TypeORM entities (18 entities + 2 enums)
+│   ├── migrations/           # Database migrations (30 total, timestamped)
+│   ├── database.module.ts    # TypeORM module configuration (18 entities registered)
 │   └── supabase-storage.service.ts   # Supabase Storage wrapper
-└── modules/                   # Feature modules (domain-driven)
+└── modules/                   # Feature modules (domain-driven) — 12 total
     ├── auth/                 # Authentication & authorization
     ├── user/                 # User management
     ├── language/             # Language preferences & proficiency
     ├── ai/                   # AI-powered learning features
     ├── onboarding/           # Anonymous onboarding chat
     ├── subscription/         # RevenueCat subscriptions
-    ├── notification/         # Firebase push notifications
-    └── email/                # Nodemailer SMTP service
+    ├── email/                # Nodemailer SMTP service (internal)
+    ├── lesson/               # Lesson catalog & scenario grouping
+    ├── scenario/             # Scenario roleplay conversations
+    ├── vocabulary/           # Vocabulary CRUD + SRS review
+    ├── admin-content/        # Admin content generation & lifecycle
+    └── progress/             # Progress tracking (internal)
 ```
 
 ## API JSON Key Convention
@@ -170,118 +174,13 @@ export class ModuleService {
 
 ## TypeScript Patterns
 
-### Type Safety
-
-Always use explicit types:
-```typescript
-// Good
-async getUserSubscription(userId: string): Promise<SubscriptionDto | null> {
-  const subscription = await this.repository.findOne({ where: { userId } });
-  return subscription ? this.mapToDto(subscription) : null;
-}
-
-// Avoid
-async getUserSubscription(userId) {
-  const subscription = await this.repository.findOne({ where: { userId } });
-  return subscription ? this.mapToDto(subscription) : null;
-}
-```
-
-### Async/Await
-
-Use async/await over promises:
-```typescript
-// Good
-async function processWebhook(payload: RevenueCatWebhookDto): Promise<void> {
-  try {
-    const user = await this.findUser(payload.event.app_user_id);
-    await this.updateSubscription(user.id, payload);
-  } catch (error) {
-    this.logger.error('Webhook processing failed', error.stack);
-    throw error;
-  }
-}
-```
-
-### Error Handling
-
-Use NestJS built-in exceptions:
-```typescript
-async findOne(id: string): Promise<Entity> {
-  const entity = await this.repository.findOne({ where: { id } });
-  if (!entity) {
-    throw new NotFoundException(`Entity with ID ${id} not found`);
-  }
-  return entity;
-}
-```
-
-### Dependency Injection
-
-Use constructor injection:
-```typescript
-@Injectable()
-export class SubscriptionService {
-  constructor(
-    @InjectRepository(Subscription)
-    private readonly subscriptionRepo: Repository<Subscription>,
-    private readonly configService: ConfigService,
-  ) {}
-}
-```
+### Type Safety, Async, Errors, DI
+Always use explicit types. Use async/await. Use NestJS exceptions (NotFoundException, etc). Use constructor injection with @InjectRepository and @Injectable.
 
 ## Data Transfer Objects (DTOs)
 
-### DTO Structure
-
-```typescript
-import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-
-export class CreateUserDto {
-  @ApiProperty({ example: 'user@example.com' })
-  @IsEmail()
-  email!: string;
-
-  @ApiProperty({ example: 'SecurePassword123!' })
-  @IsString()
-  @MinLength(8)
-  password!: string;
-
-  @ApiPropertyOptional({ example: 'John Doe' })
-  @IsString()
-  @IsOptional()
-  name?: string;
-}
-```
-
-### Validation Decorators
-
-Use `class-validator` for input validation:
-```typescript
-import {
-  IsString,
-  IsEmail,
-  IsEnum,
-  IsUUID,
-  IsOptional,
-  MinLength,
-  MaxLength,
-} from 'class-validator';
-
-export class RegisterDeviceDto {
-  @IsString()
-  @MinLength(1)
-  token!: string;
-
-  @IsEnum(DevicePlatform)
-  platform!: DevicePlatform;
-
-  @IsString()
-  @IsOptional()
-  deviceName?: string;
-}
-```
+### DTOs & Validation
+Use `class-validator` decorators (@IsEmail, @IsString, @IsEnum, @IsOptional, etc) and `@nestjs/swagger` (@ApiProperty, @ApiPropertyOptional) for documentation and validation.
 
 ## Database Entities
 
@@ -328,192 +227,33 @@ export class Subscription {
 
 ## Authentication & Authorization
 
-### Public Routes
-
-```typescript
-@Public()
-@Post('webhook')
-async handleWebhook() {
-  // No authentication required
-}
-```
-
-### Protected Routes (Default)
-
-```typescript
-@Get('me')
-async getProfile(@CurrentUser() user: User) {
-  // Requires JWT authentication
-}
-```
-
-### Current User Decorator
-
-```typescript
-async updateProfile(@CurrentUser() user: User, @Body() dto: UpdateDto) {
-  return this.service.update(user.id, dto);
-}
-```
+### Auth Decorators
+Use `@Public()` to bypass JWT (default is protected). Use `@CurrentUser()` to inject authenticated user into method params.
 
 ## Configuration Management
 
-### Environment Variables
-
-Define all config in `app-configuration.ts`:
-
-```typescript
-export interface AppConfiguration {
-  revenuecat: {
-    apiKey?: string;
-    webhookSecret?: string;
-  };
-  firebase: {
-    projectId?: string;
-    clientEmail?: string;
-    privateKey?: string;
-  };
-}
-
-export default (): AppConfiguration => ({
-  revenuecat: {
-    apiKey: process.env.REVENUECAT_API_KEY,
-    webhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET,
-  },
-});
-```
-
-### Accessing Config
-
-```typescript
-constructor(private readonly configService: ConfigService) {}
-
-const apiKey = this.configService.get<string>('revenuecat.apiKey');
-```
+### Environment Config
+Define all config in `app-configuration.ts` with proper types. Access via `this.configService.get<T>('path.to.key')`. Never commit `.env` to git; use `.env.example` for documentation.
 
 ## Logging
 
-### Logger Usage
-
-```typescript
-@Injectable()
-export class SubscriptionService {
-  private readonly logger = new Logger(SubscriptionService.name);
-
-  async processWebhook(payload: RevenueCatWebhookDto): Promise<void> {
-    this.logger.log(`Processing webhook: ${payload.event.type}`);
-    try {
-      await this.updateSubscription(payload);
-    } catch (error) {
-      this.logger.error(`Webhook error: ${error.message}`, error.stack);
-    }
-  }
-}
-```
-
-### Log Levels
-
-- `logger.log()` - General information
-- `logger.warn()` - Warning messages
-- `logger.error()` - Error messages with stack trace
-- `logger.debug()` - Debug information (development only)
-- `logger.verbose()` - Detailed logs (development only)
+### Logging
+Create logger: `private readonly logger = new Logger(ClassName.name);` Log levels: log (info) / warn / error (with stack) / debug / verbose.
 
 ## Swagger/OpenAPI Documentation
 
-### Controller Documentation
-
-```typescript
-@ApiTags('subscriptions')
-@ApiBearerAuth()
-@Controller('subscriptions')
-export class SubscriptionController {
-  @Get('me')
-  @ApiOperation({ summary: 'Get current user subscription' })
-  @ApiResponse({ status: 200, description: 'Subscription found', type: SubscriptionDto })
-  async getSubscription(@CurrentUser() user: User): Promise<SubscriptionDto | null> {
-    return this.service.getUserSubscription(user.id);
-  }
-}
-```
-
-### Exclude from Swagger
-
-```typescript
-@Public()
-@Post('revenuecat')
-@ApiExcludeEndpoint()  // Hide from Swagger docs
-async handleWebhook(@Body() payload: RevenueCatWebhookDto) {
-  // Webhook endpoint
-}
-```
+### Swagger Documentation
+Use @ApiTags, @ApiBearerAuth, @ApiOperation, @ApiResponse for docs. Use @ApiExcludeEndpoint() to hide webhooks/internal endpoints.
 
 ## Testing Standards
 
-### Unit Test Structure
-
-```typescript
-describe('SubscriptionService', () => {
-  let service: SubscriptionService;
-  let repository: MockRepository;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        SubscriptionService,
-        {
-          provide: getRepositoryToken(Subscription),
-          useValue: createMockRepository(),
-        },
-      ],
-    }).compile();
-    service = module.get<SubscriptionService>(SubscriptionService);
-  });
-
-  it('should return subscription for valid user', async () => {
-    const userId = 'user-id';
-    const subscription = { id: 'sub-id', userId, plan: 'monthly' };
-    repository.findOne.mockResolvedValue(subscription);
-
-    const result = await service.getUserSubscription(userId);
-    expect(result).toEqual(subscription);
-  });
-});
-```
+### Unit Tests
+Use Test.createTestingModule to mock dependencies with getRepositoryToken. Mock repositories with resolved values. Test both success and error paths.
 
 ## Security Best Practices
 
-### Webhook Security
-
-```typescript
-import { timingSafeEqual } from 'crypto';
-
-private verifyAuth(authHeader: string, expectedSecret: string): boolean {
-  const expected = `Bearer ${expectedSecret}`;
-  if (!authHeader || authHeader.length !== expected.length) {
-    return false;
-  }
-  try {
-    return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
-  } catch {
-    return false;
-  }
-}
-```
-
-### Password Hashing
-
-```typescript
-import * as bcrypt from 'bcrypt';
-
-async hashPassword(password: string): Promise<string> {
-  const salt = await bcrypt.genSalt(10);
-  return bcrypt.hash(password, salt);
-}
-
-async validatePassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
-}
-```
+### Security
+**Webhooks:** Use timingSafeEqual for Bearer token comparison. **Password:** Use bcrypt.genSalt + bcrypt.hash for hashing; bcrypt.compare for validation. **Env:** Never commit .env; validate on startup.
 
 ### Environment Variables
 
@@ -522,19 +262,21 @@ async validatePassword(password: string, hash: string): Promise<boolean> {
 - Validate all required variables on startup
 - Use optional typing for truly optional variables
 
+## External Service Integration Patterns
+
+### Graceful Degradation
+For non-critical external services (Firebase, SMTP), wrap onModuleInit in try-catch. Use `initialized` flag; endpoints return 503 if unavailable instead of crashing the app.
+
+### Signed URLs (Private Files)
+Use Supabase storage.createSignedUrl() with expirySeconds. For audio/transcription: save to private bucket, return signed URL (1h expiry) to mobile. Supabase config: bucket private + RLS deny public.
+
+### Rate Limiting
+Use @Throttle decorator with limit/ttl. AI endpoints: 20/min or 100/hr. Onboarding: 5/hr (create) / 30/hr (chat). Admin: 5/min. Custom guards for IP-based (onboarding) vs user-based (AI).
+
 ## Code Quality
 
-### ESLint Rules
-
-Follow the project's ESLint configuration. Key rules:
-- No unused variables
-- Prefer `const` over `let`
-- Require explicit return types on functions
-- Enforce consistent spacing and formatting
-
-### Prettier Formatting
-
-Run `npm run format` before committing.
+### Linting & Formatting
+Run `npm run lint` and `npm run format` before committing. Key rules: no unused vars, prefer const, explicit return types.
 
 ### Import Organization
 
@@ -554,37 +296,8 @@ import { SubscriptionDto } from './dto/subscription.dto';
 
 ## Performance Considerations
 
-### Database Queries
-
-Avoid N+1 queries - use relations:
-```typescript
-// Good
-const subscriptions = await this.repository.find({
-  where: { userId },
-  relations: ['user'],
-});
-
-// Avoid N+1
-const subscriptions = await this.repository.find({ where: { userId } });
-for (const sub of subscriptions) {
-  sub.user = await this.userRepository.findOne({ where: { id: sub.userId } });
-}
-```
-
-### Async Processing
-
-Use `setImmediate()` for non-blocking webhooks:
-```typescript
-@Post('webhook')
-async handleWebhook(@Body() payload: WebhookDto): Promise<{ status: string }> {
-  setImmediate(() => {
-    this.processWebhook(payload).catch((err) => {
-      this.logger.error('Webhook processing failed', err.stack);
-    });
-  });
-  return { status: 'received' };
-}
-```
+### Performance
+Avoid N+1 queries: use relations in find options. For webhooks: respond immediately with setImmediate() for async processing; catch and log errors.
 
 ## File Size Guidelines
 
@@ -595,30 +308,8 @@ async handleWebhook(@Body() payload: WebhookDto): Promise<{ status: string }> {
 
 ## Comments and Documentation
 
-### JSDoc Comments
-
-```typescript
-/**
- * Processes RevenueCat webhook events to update subscription status
- * @param payload - RevenueCat webhook payload
- * @throws {NotFoundException} If user not found
- * @returns Promise resolving when processing complete
- */
-async processWebhook(payload: RevenueCatWebhookDto): Promise<void> {
-  // Implementation
-}
-```
-
-### Inline Comments
-
-Use inline comments for complex logic:
-
-```typescript
-// Timing-safe comparison to prevent timing attacks
-if (!timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
-  throw new UnauthorizedException();
-}
-```
+### Comments
+Use JSDoc for complex public methods. Use inline comments for security-critical logic (e.g., timing-safe comparison, race conditions).
 
 ## Version Control
 
@@ -736,30 +427,4 @@ async checkCorrection(dto: CorrectionCheckRequestDto): Promise<string | null> {
 
 ## Deprecated Patterns
 
-### Avoid These Patterns
-
-Don't use `any` type - always type explicitly:
-```typescript
-// Avoid: function processData(data: any) {}
-// Use:
-function processData(data: WebhookPayload) {}
-```
-
-Don't use `var` - use `const`:
-```typescript
-// Avoid: var userId = user.id;
-// Use:
-const userId = user.id;
-```
-
-Don't ignore errors - always handle them:
-```typescript
-// Avoid: try { await this.process(); } catch {}
-// Use:
-try {
-  await this.process();
-} catch (error) {
-  this.logger.error('Processing failed', error.stack);
-  throw error;
-}
-```
+**Avoid:** `any` type, `var` keyword, empty catch blocks. **Always:** Type explicitly, use `const`, handle and log errors.
