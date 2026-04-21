@@ -2,18 +2,23 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
-import { AiConversation, AiConversationMessage, MessageRole } from '@/database/entities';
+import { AiConversation, AiConversationMessage, MessageRole, VocabularyInjectionEvent } from '@/database/entities';
 import { AiConversationType } from '@/database/entities/ai-conversation.entity';
+import { Vocabulary } from '@/database/entities/vocabulary.entity';
 import { UnifiedLLMService } from '@/modules/ai/services/unified-llm.service';
 import { PromptLoaderService } from '@/modules/ai/services/prompt-loader.service';
 import { LLMModel } from '@/modules/ai/providers/llm-models.enum';
 import { LanguageService } from '@/modules/language/language.service';
+import { VocabularyReviewService } from '@/modules/vocabulary/services/vocabulary-review.service';
 import { ScenarioAccessService } from './scenario-access.service';
+import { VocabularyInjectionService } from './vocabulary-injection.service';
+import { matchesWord } from './vocabulary-usage-matcher';
 import {
   ScenarioChatRequestDto,
   ScenarioChatResponseDto,
@@ -34,16 +39,21 @@ const MAX_HISTORY = MAX_TURNS * 2 + 2;
 @Injectable()
 export class ScenarioChatService {
   private readonly defaultModel = LLMModel.GEMINI_2_0_FLASH;
+  private readonly logger = new Logger(ScenarioChatService.name);
 
   constructor(
     @InjectRepository(AiConversation)
     private readonly convoRepo: Repository<AiConversation>,
     @InjectRepository(AiConversationMessage)
     private readonly msgRepo: Repository<AiConversationMessage>,
+    @InjectRepository(VocabularyInjectionEvent)
+    private readonly eventsRepo: Repository<VocabularyInjectionEvent>,
     private readonly llmService: UnifiedLLMService,
     private readonly promptLoader: PromptLoaderService,
     private readonly languageService: LanguageService,
     private readonly scenarioAccessService: ScenarioAccessService,
+    private readonly vocabInjection: VocabularyInjectionService,
+    private readonly vocabReview: VocabularyReviewService,
   ) {}
 
   async chat(
@@ -93,6 +103,9 @@ export class ScenarioChatService {
     const isOpening = history.length === 0;
     const isWrapUp = currentTurn >= maxTurns;
 
+    // 6b. Resolve injected vocabulary for this conversation
+    const injectedVocab = await this.resolveInjectedVocabulary(conversation, langCtx.targetLangCode);
+
     // 7. Build system prompt
     const systemPrompt = this.promptLoader.loadPrompt('scenario-chat-prompt.json', {
       scenarioTitle: scenario.title,
@@ -105,6 +118,7 @@ export class ScenarioChatService {
       maxTurns: String(maxTurns),
       isOpening: String(isOpening),
       isWrapUp: String(isWrapUp),
+      userVocabulary: this.formatVocabList(injectedVocab),
     });
 
     // 8. Build messages for LLM
@@ -145,6 +159,10 @@ export class ScenarioChatService {
     conversation.messageCount += dto.message ? 2 : 1;
     conversation.metadata = { ...(conversation.metadata ?? {}), maxTurns, completed };
     await this.convoRepo.save(conversation);
+
+    // 12. Fire-and-forget vocab usage tracking
+    void this.trackUsage(conversation.id, userId, currentTurn, injectedVocab, dto.message)
+      .catch((err) => this.logger.warn(`Usage-track failed conv=${conversation.id}: ${(err as Error).message}`));
 
     return { reply, conversationId: conversation.id, turn: currentTurn, maxTurns, completed };
   }
@@ -297,7 +315,7 @@ export class ScenarioChatService {
 
   private async loadLanguageContext(
     userId: string,
-  ): Promise<{ targetLanguage: string; nativeLanguage: string; proficiencyLevel: string }> {
+  ): Promise<{ targetLanguage: string; targetLangCode: string; nativeLanguage: string; proficiencyLevel: string }> {
     const [langs, nativeLang] = await Promise.all([
       this.languageService.getUserLanguages(userId),
       this.languageService.getNativeLanguage(userId),
@@ -308,8 +326,59 @@ export class ScenarioChatService {
 
     return {
       targetLanguage: active.language.name,
+      targetLangCode: active.language.code,
       nativeLanguage: nativeLang?.name ?? 'English',
       proficiencyLevel: active.proficiencyLevel,
     };
+  }
+
+  private async resolveInjectedVocabulary(
+    conversation: AiConversation,
+    targetLangCode: string,
+  ): Promise<Vocabulary[]> {
+    if (conversation.injectedVocabIds !== null && conversation.injectedVocabIds !== undefined) {
+      return this.vocabInjection.hydrateByIds(conversation.injectedVocabIds);
+    }
+    try {
+      const picked = await this.vocabInjection.selectVocabularyForConversation(
+        conversation.userId!,
+        targetLangCode,
+      );
+      conversation.injectedVocabIds = picked.map((v) => v.id);
+      await this.convoRepo.save(conversation);
+      return picked;
+    } catch (err) {
+      this.logger.warn(`Vocab injection failed for conv ${conversation.id}: ${(err as Error).message}`);
+      conversation.injectedVocabIds = [];
+      try { await this.convoRepo.save(conversation); } catch { /* swallow */ }
+      return [];
+    }
+  }
+
+  private formatVocabList(vocab: Vocabulary[]): string {
+    if (!vocab.length) return '';
+    return vocab.map((v) => `- ${v.word} (${v.translation}) [box ${v.box}]`).join('\n');
+  }
+
+  private async trackUsage(
+    conversationId: string,
+    userId: string,
+    turnIndex: number,
+    vocab: Vocabulary[],
+    userMessage: string | undefined,
+  ): Promise<void> {
+    if (!userMessage || !vocab.length) return;
+    const hits = vocab.map((v) => ({ vocabId: v.id, used: matchesWord(userMessage, v.word) }));
+    const rows = hits.map((h) =>
+      this.eventsRepo.create({
+        conversationId,
+        vocabularyId: h.vocabId,
+        turnIndex,
+        wasUsed: h.used,
+      }),
+    );
+    await this.eventsRepo.save(rows);
+    const usedIds = hits.filter((h) => h.used).map((h) => h.vocabId);
+    await Promise.all(usedIds.map((id) => this.vocabReview.touchReviewed(userId, id)));
   }
 }

@@ -22,6 +22,7 @@ import { UserScenarioAccess } from './entities/user-scenario-access.entity';
 import { UserAiScenario } from './entities/user-ai-scenario.entity';
 import { KolBundle } from './entities/kol-bundle.entity';
 import { KolBundleScenario } from './entities/kol-bundle-scenario.entity';
+import { VocabularyInjectionEvent } from './entities/vocabulary-injection-event.entity';
 
 const entities = [
   Language,
@@ -45,6 +46,7 @@ const entities = [
   UserAiScenario,
   KolBundle,
   KolBundleScenario,
+  VocabularyInjectionEvent,
 ];
 
 @Module({

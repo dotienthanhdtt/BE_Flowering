@@ -72,6 +72,9 @@ export class AiConversation {
   @Column({ type: 'jsonb', nullable: true })
   scenarios?: Array<Record<string, unknown>> | null;
 
+  @Column({ type: 'uuid', array: true, name: 'injected_vocab_ids', nullable: true })
+  injectedVocabIds?: string[] | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

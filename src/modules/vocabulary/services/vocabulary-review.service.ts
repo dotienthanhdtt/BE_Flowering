@@ -111,6 +111,16 @@ export class VocabularyReviewService {
     return { total, correct, wrong, accuracy, boxDistribution };
   }
 
+  async touchReviewed(userId: string, vocabId: string): Promise<void> {
+    await this.repo.update(
+      { id: vocabId, userId },
+      {
+        lastReviewedAt: () => 'NOW()',
+        reviewCount: () => '"review_count" + 1',
+      },
+    );
+  }
+
   private toCardDto(v: Vocabulary): ReviewCardDto {
     return {
       vocabId: v.id,
