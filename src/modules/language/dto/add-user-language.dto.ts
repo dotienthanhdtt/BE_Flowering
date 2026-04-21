@@ -1,21 +1,24 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
-import { ProficiencyLevel } from '../../../database/entities/user-language.entity';
+import { IsOptional, IsString, IsUUID, Length } from 'class-validator';
+import { IsValidLevelForLanguage } from '../../../common/validators/is-valid-level-for-language.validator';
 
-/**
- * DTO for adding a language to user's learning list
- */
 export class AddUserLanguageDto {
   @ApiProperty({ description: 'Language ID to add' })
   @IsUUID()
   languageId!: string;
 
   @ApiPropertyOptional({
-    description: 'Initial proficiency level',
-    enum: ProficiencyLevel,
-    default: ProficiencyLevel.BEGINNER,
+    description: 'Initial proficiency level (framework-native, e.g. A1, N3, HSK2, TOPIK1)',
+    examples: {
+      CEFR: { value: 'A1' },
+      JLPT: { value: 'N5' },
+      HSK: { value: 'HSK1' },
+      TOPIK: { value: 'TOPIK1' },
+    },
   })
   @IsOptional()
-  @IsEnum(ProficiencyLevel)
-  proficiencyLevel?: ProficiencyLevel;
+  @IsString()
+  @Length(1, 16)
+  @IsValidLevelForLanguage('languageId')
+  proficiencyLevel?: string;
 }

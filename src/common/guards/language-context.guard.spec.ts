@@ -4,7 +4,7 @@ import { Reflector } from '@nestjs/core';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { LanguageContextGuard } from './language-context.guard';
 import { LanguageContextCacheService } from '../services/language-context-cache.service';
-import { UserLanguage, ProficiencyLevel } from '../../database/entities/user-language.entity';
+import { UserLanguage } from '../../database/entities/user-language.entity';
 import { Language } from '../../database/entities/language.entity';
 import { SKIP_LANGUAGE_CONTEXT, AUTO_ENROLL_LANGUAGE } from '../decorators/active-language.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public-route.decorator';
@@ -154,7 +154,7 @@ describe('LanguageContextGuard', () => {
     userLanguageRepo.findOne
       .mockResolvedValueOnce(null) // not enrolled check
       .mockResolvedValueOnce(null); // race-check not triggered (no error thrown)
-    languageRepo.findOne.mockResolvedValue({ id: mockLangFr.id, isActive: true, isLearningAvailable: true });
+    languageRepo.findOne.mockResolvedValue({ id: mockLangFr.id, isActive: true, isLearningAvailable: true, levelFramework: 'CEFR' });
     userLanguageRepo.save.mockResolvedValue({});
     reflector.getAllAndOverride.mockImplementation((key) =>
       key === AUTO_ENROLL_LANGUAGE ? true : false,
@@ -171,7 +171,7 @@ describe('LanguageContextGuard', () => {
       userId: mockUserId,
       languageId: mockLangFr.id,
       isActive: false,
-      proficiencyLevel: ProficiencyLevel.BEGINNER,
+      proficiencyLevel: 'A1', // CEFR framework[0]
     });
     expect(userLanguageRepo.save).toHaveBeenCalled();
 

@@ -1,4 +1,9 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  mapGenericToFramework,
+  LANGUAGE_FRAMEWORKS,
+  FrameworkCode,
+} from '../../common/constants/language-levels';
 import { OnboardingScenarioDto, SCENARIO_ACCENT_COLORS } from './dto/onboarding-scenario.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -51,7 +56,9 @@ export class OnboardingService {
       where: { code: args.targetLanguage, isActive: true },
     });
     if (!language) {
-      throw new BadRequestException(`Unknown or unsupported target language: "${args.targetLanguage}"`);
+      throw new BadRequestException(
+        `Unknown or unsupported target language: "${args.targetLanguage}"`,
+      );
     }
 
     const conversation = this.conversationRepo.create({
@@ -124,6 +131,9 @@ export class OnboardingService {
   async complete(dto: OnboardingCompleteDto) {
     const conversation = await this.findValidSession(dto.conversationId);
 
+    const { targetLanguage } = conversation.metadata as Record<string, string>;
+    const language = await this.languageRepo.findOne({ where: { code: targetLanguage } });
+
     // Cache hit: return previously extracted profile + scenarios to keep UUIDs stable
     // across resumes and avoid burning LLM tokens. Requires both fields populated and
     // a full 5-scenario payload (partial failures are retried on next call).
@@ -132,8 +142,13 @@ export class OnboardingService {
       Array.isArray(conversation.scenarios) &&
       conversation.scenarios.length === 5
     ) {
+      const cached = conversation.extractedProfile as Record<string, unknown>;
       return {
-        ...(conversation.extractedProfile as Record<string, unknown>),
+        ...cached,
+        suggestedFrameworkLevel: this.mapOnboardingLevel(
+          language?.levelFramework ?? null,
+          cached.suggestedProficiency as string | undefined,
+        ),
         scenarios: conversation.scenarios as unknown as OnboardingScenarioDto[],
       };
     }
@@ -172,7 +187,14 @@ export class OnboardingService {
       });
     }
 
-    return { ...profile, scenarios };
+    return {
+      ...profile,
+      suggestedFrameworkLevel: this.mapOnboardingLevel(
+        language?.levelFramework ?? null,
+        profile.suggestedProficiency as string | undefined,
+      ),
+      scenarios,
+    };
   }
 
   /**
@@ -303,6 +325,21 @@ export class OnboardingService {
         reply: raw,
         isLastTurn: currentTurn >= onboardingConfig.maxTurns,
       };
+    }
+  }
+
+  // Maps onboarding AI suggestion (generic) to framework-native level. Falls back to framework[0] on bad input.
+  private mapOnboardingLevel(framework: string | null, suggestion: string | undefined): string {
+    const generic = (suggestion ?? 'beginner').toLowerCase();
+    if (!framework) return generic;
+    try {
+      return mapGenericToFramework(framework as FrameworkCode, generic);
+    } catch {
+      const fallback = LANGUAGE_FRAMEWORKS[framework as FrameworkCode]?.[0] ?? generic;
+      this.logger.warn(
+        `Invalid onboarding suggestion '${generic}' for framework ${framework}; defaulting to ${fallback}`,
+      );
+      return fallback;
     }
   }
 

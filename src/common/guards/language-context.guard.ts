@@ -9,7 +9,8 @@ import {
 import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserLanguage, ProficiencyLevel } from '@/database/entities/user-language.entity';
+import { UserLanguage } from '@/database/entities/user-language.entity';
+import { LANGUAGE_FRAMEWORKS, FrameworkCode } from '@common/constants/language-levels';
 import { Language } from '@/database/entities/language.entity';
 import { User } from '@/database/entities/user.entity';
 import { IS_PUBLIC_KEY } from '@common/decorators/public-route.decorator';
@@ -41,7 +42,9 @@ export class LanguageContextGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const user = request.user as User | undefined;
-    const headerCode = (request.headers['x-learning-language'] as string | undefined)?.trim().toLowerCase();
+    const headerCode = (request.headers['x-learning-language'] as string | undefined)
+      ?.trim()
+      .toLowerCase();
 
     if (headerCode) {
       const lang = await this.languageCache.resolve(headerCode);
@@ -65,10 +68,14 @@ export class LanguageContextGuard implements CanActivate {
       });
 
       if (!activeUserLang?.language) {
-        throw new BadRequestException('Active learning language required. Send X-Learning-Language header.');
+        throw new BadRequestException(
+          'Active learning language required. Send X-Learning-Language header.',
+        );
       }
 
-      this.logger.warn(`X-Learning-Language header missing for user ${user.id}; falling back to UserLanguage.isActive`);
+      this.logger.warn(
+        `X-Learning-Language header missing for user ${user.id}; falling back to UserLanguage.isActive`,
+      );
 
       const lang: ActiveLanguageContext = {
         id: activeUserLang.languageId,
@@ -92,10 +99,10 @@ export class LanguageContextGuard implements CanActivate {
     });
     if (enrolled) return;
 
-    const autoEnroll = this.reflector.getAllAndOverride<boolean>(
-      AUTO_ENROLL_LANGUAGE,
-      [context.getHandler(), context.getClass()],
-    );
+    const autoEnroll = this.reflector.getAllAndOverride<boolean>(AUTO_ENROLL_LANGUAGE, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
     if (!autoEnroll) {
       throw new ForbiddenException(`Language "${lang.code}" not enrolled for this user`);
     }
@@ -112,12 +119,15 @@ export class LanguageContextGuard implements CanActivate {
         throw new BadRequestException(`Language "${lang.code}" is not available for learning`);
       }
 
+      const fw = language.levelFramework as FrameworkCode | null;
+      const defaultLevel = fw ? LANGUAGE_FRAMEWORKS[fw][0] : 'beginner';
+
       await this.userLanguageRepo.save(
         this.userLanguageRepo.create({
           userId,
           languageId: lang.id,
           isActive: false,
-          proficiencyLevel: ProficiencyLevel.BEGINNER,
+          proficiencyLevel: defaultLevel,
         }),
       );
       this.logger.log(`Auto-enrolled user ${userId} in language "${lang.code}"`);
@@ -128,7 +138,10 @@ export class LanguageContextGuard implements CanActivate {
         where: { userId, languageId: lang.id },
       });
       if (!exists) {
-        this.logger.warn(`Auto-enroll failed for user ${userId}, language "${lang.code}"`, error as Error);
+        this.logger.warn(
+          `Auto-enroll failed for user ${userId}, language "${lang.code}"`,
+          error as Error,
+        );
       }
     }
   }

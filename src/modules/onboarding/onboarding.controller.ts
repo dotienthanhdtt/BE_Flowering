@@ -12,11 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { OnboardingService } from './onboarding.service';
-import {
-  OnboardingChatDto,
-  OnboardingCompleteDto,
-  OnboardingMessagesResponseDto,
-} from './dto';
+import { OnboardingChatDto, OnboardingCompleteDto, OnboardingMessagesResponseDto } from './dto';
 import { OnboardingThrottlerGuard } from './onboarding-throttler.guard';
 
 @ApiTags('onboarding')

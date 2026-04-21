@@ -2,12 +2,16 @@ import { langfuseSdk } from './instrument';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { useContainer } from 'class-validator';
 import { AppModule } from './app.module';
 import { setupSwaggerDocumentation } from './swagger/swagger-documentation-setup';
 import { ResponseTransformInterceptor, AllExceptionsFilter } from './common';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+
+  // Enables async class-validator constraints (e.g. IsValidLevelForLanguage) to use NestJS DI
+  useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port', 3000);

@@ -5,14 +5,12 @@ import { LanguageService } from './language.service';
 import { Language } from '../../database/entities/language.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
 import { User } from '../../database/entities/user.entity';
+import { IsValidLevelForLanguageConstraint } from '../../common/validators/is-valid-level-for-language.validator';
 
-/**
- * Language module for available languages and user learning languages management
- */
 @Module({
   imports: [TypeOrmModule.forFeature([Language, UserLanguage, User])],
   controllers: [LanguageController],
-  providers: [LanguageService],
+  providers: [LanguageService, IsValidLevelForLanguageConstraint],
   exports: [LanguageService],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

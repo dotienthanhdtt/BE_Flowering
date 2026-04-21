@@ -19,7 +19,9 @@ export class FirebaseAdminService implements OnModuleInit {
       ?.replace(/\\n/g, '\n');
 
     if (!projectId || !clientEmail || !privateKey) {
-      this.logger.warn('Firebase credentials not configured — POST /auth/firebase will be unavailable');
+      this.logger.warn(
+        'Firebase credentials not configured — POST /auth/firebase will be unavailable',
+      );
       return;
     }
 
@@ -32,7 +34,10 @@ export class FirebaseAdminService implements OnModuleInit {
       this.initialized = true;
       this.logger.log('Firebase Admin SDK initialized');
     } catch (error) {
-      this.logger.error('Firebase Admin SDK initialization failed — check FIREBASE_PRIVATE_KEY format', error);
+      this.logger.error(
+        'Firebase Admin SDK initialization failed — check FIREBASE_PRIVATE_KEY format',
+        error,
+      );
     }
   }
 

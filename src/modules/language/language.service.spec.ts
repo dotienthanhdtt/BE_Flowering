@@ -56,6 +56,7 @@ describe('LanguageService', () => {
     isActive: true,
     isNativeAvailable: true,
     isLearningAvailable: true,
+    levelFramework: 'CEFR',
   };
 
   describe('findAll', () => {
@@ -142,6 +143,29 @@ describe('LanguageService', () => {
       expect(userLanguageRepo.update).toHaveBeenCalledWith(
         { userId, isActive: true },
         { isActive: false },
+      );
+    });
+
+    it('should reject invalid level for CEFR language with BadRequestException', async () => {
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, levelFramework: 'CEFR' });
+      userLanguageRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.addUserLanguage(userId, { languageId: langId, proficiencyLevel: 'N3' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should default to framework[0] when proficiencyLevel omitted', async () => {
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, levelFramework: 'JLPT' });
+      userLanguageRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue(mockUserLang);
+      userLanguageRepo.create.mockReturnValue(mockUserLang);
+      userLanguageRepo.save.mockResolvedValue({ id: 'ul-1' });
+      userLanguageRepo.update.mockResolvedValue({ affected: 1 });
+
+      await service.addUserLanguage(userId, { languageId: langId });
+
+      expect(userLanguageRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ proficiencyLevel: 'N5' }),
       );
     });
   });

@@ -1,10 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { ProficiencyLevel } from '../../../database/entities/user-language.entity';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LanguageDto } from './language.dto';
 
-/**
- * DTO for user's learning language with proficiency info
- */
 export class UserLanguageDto {
   @ApiProperty({ description: 'User language record ID' })
   id!: string;
@@ -12,8 +8,15 @@ export class UserLanguageDto {
   @ApiProperty({ description: 'Language ID' })
   languageId!: string;
 
-  @ApiProperty({ description: 'Proficiency level', enum: ProficiencyLevel })
-  proficiencyLevel!: ProficiencyLevel;
+  @ApiProperty({ description: 'Proficiency level (framework-native, e.g. A1, N3, HSK2, TOPIK1)' })
+  proficiencyLevel!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Level framework code (CEFR, JLPT, HSK, TOPIK, or null for frameworkless languages)',
+    nullable: true,
+  })
+  levelFramework!: string | null;
 
   @ApiProperty({ description: 'Whether actively learning', default: true })
   isActive!: boolean;
