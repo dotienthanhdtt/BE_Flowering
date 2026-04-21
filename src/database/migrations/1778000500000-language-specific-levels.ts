@@ -17,14 +17,19 @@ export class LanguageSpecificLevels1778000500000 implements MigrationInterface {
     await queryRunner.query(`UPDATE languages SET level_framework = 'HSK'   WHERE code = 'zh'`);
     await queryRunner.query(`UPDATE languages SET level_framework = 'TOPIK' WHERE code = 'ko'`);
 
-    // 3. Loosen proficiency_level column type (cast enum → text)
+    // 3. Drop default (references enum type — would block the type change / DROP TYPE)
+    await queryRunner.query(
+      `ALTER TABLE user_languages ALTER COLUMN proficiency_level DROP DEFAULT`,
+    );
+
+    // 4. Loosen proficiency_level column type (cast enum → text)
     await queryRunner.query(`
       ALTER TABLE user_languages
         ALTER COLUMN proficiency_level TYPE VARCHAR(16)
         USING proficiency_level::text
     `);
 
-    // 4. Drop the old enum type
+    // 5. Drop the old enum type
     await queryRunner.query(`DROP TYPE IF EXISTS proficiency_level_enum`);
 
     // 5. Backfill user rows to framework-native levels
@@ -108,6 +113,10 @@ export class LanguageSpecificLevels1778000500000 implements MigrationInterface {
       ALTER TABLE user_languages
         ALTER COLUMN proficiency_level TYPE proficiency_level_enum
         USING proficiency_level::proficiency_level_enum
+    `);
+    await queryRunner.query(`
+      ALTER TABLE user_languages
+        ALTER COLUMN proficiency_level SET DEFAULT 'beginner'::proficiency_level_enum
     `);
 
     // 3. Drop level_framework column

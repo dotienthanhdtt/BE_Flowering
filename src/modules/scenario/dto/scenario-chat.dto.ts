@@ -7,6 +7,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ScenarioChatRequestDto {
@@ -15,7 +16,15 @@ export class ScenarioChatRequestDto {
   @IsNotEmpty()
   scenarioId!: string;
 
-  @ApiPropertyOptional({ description: 'Omit on first turn to let AI open the conversation' })
+  @ApiPropertyOptional({
+    description:
+      'User message. Omit or send empty on first turn to let AI open the conversation.',
+  })
+  // Normalize empty/whitespace-only to undefined so @IsOptional() applies.
+  // Clients (e.g. Flutter) often send message: "" on the first turn — that's valid and must not 400.
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.trim().length === 0 ? undefined : value,
+  )
   @IsOptional()
   @IsString()
   @MinLength(1)
