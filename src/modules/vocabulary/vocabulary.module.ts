@@ -15,6 +15,6 @@ import { ReviewSessionStore } from './services/review-session-store';
   imports: [TypeOrmModule.forFeature([Vocabulary])],
   controllers: [VocabularyController, VocabularyReviewController],
   providers: [VocabularyService, VocabularyReviewService, ReviewSessionStore],
-  exports: [VocabularyService],
+  exports: [VocabularyService, VocabularyReviewService],
 })
 export class VocabularyModule {}

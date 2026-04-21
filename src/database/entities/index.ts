@@ -20,3 +20,4 @@ export * from './user-scenario-access.entity';
 export * from './user-ai-scenario.entity';
 export * from './kol-bundle.entity';
 export * from './kol-bundle-scenario.entity';
+export * from './vocabulary-injection-event.entity';

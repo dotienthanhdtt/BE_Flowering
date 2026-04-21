@@ -6,11 +6,13 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ScenarioChatService } from './scenario-chat.service';
 import { ScenarioAccessService } from './scenario-access.service';
-import { AiConversation, AiConversationMessage, MessageRole } from '../../../database/entities';
+import { AiConversation, AiConversationMessage, MessageRole, VocabularyInjectionEvent } from '../../../database/entities';
 import { AiConversationType } from '../../../database/entities/ai-conversation.entity';
 import { UnifiedLLMService } from '../../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../../ai/services/prompt-loader.service';
 import { LanguageService } from '../../language/language.service';
+import { VocabularyInjectionService } from './vocabulary-injection.service';
+import { VocabularyReviewService } from '../../vocabulary/services/vocabulary-review.service';
 
 const mockConvoRepo = () => {
   // Single unified query-builder mock covering both select and update paths
@@ -40,6 +42,20 @@ const mockMsgRepo = () => ({
   find: jest.fn(),
 });
 
+const mockEventsRepo = () => ({
+  create: jest.fn((dto) => dto),
+  save: jest.fn(() => Promise.resolve([])),
+});
+
+const mockVocabInjectionService = () => ({
+  selectVocabularyForConversation: jest.fn().mockResolvedValue([]),
+  hydrateByIds: jest.fn().mockResolvedValue([]),
+});
+
+const mockVocabReviewService = () => ({
+  touchReviewed: jest.fn().mockResolvedValue(undefined),
+});
+
 const mockLanguageService = () => ({
   getUserLanguages: jest.fn(),
   getNativeLanguage: jest.fn(),
@@ -50,6 +66,7 @@ const mockScenarioAccessService = () => ({
 });
 
 describe('ScenarioChatService', () => {
+  let module: TestingModule;
   let service: ScenarioChatService;
   let convoRepo: ReturnType<typeof mockConvoRepo>;
   let msgRepo: ReturnType<typeof mockMsgRepo>;
@@ -61,15 +78,18 @@ describe('ScenarioChatService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         ScenarioChatService,
         { provide: getRepositoryToken(AiConversation), useFactory: mockConvoRepo },
         { provide: getRepositoryToken(AiConversationMessage), useFactory: mockMsgRepo },
+        { provide: getRepositoryToken(VocabularyInjectionEvent), useFactory: mockEventsRepo },
         { provide: UnifiedLLMService, useValue: { chat: jest.fn() } },
         { provide: PromptLoaderService, useValue: { loadPrompt: jest.fn() } },
         { provide: LanguageService, useFactory: mockLanguageService },
         { provide: ScenarioAccessService, useFactory: mockScenarioAccessService },
+        { provide: VocabularyInjectionService, useFactory: mockVocabInjectionService },
+        { provide: VocabularyReviewService, useFactory: mockVocabReviewService },
       ],
     }).compile();
 
@@ -123,6 +143,7 @@ describe('ScenarioChatService', () => {
     topic: 'scenario_roleplay',
     messageCount: 0,
     metadata: { maxTurns: 12, completed: false },
+    injectedVocabIds: null,
   };
 
   describe('chat - new conversation', () => {
@@ -643,6 +664,114 @@ describe('ScenarioChatService', () => {
         expect.objectContaining({ text: 'system prompt text' }),
         expect.objectContaining({ text: 'User message' }),
       ]));
+    });
+  });
+
+  describe('chat - vocab injection', () => {
+    let vocabInjection: ReturnType<typeof mockVocabInjectionService>;
+    let eventsRepo: ReturnType<typeof mockEventsRepo>;
+    let vocabReview: ReturnType<typeof mockVocabReviewService>;
+
+    const setupChat = (convOverrides = {}) => {
+      const conv = { ...mockConversationEntity, ...convOverrides };
+      scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
+      languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
+      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
+      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
+      convoRepo.save.mockResolvedValue(conv);
+      msgRepo.find.mockResolvedValue([]);
+      promptLoader.loadPrompt.mockReturnValue('system prompt');
+      llmService.chat.mockResolvedValue('reply');
+      return conv;
+    };
+
+    beforeEach(() => {
+      vocabInjection = module.get(VocabularyInjectionService);
+      eventsRepo = module.get(getRepositoryToken(VocabularyInjectionEvent));
+      vocabReview = module.get(VocabularyReviewService);
+    });
+
+    it('turn-1 (injectedVocabIds=null) → calls selectVocabularyForConversation and persists IDs', async () => {
+      const mockVocab = [{ id: 'v1', word: 'bonjour', translation: 'hello', box: 2 }] as any[];
+      vocabInjection.selectVocabularyForConversation.mockResolvedValue(mockVocab);
+      setupChat({ injectedVocabIds: null });
+
+      const dto = { scenarioId: mockScenarioId };
+      await service.chat(mockUserId, dto, 'lang-en');
+
+      expect(vocabInjection.selectVocabularyForConversation).toHaveBeenCalledWith(mockUserId, 'en');
+      expect(vocabInjection.hydrateByIds).not.toHaveBeenCalled();
+      // IDs should be persisted on conversation
+      const savedCalls = convoRepo.save.mock.calls;
+      const savedConv = savedCalls.find((c: any[]) => Array.isArray(c[0]?.injectedVocabIds) || c[0]?.injectedVocabIds !== undefined);
+      expect(savedConv).toBeDefined();
+    });
+
+    it('turn-2 (injectedVocabIds cached) → calls hydrateByIds, skips selectVocabularyForConversation', async () => {
+      const cachedIds = ['v1', 'v2'];
+      vocabInjection.hydrateByIds.mockResolvedValue([]);
+      setupChat({ injectedVocabIds: cachedIds });
+
+      const dto = { scenarioId: mockScenarioId };
+      await service.chat(mockUserId, dto, 'lang-en');
+
+      expect(vocabInjection.hydrateByIds).toHaveBeenCalledWith(cachedIds);
+      expect(vocabInjection.selectVocabularyForConversation).not.toHaveBeenCalled();
+    });
+
+    it('turn-1 selection throws → conversation saves with injectedVocabIds=[], response still returns', async () => {
+      vocabInjection.selectVocabularyForConversation.mockRejectedValue(new Error('DB timeout'));
+      setupChat({ injectedVocabIds: null });
+
+      const dto = { scenarioId: mockScenarioId };
+      const result = await service.chat(mockUserId, dto, 'lang-en');
+
+      expect(result.reply).toBe('reply');
+      const saveCalls = convoRepo.save.mock.calls;
+      const errorSave = saveCalls.find((c: any[]) => Array.isArray(c[0]?.injectedVocabIds) && c[0].injectedVocabIds.length === 0);
+      expect(errorSave).toBeDefined();
+    });
+
+    it('user message contains injected word → event row wasUsed=true, touchReviewed called', async () => {
+      const mockVocab = [{ id: 'v1', word: 'bonjour', translation: 'hello', box: 1 }] as any[];
+      setupChat({ injectedVocabIds: ['v1'] });
+      vocabInjection.hydrateByIds.mockResolvedValue(mockVocab);
+
+      const dto = { scenarioId: mockScenarioId, message: 'Bonjour! How are you?' };
+      await service.chat(mockUserId, dto, 'lang-en');
+
+      // Allow fire-and-forget to settle
+      await new Promise((r) => setImmediate(r));
+
+      expect(eventsRepo.create).toHaveBeenCalledWith(expect.objectContaining({ wasUsed: true }));
+      expect(vocabReview.touchReviewed).toHaveBeenCalledWith(mockUserId, 'v1');
+    });
+
+    it('user message no match → event rows all wasUsed=false, touchReviewed NOT called', async () => {
+      const mockVocab = [{ id: 'v1', word: 'merci', translation: 'thanks', box: 1 }] as any[];
+      setupChat({ injectedVocabIds: ['v1'] });
+      vocabInjection.hydrateByIds.mockResolvedValue(mockVocab);
+
+      const dto = { scenarioId: mockScenarioId, message: 'Hello there' };
+      await service.chat(mockUserId, dto, 'lang-en');
+
+      await new Promise((r) => setImmediate(r));
+
+      expect(eventsRepo.create).toHaveBeenCalledWith(expect.objectContaining({ wasUsed: false }));
+      expect(vocabReview.touchReviewed).not.toHaveBeenCalled();
+    });
+
+    it('empty dto.message → trackUsage early-returns, no event rows', async () => {
+      const mockVocab = [{ id: 'v1', word: 'bonjour', translation: 'hello', box: 1 }] as any[];
+      setupChat({ injectedVocabIds: ['v1'] });
+      vocabInjection.hydrateByIds.mockResolvedValue(mockVocab);
+
+      const dto = { scenarioId: mockScenarioId }; // no message
+      await service.chat(mockUserId, dto, 'lang-en');
+
+      await new Promise((r) => setImmediate(r));
+
+      expect(eventsRepo.save).not.toHaveBeenCalled();
     });
   });
 });
