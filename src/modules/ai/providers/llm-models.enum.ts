@@ -15,10 +15,6 @@ export enum LLMModel {
   ANTHROPIC_CLAUDE_3_HAIKU = 'claude-3-haiku-20240307',
 
   // Gemini Models
-  GEMINI_2_5_FLASH = 'gemini-2.5-flash-preview-05-20',
-  GEMINI_2_0_FLASH = 'gemini-2.0-flash',
-  GEMINI_1_5_PRO = 'gemini-1.5-pro',
-  GEMINI_1_5_FLASH = 'gemini-1.5-flash',
   GEMINI_3_1_FLASH_LITE_PREVIEW = 'gemini-3.1-flash-lite-preview',
 }
 

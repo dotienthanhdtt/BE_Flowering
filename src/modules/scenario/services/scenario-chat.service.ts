@@ -38,7 +38,7 @@ const MAX_HISTORY = MAX_TURNS * 2 + 2;
  */
 @Injectable()
 export class ScenarioChatService {
-  private readonly defaultModel = LLMModel.GEMINI_2_0_FLASH;
+  private readonly defaultModel = LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW;
   private readonly logger = new Logger(ScenarioChatService.name);
 
   constructor(
