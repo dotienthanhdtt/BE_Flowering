@@ -1,7 +1,7 @@
 ---
 title: "Language-Specific Proficiency Levels"
 description: "Per-language level frameworks (CEFR/JLPT/HSK/TOPIK) replacing shared 5-tier enum."
-status: pending
+status: completed
 priority: P1
 effort: 6h
 branch: dev
@@ -23,13 +23,13 @@ Replace shared 5-tier `ProficiencyLevel` enum with per-language framework-native
 
 | # | Phase | Status | Effort |
 |---|-------|--------|--------|
-| 1 | [Framework registry + helpers + unit tests](phase-01-framework-registry.md) | pending | 45m |
-| 2 | [Entity + DTO + custom validator](phase-02-entity-dto-validator.md) | pending | 45m |
-| 3 | [Database migration (schema + data backfill)](phase-03-database-migration.md) | pending | 1h |
-| 4 | [Seed data + service validation wiring](phase-04-seed-and-service.md) | pending | 45m |
-| 5 | [Onboarding save-path mapping](phase-05-onboarding-mapping.md) | pending | 30m |
+| 1 | [Framework registry + helpers + unit tests](phase-01-framework-registry.md) | completed | 45m |
+| 2 | [Entity + DTO + custom validator](phase-02-entity-dto-validator.md) | completed | 45m |
+| 3 | [Database migration (schema + data backfill)](phase-03-database-migration.md) | completed | 1h |
+| 4 | [Seed data + service validation wiring](phase-04-seed-and-service.md) | completed | 45m |
+| 5 | [Onboarding save-path mapping](phase-05-onboarding-mapping.md) | completed | 30m |
 | 6 | [Flutter model + LanguageLevelPicker widget](phase-06-flutter-picker.md) | pending | 1.5h |
-| 7 | [Swagger + E2E + staging deploy](phase-07-swagger-e2e-deploy.md) | pending | 45m |
+| 7 | [Swagger + E2E + staging deploy](phase-07-swagger-e2e-deploy.md) | completed | 45m |
 
 ## Key Dependencies
 

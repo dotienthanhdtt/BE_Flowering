@@ -6,7 +6,7 @@
 
 ## Overview
 - Priority: P1
-- Status: pending
+- Status: completed
 - Effort: 30m
 - Brief: Onboarding AI extraction returns generic proficiency (`beginner|intermediate|advanced`). Before persisting via `language.service.ts`, map to framework-native via `mapGenericToFramework`. Prompt file itself is unchanged.
 

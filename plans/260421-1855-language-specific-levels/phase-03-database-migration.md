@@ -7,7 +7,7 @@
 
 ## Overview
 - Priority: P1
-- Status: pending
+- Status: completed
 - Effort: 1h
 - Brief: Single reversible migration — adds `languages.level_framework`, loosens `user_languages.proficiency_level` column type, drops `proficiency_level_enum`, backfills per-language framework + auto-maps existing user rows.
 

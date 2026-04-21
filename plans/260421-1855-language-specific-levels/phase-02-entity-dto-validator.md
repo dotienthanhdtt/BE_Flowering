@@ -6,7 +6,7 @@
 
 ## Overview
 - Priority: P1
-- Status: pending
+- Status: completed
 - Effort: 45m
 - Brief: Update entities to drop enum, widen DTO typing, introduce `@IsValidLevelForLanguage` validator. After this phase, backend still compiles but migration has not yet run — handle with non-breaking column definition.
 

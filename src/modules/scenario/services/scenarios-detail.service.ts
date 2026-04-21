@@ -21,6 +21,7 @@ export class ScenariosDetailService {
       accessTier: scenario.accessTier,
       isLocked: result.isLocked,
       lockReason: result.isLocked ? result.lockReason : undefined,
+      userStatus: result.isLocked ? 'locked' : 'available',
     };
   }
 }

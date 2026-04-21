@@ -6,7 +6,7 @@
 
 ## Overview
 - Priority: P1 (foundation; everything else imports from here)
-- Status: pending
+- Status: completed
 - Effort: 45m
 - Brief: Build the single source of truth for level frameworks plus three pure helpers. Cover with unit tests before any other code depends on them.
 

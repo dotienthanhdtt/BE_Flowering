@@ -7,7 +7,7 @@
 
 ## Overview
 - Priority: P1
-- Status: pending
+- Status: completed
 - Effort: 45m
 - Brief: Add `levelFramework` to seed rows (fresh DBs). Wire `language.service.ts` to apply default + validate levels against framework on `addUserLanguage` / `updateUserLanguage`. Add boot-time seed invariant (learning-available ⇒ framework set).
 

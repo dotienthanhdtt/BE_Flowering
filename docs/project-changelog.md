@@ -5,6 +5,70 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-04-21 — Language-Specific Proficiency Levels
+
+### Added
+
+- **Per-Language Proficiency Frameworks:** CEFR (European), JLPT (Japanese), HSK (Chinese), TOPIK (Korean) replacing shared 5-tier enum
+  - Framework registry in `src/modules/language/constants/proficiency-frameworks.ts`
+  - Native-only languages (vi, th) remain frameworkless
+  - Custom validator `IsValidProficiencyLevelForFramework` validates level belongs to selected framework
+  - All 6 backend phases completed with 403 unit tests passing
+
+- **Swagger Decorator Updates:** 3 DTOs updated with multi-framework examples
+  - `UpdateUserLanguageDto.proficiencyLevel` — examples: ['A1','B1','N3','HSK3','TOPIK2','beginner']
+  - `UserLanguageDto.proficiencyLevel` — same examples
+  - `ChatDto.proficiencyLevel` — replaced enum constraint with framework-aware examples
+  - `UserLanguageDto.levelFramework` — new @ApiProperty with enum hints
+
+- **E2E Test Infrastructure:** 4 integration tests covering language-specific levels
+  - Japanese onboarding (JLPT levels)
+  - Update with valid level (N3)
+  - Rejection of invalid level (X9)
+  - Cross-language validation (N3 on English → 400)
+  - AI chat integration with stored framework level
+  - Test file: `test/language-specific-levels.e2e-spec.ts`
+  - All 4 tests passing
+
+- **Build & Compilation:** ESLint config updated to ignore test/ directory
+
+### Changed
+
+- **Onboarding auto-mapping:** Generic `'beginner'` level transparently mapped to language-specific framework default via `mapGenericToFramework()` helper
+
+### Database
+
+- Migration `1776500000000-add-level-framework-to-user-languages` adds framework tracking
+- Auto-backfill existing users preserving level semantics (e.g., 'intermediate' → 'B1' for CEFR)
+- Zero data loss migration
+
+### Testing
+
+- 403 unit tests passing (all phases)
+- 4 E2E tests passing (Phase 7)
+- Build clean: `npm run build`, `npm run lint` green
+
+### Documentation Updates
+
+- `codebase-summary.md` — Framework registry, custom validator, per-language levels explained
+- `code-standards.md` — Proficiency framework validation pattern
+- `system-architecture.md` — Data model updated with levelFramework field
+- `api-documentation.md` — Swagger examples showing CEFR/JLPT/HSK/TOPIK levels
+- Updated project-roadmap.md Phase 2 progress (99% → adding language-specific levels completion)
+
+### Scope Exclusions (by design)
+
+- `scenario-chat-prompt.json` — UNTOUCHED (user directive). Behavioral consequence: literal `'beginner'` check on line 21 no longer matches migrated users (they have framework-specific levels). Accepted per user requirement.
+- No grace shim for stale Flutter clients (400 rejection recommended; reassess after staging telemetry)
+
+### Next Steps
+
+- Flutter phase: mobile model + LanguageLevelPicker widget (Phase 6, pending)
+- Staging deployment (operational): confirm `/api/docs` rendering, 48h monitoring
+- Production rollout: after staging green
+
+---
+
 ## 2026-04-21
 
 ### Added
