@@ -20,7 +20,7 @@ import { ConversationContext } from '../dto';
  */
 @Injectable()
 export class LearningAgentService {
-  private readonly defaultModel = LLMModel.GEMINI_2_0_FLASH;
+  private readonly defaultModel = LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW;
 
   constructor(
     private llmService: UnifiedLLMService,
