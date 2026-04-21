@@ -4,7 +4,9 @@ export class AddLanguageIdToUserExerciseAttempts1777000200000 implements Migrati
   name = 'AddLanguageIdToUserExerciseAttempts1777000200000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "user_exercise_attempts" ADD COLUMN IF NOT EXISTS "language_id" uuid`);
+    await queryRunner.query(
+      `ALTER TABLE "user_exercise_attempts" ADD COLUMN IF NOT EXISTS "language_id" uuid`,
+    );
     await queryRunner.query(`
       UPDATE "user_exercise_attempts" uea
       SET "language_id" = l."language_id"
@@ -13,7 +15,9 @@ export class AddLanguageIdToUserExerciseAttempts1777000200000 implements Migrati
       WHERE e."id" = uea."exercise_id"
         AND uea."language_id" IS NULL
     `);
-    await queryRunner.query(`ALTER TABLE "user_exercise_attempts" ALTER COLUMN "language_id" SET NOT NULL`);
+    await queryRunner.query(
+      `ALTER TABLE "user_exercise_attempts" ALTER COLUMN "language_id" SET NOT NULL`,
+    );
     await queryRunner.query(`
       ALTER TABLE "user_exercise_attempts"
       ADD CONSTRAINT "fk_user_exercise_attempts_language"
@@ -27,7 +31,11 @@ export class AddLanguageIdToUserExerciseAttempts1777000200000 implements Migrati
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_user_exercise_attempts_user_lang"`);
-    await queryRunner.query(`ALTER TABLE "user_exercise_attempts" DROP CONSTRAINT IF EXISTS "fk_user_exercise_attempts_language"`);
-    await queryRunner.query(`ALTER TABLE "user_exercise_attempts" DROP COLUMN IF EXISTS "language_id"`);
+    await queryRunner.query(
+      `ALTER TABLE "user_exercise_attempts" DROP CONSTRAINT IF EXISTS "fk_user_exercise_attempts_language"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "user_exercise_attempts" DROP COLUMN IF EXISTS "language_id"`,
+    );
   }
 }

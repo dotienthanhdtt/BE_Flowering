@@ -2,7 +2,10 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } fro
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ScenarioChatService } from './services/scenario-chat.service';
-import { ActiveLanguage, ActiveLanguageContext } from '../../common/decorators/active-language.decorator';
+import {
+  ActiveLanguage,
+  ActiveLanguageContext,
+} from '../../common/decorators/active-language.decorator';
 import {
   ScenarioChatRequestDto,
   ScenarioChatResponseDto,
@@ -12,7 +15,11 @@ import {
 
 @ApiTags('Scenario Chat')
 @ApiBearerAuth()
-@ApiHeader({ name: 'X-Learning-Language', description: 'Active learning language code', required: true })
+@ApiHeader({
+  name: 'X-Learning-Language',
+  description: 'Active learning language code',
+  required: true,
+})
 @Controller('scenario')
 @UseGuards(ThrottlerGuard)
 export class ScenarioChatController {

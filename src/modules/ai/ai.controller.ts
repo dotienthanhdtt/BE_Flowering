@@ -1,4 +1,12 @@
-import { Controller, Post, Sse, Body, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Sse,
+  Body,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -9,7 +17,11 @@ import { TranscriptionService } from './services/transcription.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
 import { RequirePremium } from '../../common/decorators/require-premium.decorator';
-import { ActiveLanguage, ActiveLanguageContext, SkipLanguageContext } from '../../common/decorators/active-language.decorator';
+import {
+  ActiveLanguage,
+  ActiveLanguageContext,
+  SkipLanguageContext,
+} from '../../common/decorators/active-language.decorator';
 import { PremiumGuard } from '../../common/guards/premium.guard';
 import { User } from '../../database/entities';
 import {
@@ -128,9 +140,11 @@ export class AiController {
   @ApiOperation({ summary: 'Transcribe audio to text' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, type: TranscribeResponseDto })
-  @UseInterceptors(FileInterceptor('audio', {
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB hard limit at Multer layer
-  }))
+  @UseInterceptors(
+    FileInterceptor('audio', {
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB hard limit at Multer layer
+    }),
+  )
   async transcribe(
     @CurrentUser() user: User,
     @UploadedFile() file: Express.Multer.File,

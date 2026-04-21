@@ -46,7 +46,11 @@ export class ScenarioChatService {
     private readonly scenarioAccessService: ScenarioAccessService,
   ) {}
 
-  async chat(userId: string, dto: ScenarioChatRequestDto, languageId: string): Promise<ScenarioChatResponseDto> {
+  async chat(
+    userId: string,
+    dto: ScenarioChatRequestDto,
+    languageId: string,
+  ): Promise<ScenarioChatResponseDto> {
     // 0. Reject conflicting intent: forceNew + conversationId is ambiguous
     if (dto.forceNew && dto.conversationId) {
       throw new BadRequestException('Cannot combine forceNew with conversationId');

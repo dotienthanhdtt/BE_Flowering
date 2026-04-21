@@ -7,7 +7,10 @@ export class FirebaseAuthDto {
   @IsNotEmpty()
   idToken!: string;
 
-  @ApiProperty({ required: false, description: 'Display name from FirebaseAuth.currentUser.displayName or Apple credential' })
+  @ApiProperty({
+    required: false,
+    description: 'Display name from FirebaseAuth.currentUser.displayName or Apple credential',
+  })
   @IsString()
   @IsOptional()
   displayName?: string;
@@ -17,7 +20,10 @@ export class FirebaseAuthDto {
   @IsOptional()
   avatarUrl?: string;
 
-  @ApiProperty({ required: false, description: 'Phone number from FirebaseAuth.currentUser.phoneNumber' })
+  @ApiProperty({
+    required: false,
+    description: 'Phone number from FirebaseAuth.currentUser.phoneNumber',
+  })
   @IsString()
   @IsOptional()
   phoneNumber?: string;

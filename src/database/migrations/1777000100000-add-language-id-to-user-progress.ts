@@ -4,7 +4,9 @@ export class AddLanguageIdToUserProgress1777000100000 implements MigrationInterf
   name = 'AddLanguageIdToUserProgress1777000100000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "user_progress" ADD COLUMN IF NOT EXISTS "language_id" uuid`);
+    await queryRunner.query(
+      `ALTER TABLE "user_progress" ADD COLUMN IF NOT EXISTS "language_id" uuid`,
+    );
     await queryRunner.query(`
       UPDATE "user_progress" up
       SET "language_id" = l."language_id"
@@ -26,7 +28,9 @@ export class AddLanguageIdToUserProgress1777000100000 implements MigrationInterf
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_user_progress_user_lang_status"`);
-    await queryRunner.query(`ALTER TABLE "user_progress" DROP CONSTRAINT IF EXISTS "fk_user_progress_language"`);
+    await queryRunner.query(
+      `ALTER TABLE "user_progress" DROP CONSTRAINT IF EXISTS "fk_user_progress_language"`,
+    );
     await queryRunner.query(`ALTER TABLE "user_progress" DROP COLUMN IF EXISTS "language_id"`);
   }
 }

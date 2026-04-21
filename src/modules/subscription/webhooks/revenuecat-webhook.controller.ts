@@ -23,7 +23,7 @@ import { AppConfiguration } from '../../../config/app-configuration';
 @Controller('webhooks')
 export class RevenuecatWebhookController implements OnModuleInit {
   private readonly logger = new Logger(RevenuecatWebhookController.name);
-  private webhookSecret!: string;
+  private webhookSecret: string | undefined;
 
   constructor(
     private readonly subscriptionService: SubscriptionService,
@@ -33,7 +33,8 @@ export class RevenuecatWebhookController implements OnModuleInit {
   onModuleInit(): void {
     const secret = this.configService.get('revenuecat.webhookSecret', { infer: true });
     if (!secret) {
-      throw new Error('REVENUECAT_WEBHOOK_SECRET is required');
+      this.logger.warn('REVENUECAT_WEBHOOK_SECRET not configured — POST /webhooks/revenuecat will reject all requests');
+      return;
     }
     this.webhookSecret = secret;
   }
@@ -47,6 +48,9 @@ export class RevenuecatWebhookController implements OnModuleInit {
     @Headers('authorization') authHeader: string,
     @Body() payload: RevenueCatWebhookDto,
   ): Promise<{ status: string }> {
+    if (!this.webhookSecret) {
+      throw new UnauthorizedException('Webhook not configured');
+    }
     // Always verify webhook authorization using timing-safe comparison
     if (!this.verifyAuth(authHeader, this.webhookSecret)) {
       this.logger.warn('Invalid webhook authorization attempt');

@@ -23,7 +23,8 @@ export class LanguageDto {
   isLearningAvailable!: boolean;
 
   @ApiPropertyOptional({
-    description: 'Ordered proficiency levels for this language; null for frameworkless languages (vi, th)',
+    description:
+      'Ordered proficiency levels for this language; null for frameworkless languages (vi, th)',
     example: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
     nullable: true,
     type: [String],

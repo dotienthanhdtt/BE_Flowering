@@ -17,7 +17,8 @@ export class BackfillAndEnforceAiConversationLanguageId1777000400000 implements 
 
     // Step 2: remaining NULLs fall back to 'en'
     const result = await queryRunner.query(`SELECT id FROM "languages" WHERE code = 'en' LIMIT 1`);
-    if (!result.length) throw new Error('Default language "en" not found — seed languages table first');
+    if (!result.length)
+      throw new Error('Default language "en" not found — seed languages table first');
 
     const enId = result[0].id as string;
     await queryRunner.query(
@@ -25,7 +26,9 @@ export class BackfillAndEnforceAiConversationLanguageId1777000400000 implements 
       [enId],
     );
 
-    await queryRunner.query(`ALTER TABLE "ai_conversations" ALTER COLUMN "language_id" SET NOT NULL`);
+    await queryRunner.query(
+      `ALTER TABLE "ai_conversations" ALTER COLUMN "language_id" SET NOT NULL`,
+    );
 
     // Update FK constraint to remove nullable semantics
     await queryRunner.query(`
@@ -40,7 +43,11 @@ export class BackfillAndEnforceAiConversationLanguageId1777000400000 implements 
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "ai_conversations" DROP CONSTRAINT IF EXISTS "fk_ai_conversations_language"`);
-    await queryRunner.query(`ALTER TABLE "ai_conversations" ALTER COLUMN "language_id" DROP NOT NULL`);
+    await queryRunner.query(
+      `ALTER TABLE "ai_conversations" DROP CONSTRAINT IF EXISTS "fk_ai_conversations_language"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "ai_conversations" ALTER COLUMN "language_id" DROP NOT NULL`,
+    );
   }
 }

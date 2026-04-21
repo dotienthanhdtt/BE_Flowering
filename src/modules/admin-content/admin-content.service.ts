@@ -53,7 +53,10 @@ export class AdminContentService implements OnModuleInit {
       this.logger.warn('ADMIN_EMAILS env not set — no admin users bootstrapped');
       return;
     }
-    const emails = raw.split(',').map((e) => e.trim()).filter(Boolean);
+    const emails = raw
+      .split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
     if (!emails.length) return;
     try {
       await this.userRepo
@@ -68,7 +71,10 @@ export class AdminContentService implements OnModuleInit {
     }
   }
 
-  async generateDrafts(adminId: string, dto: GenerateContentDto): Promise<{ ids: string[]; items: unknown[] }> {
+  async generateDrafts(
+    adminId: string,
+    dto: GenerateContentDto,
+  ): Promise<{ ids: string[]; items: unknown[] }> {
     const language = await this.languageRepo.findOne({
       where: { code: dto.languageCode, isActive: true },
     });
@@ -156,9 +162,12 @@ export class AdminContentService implements OnModuleInit {
 
   private repoFor(type: ContentType): Repository<any> {
     switch (type) {
-      case ContentType.LESSON: return this.lessonRepo;
-      case ContentType.EXERCISE: return this.exerciseRepo;
-      case ContentType.SCENARIO: return this.scenarioRepo;
+      case ContentType.LESSON:
+        return this.lessonRepo;
+      case ContentType.EXERCISE:
+        return this.exerciseRepo;
+      case ContentType.SCENARIO:
+        return this.scenarioRepo;
       default:
         throw new BadRequestException(`Invalid content type: "${type}"`);
     }
@@ -171,14 +180,18 @@ export class AdminContentService implements OnModuleInit {
   ): Record<string, unknown> {
     const base = {
       title: String(item.title ?? '').substring(0, 255),
-      description: typeof item.description === 'string' ? item.description.substring(0, 1000) : undefined,
+      description:
+        typeof item.description === 'string' ? item.description.substring(0, 1000) : undefined,
       difficulty: item.difficulty,
       orderIndex: typeof item.orderIndex === 'number' ? item.orderIndex : 0,
       languageId,
       status: ContentStatus.DRAFT,
     };
     if (type === ContentType.LESSON) {
-      return { ...base, accessTier: item.accessTier === 'premium' ? AccessTier.PREMIUM : AccessTier.FREE };
+      return {
+        ...base,
+        accessTier: item.accessTier === 'premium' ? AccessTier.PREMIUM : AccessTier.FREE,
+      };
     }
     if (type === ContentType.EXERCISE) {
       return {

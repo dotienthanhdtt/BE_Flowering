@@ -55,10 +55,7 @@ export class KolBundleController {
   @ApiResponse({ status: 403, description: 'Requires admin role' })
   @ApiResponse({ status: 404, description: 'Bundle not found' })
   @ApiResponse({ status: 409, description: 'Scenario already attached to a bundle' })
-  attachScenarios(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: AttachScenariosDto,
-  ) {
+  attachScenarios(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AttachScenariosDto) {
     return this.kolBundleService.attachScenarios(id, dto);
   }
 }

@@ -10,7 +10,9 @@ export class RelaxUserScenarioAccessFkCascade1778000400000 implements MigrationI
     `);
     if (result.length > 0) {
       const constraintName: string = result[0].constraint_name;
-      await queryRunner.query(`ALTER TABLE user_scenario_access DROP CONSTRAINT "${constraintName}"`);
+      await queryRunner.query(
+        `ALTER TABLE user_scenario_access DROP CONSTRAINT "${constraintName}"`,
+      );
     }
     await queryRunner.query(`
       ALTER TABLE user_scenario_access
@@ -20,7 +22,9 @@ export class RelaxUserScenarioAccessFkCascade1778000400000 implements MigrationI
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE user_scenario_access DROP CONSTRAINT IF EXISTS user_scenario_access_scenario_id_fkey`);
+    await queryRunner.query(
+      `ALTER TABLE user_scenario_access DROP CONSTRAINT IF EXISTS user_scenario_access_scenario_id_fkey`,
+    );
     await queryRunner.query(`
       ALTER TABLE user_scenario_access
         ADD CONSTRAINT user_scenario_access_scenario_id_fkey

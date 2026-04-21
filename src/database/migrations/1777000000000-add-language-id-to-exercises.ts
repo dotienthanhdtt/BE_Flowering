@@ -26,7 +26,9 @@ export class AddLanguageIdToExercises1777000000000 implements MigrationInterface
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_exercises_language"`);
-    await queryRunner.query(`ALTER TABLE "exercises" DROP CONSTRAINT IF EXISTS "fk_exercises_language"`);
+    await queryRunner.query(
+      `ALTER TABLE "exercises" DROP CONSTRAINT IF EXISTS "fk_exercises_language"`,
+    );
     await queryRunner.query(`ALTER TABLE "exercises" DROP COLUMN IF EXISTS "language_id"`);
   }
 }

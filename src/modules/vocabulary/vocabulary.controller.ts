@@ -29,10 +29,7 @@ export class VocabularyController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a single vocabulary item' })
   @ApiResponse({ status: 200, type: VocabularyItemDto })
-  findOne(
-    @Req() req: any,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<VocabularyItemDto> {
+  findOne(@Req() req: any, @Param('id', ParseUUIDPipe) id: string): Promise<VocabularyItemDto> {
     return this.service.findOne(req.user.id, id);
   }
 

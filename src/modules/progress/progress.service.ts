@@ -17,7 +17,12 @@ export class ProgressService {
     userId: string,
     languageId: string,
     lessonId: string,
-    patch: Partial<Pick<UserProgress, 'status' | 'scoreEarned' | 'exercisesCompleted' | 'exercisesTotal' | 'completedAt'>>,
+    patch: Partial<
+      Pick<
+        UserProgress,
+        'status' | 'scoreEarned' | 'exercisesCompleted' | 'exercisesTotal' | 'completedAt'
+      >
+    >,
   ): Promise<UserProgress> {
     const existing = await this.progressRepo.findOne({ where: { userId, lessonId } });
 

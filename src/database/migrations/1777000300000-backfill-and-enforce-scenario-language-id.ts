@@ -5,7 +5,8 @@ export class BackfillAndEnforceScenarioLanguageId1777000300000 implements Migrat
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     const result = await queryRunner.query(`SELECT id FROM "languages" WHERE code = 'en' LIMIT 1`);
-    if (!result.length) throw new Error('Default language "en" not found — seed languages table first');
+    if (!result.length)
+      throw new Error('Default language "en" not found — seed languages table first');
 
     const enId = result[0].id as string;
     await queryRunner.query(
@@ -27,7 +28,9 @@ export class BackfillAndEnforceScenarioLanguageId1777000300000 implements Migrat
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "scenarios" DROP CONSTRAINT IF EXISTS "fk_scenarios_language"`);
+    await queryRunner.query(
+      `ALTER TABLE "scenarios" DROP CONSTRAINT IF EXISTS "fk_scenarios_language"`,
+    );
     await queryRunner.query(`ALTER TABLE "scenarios" ALTER COLUMN "language_id" DROP NOT NULL`);
   }
 }

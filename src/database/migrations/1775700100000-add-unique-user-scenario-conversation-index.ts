@@ -15,8 +15,6 @@ export class AddUniqueUserScenarioConversationIndex1775700100000 implements Migr
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "UQ_ai_conversations_user_scenario_active"`,
-    );
+    await queryRunner.query(`DROP INDEX IF EXISTS "UQ_ai_conversations_user_scenario_active"`);
   }
 }

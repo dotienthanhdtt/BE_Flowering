@@ -45,4 +45,7 @@ export class ScenarioDetailDto {
 
   @ApiPropertyOptional({ enum: ['premium_required'] })
   lockReason?: LockReason;
+
+  @ApiProperty({ enum: ['available', 'learned', 'locked'] })
+  userStatus!: 'available' | 'learned' | 'locked';
 }

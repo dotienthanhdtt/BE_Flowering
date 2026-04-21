@@ -71,6 +71,7 @@ describe('LessonService', () => {
     isActive: true,
     isNativeAvailable: true,
     isLearningAvailable: true,
+    levelFramework: 'CEFR',
   });
 
   // Helper: Create mock scenario

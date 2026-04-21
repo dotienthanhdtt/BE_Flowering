@@ -24,8 +24,7 @@ export class OnboardingThrottlerGuard extends ThrottlerGuard {
     // GET routes (e.g. /conversations/:conversationId/messages) carry the id in the
     // URL path, not the body — treat those as "continuation" (30/hr) rather than
     // "creation" (5/hr) so cheap reads aren't starved by the creation budget.
-    const hasConversationId =
-      !!httpReq.body?.conversationId || !!httpReq.params?.conversationId;
+    const hasConversationId = !!httpReq.body?.conversationId || !!httpReq.params?.conversationId;
 
     return super.handleRequest({
       ...requestProps,

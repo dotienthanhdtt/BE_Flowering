@@ -1,17 +1,10 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Vocabulary } from '../../../database/entities/vocabulary.entity';
 import { ReviewStartDto, ReviewCardDto, ReviewStartResponseDto } from '../dto/review-start.dto';
 import { ReviewRateDto, ReviewRateResponseDto } from '../dto/review-rate.dto';
-import {
-  BoxDistributionEntryDto,
-  ReviewCompleteResponseDto,
-} from '../dto/review-complete.dto';
+import { BoxDistributionEntryDto, ReviewCompleteResponseDto } from '../dto/review-complete.dto';
 import { applyLeitner } from './leitner';
 import { ReviewSessionStore } from './review-session-store';
 
@@ -35,7 +28,10 @@ export class VocabularyReviewService {
     }
 
     const cards = await qb.orderBy('v.dueAt', 'ASC').limit(limit).getMany();
-    const session = this.store.create(userId, cards.map((c) => c.id));
+    const session = this.store.create(
+      userId,
+      cards.map((c) => c.id),
+    );
 
     return {
       sessionId: session.id,

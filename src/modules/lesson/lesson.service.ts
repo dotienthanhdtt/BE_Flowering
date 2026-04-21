@@ -24,7 +24,11 @@ export class LessonService {
     private readonly subscriptionService: SubscriptionService,
   ) {}
 
-  async getLessons(userId: string, languageId: string, query: GetLessonsQueryDto): Promise<GetLessonsResponseDto> {
+  async getLessons(
+    userId: string,
+    languageId: string,
+    query: GetLessonsQueryDto,
+  ): Promise<GetLessonsResponseDto> {
     const { level, search, page = 1, limit = 20 } = query;
 
     // Build visibility query
@@ -69,10 +73,7 @@ export class LessonService {
   }
 
   /** Build query: language-specific + user-granted access. No global (IS NULL) scenarios. */
-  private buildVisibilityQuery(
-    userId: string,
-    languageId: string,
-  ): SelectQueryBuilder<Scenario> {
+  private buildVisibilityQuery(userId: string, languageId: string): SelectQueryBuilder<Scenario> {
     const qb = this.scenarioRepo
       .createQueryBuilder('scenario')
       .innerJoin('scenario.category', 'cat', 'cat.is_active = true')
@@ -86,19 +87,16 @@ export class LessonService {
       .where('access.user_id = :userId')
       .getQuery();
 
-    qb.andWhere(
-      `(scenario.language_id = :languageId OR scenario.id IN ${accessSubQuery})`,
-      { languageId, userId },
-    );
+    qb.andWhere(`(scenario.language_id = :languageId OR scenario.id IN ${accessSubQuery})`, {
+      languageId,
+      userId,
+    });
 
     return qb;
   }
 
   /** Group flat scenario list by category and compute per-scenario status */
-  private groupByCategory(
-    scenarios: Scenario[],
-    isFreeUser: boolean,
-  ): CategoryWithScenariosDto[] {
+  private groupByCategory(scenarios: Scenario[], isFreeUser: boolean): CategoryWithScenariosDto[] {
     const categoryMap = new Map<string, CategoryWithScenariosDto>();
 
     for (const scenario of scenarios) {

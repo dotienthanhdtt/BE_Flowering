@@ -15,7 +15,9 @@ export class CreateUserAiScenariosTable1778000100000 implements MigrationInterfa
         PRIMARY KEY (id)
       )
     `);
-    await queryRunner.query(`CREATE INDEX idx_user_ai_scenarios_user_lang ON user_ai_scenarios(user_id, language_id)`);
+    await queryRunner.query(
+      `CREATE INDEX idx_user_ai_scenarios_user_lang ON user_ai_scenarios(user_id, language_id)`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
