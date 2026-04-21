@@ -121,9 +121,15 @@ export class ScenarioChatService {
       userVocabulary: this.formatVocabList(injectedVocab),
     });
 
-    // 8. Build messages for LLM
+    // 8. Build messages for LLM. Gemini requires at least one user message —
+    //    on the opening turn with no user input, push a 'Start' placeholder
+    //    so the model produces the scenario's opening greeting.
     const messages: BaseMessage[] = [new SystemMessage(systemPrompt), ...history];
-    if (dto.message) messages.push(new HumanMessage(dto.message));
+    if (dto.message) {
+      messages.push(new HumanMessage(dto.message));
+    } else if (isOpening) {
+      messages.push(new HumanMessage('Start'));
+    }
 
     // 9. Call LLM
     const reply = await this.llmService.chat(messages, {
