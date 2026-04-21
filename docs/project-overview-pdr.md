@@ -64,31 +64,32 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - **Langfuse** - AI observability
 - **Sentry** - Error tracking (5xx exceptions)
 
-## API Modules (12 Total)
+## API Modules (13 Total)
 
 | Module | Endpoints | Key Features |
 |--------|-----------|--------------|
-| **auth/** (27 files) | POST /auth/firebase, /refresh, /logout, /forgot-password, /verify-otp, /reset-password | Firebase unified OAuth, JWT, password reset; email/password endpoints disabled (410 Gone) |
-| **ai/** (~30 files) | POST /ai/chat, /chat/correct, /translate, /transcribe; SSE /ai/chat/stream | LangChain multi-provider, STT with signed URLs, vocabulary storage, rate limiting |
-| **onboarding/** (11 files) | POST /onboarding/chat (create+continue), /complete (idempotent), GET /conversations/:id/messages | Anonymous chat, first-turn via message count, resume support with caching |
-| **language/** (9 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags, language context guard |
-| **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
-| **subscription/** (6 files) | GET /subscriptions/me, POST /webhooks/revenuecat | RevenueCat webhook, DB idempotency |
+| **admin-content/** (7 files) | POST /admin/content/generate, GET /admin/content, PATCH/DELETE | LLM content generation, lifecycle (draft→published→archived), throttled 5/min |
+| **ai/** (31 files) | POST /ai/chat, /chat/correct, /translate, /transcribe; SSE /ai/chat/stream | LangChain multi-provider, STT with signed URLs, 20 req/min + 100 req/hr rate limit |
+| **auth/** (23 files) | POST /auth/firebase, /refresh, /logout | Firebase unified OAuth, JWT, composite refresh tokens (90d); email/password disabled (410 Gone) |
 | **email/** (2 files) | Internal service | Nodemailer SMTP with graceful init |
-| **lesson/** (6 files) | GET /lessons (paginated, language-partitioned) | Scenario grouping, status computation, premium gating |
-| **scenario/** (7 files) | POST /scenario/chat (turn-based roleplay) | Roleplay conversations, premium access control |
-| **vocabulary/** (16 files) | CRUD + Leitner SRS review endpoints | Spaced repetition with 5-box system, review sessions |
-| **admin-content/** (8 files) | POST /admin/content/generate, GET /admin/content, PATCH/DELETE | LLM content generation, lifecycle (draft→published→archived) |
-| **progress/** (3 files) | Internal service | Lesson/exercise progress tracking |
+| **kol-bundle/** (7 files) | POST /admin/bundles/create, GET /bundles, POST /redeem | Admin KOL bundle creation, gift codes, scenario attachment |
+| **language/** (10 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags, per-language proficiency (CEFR/JLPT/HSK/TOPIK), auto-enroll |
+| **lesson/** (6 files) | GET /lessons (paginated, language-partitioned) | Scenario grouping, status computation, premium gating, auto-enroll support |
+| **onboarding/** (13 files) | POST /onboarding/chat (create+continue), /complete (idempotent), GET /conversations/:id/messages | Anonymous chat, first-turn via message count, resume support, rate-limited (5 create/hr, 30 chat/hr) |
+| **progress/** (2 files) | Internal service | Lesson/exercise progress tracking, upsertProgress, recordAttempt |
+| **scenario/** (23 files) | GET /scenarios (listing), GET /scenarios/:id (detail), POST /scenario/chat, GET /scenario/conversations | Listing + chat (2 controllers), roleplay, 12-turn cap, signed access control, throttled redeem 5/min |
+| **subscription/** (6 files) | GET /subscriptions/me, POST /webhook | RevenueCat webhook with signature verify, sandbox rejection in prod |
+| **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
+| **vocabulary/** (16 files) | CRUD + Leitner SRS review endpoints | Spaced repetition (5-box), in-memory sessions, review rate tracking |
 
-## Database Schema (20 Entities: 18 + 2 Enums)
+## Database Schema (21 Entities + 4 Enums)
 
 **Core:** User, Language, UserLanguage
-**Content:** Lesson, Exercise, Scenario, ScenarioCategory, UserScenarioAccess
+**Content:** Lesson, Exercise, Scenario, ScenarioCategory, UserScenarioAccess, UserAiScenario, KolBundle, KolBundleScenario
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation, AiConversationMessage, Vocabulary
 **Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent, DeviceToken
-**Enums:** AccessTier (free|premium), ContentStatus (draft|published|archived)
+**Enums:** AccessTier (free|premium), ContentStatus (draft|published|archived), ScenarioType, UserRole
 
 **Recent Updates (Apr 2026):**
 - **AccessTier refactor:** `access_tier` enum replaces `is_premium`; default: free

@@ -115,8 +115,8 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 **Duration:** 8 weeks
 **Status:** 📋 Planned
-**Target Start:** 2026-03-21
-**Target Completion:** 2026-05-15
+**Target Start:** 2026-04-22
+**Target Completion:** 2026-06-17
 
 **Objectives:**
 - Build content management system
@@ -151,8 +151,8 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 **Duration:** 10 weeks
 **Status:** 📋 Planned
-**Target Start:** 2026-05-16
-**Target Completion:** 2026-07-25
+**Target Start:** 2026-06-18
+**Target Completion:** 2026-08-27
 
 **Objectives:**
 - Background job processing
@@ -185,24 +185,27 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 ---
 
-## Current Sprint (Week of 2026-03-10)
+## Current Sprint (Week of 2026-04-21)
 
-**Sprint Goal:** Complete Phase 2 hardening with testing and caching
+**Sprint Goal:** Finalize Phase 2; transition to Phase 3 planning
 
-**Completed:**
-- ✅ Translation service (word/sentence with LangChain)
-- ✅ Correction check endpoint with context awareness
-- ✅ Vocabulary entity (definition, examples, pronunciation)
-- ✅ Documentation update (all 7 docs aligned with actual codebase)
+**Completed (Phase 2):**
+- ✅ Vocabulary SRS with Leitner algorithm (5-box system)
+- ✅ Scenario chat API with access control
+- ✅ Onboarding resume support with cached profile
+- ✅ Email/password endpoints 410 Gone; Firebase unified auth
+- ✅ Language-specific proficiency levels (CEFR/JLPT/HSK/TOPIK)
+- ✅ Signed URLs for STT audio files (1h expiry)
+- ✅ Graceful service initialization (Firebase, Nodemailer)
+- ✅ All documentation aligned with codebase (13 modules, 21 entities)
 
 **In Progress:**
-- 🔄 Unit test coverage for AI module
-- 🔄 Integration tests for translation service
+- 🔄 Phase 3 planning (content CMS, analytics, email notifications)
 
 **Planned:**
-- 📋 E2E test suite for new endpoints
-- 📋 Redis caching layer for translations
-- 📋 Per-user rate limiting
+- 📋 Lesson content library (50+ lessons)
+- 📋 Admin dashboard for content management
+- 📋 Learning analytics tracking
 
 ---
 
@@ -306,8 +309,8 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 ```
 Phase 1: MVP Foundation           2026-01-01 ========> 2026-02-04 ✅
 Phase 2: Production Hardening     2026-02-04 ========> 2026-04-21 ✅
-Phase 3: Content & Analytics      2026-04-22 =======> 2026-06-15
-Phase 4: Scalability & Advanced   2026-06-16 =======> 2026-08-25
+Phase 3: Content & Analytics      2026-04-22 =======> 2026-06-17
+Phase 4: Scalability & Advanced   2026-06-18 =======> 2026-08-27
 ```
 
 ---

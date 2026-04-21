@@ -50,15 +50,6 @@ Accepts Firebase ID token from either Google or Apple. Backend auto-detects prov
 - Google ID tokens: `aud` claim matches Google client ID
 - Apple ID tokens: `iss` claim contains `appleid.apple.com`
 
-### POST /auth/forgot-password — DISABLED (410 Gone)
-Email/password reset no longer supported.
-
-### POST /auth/verify-otp — DISABLED (410 Gone)
-OTP verification no longer supported.
-
-### POST /auth/reset-password — DISABLED (410 Gone)
-Password reset no longer supported.
-
 ### POST /auth/refresh
 ```json
 // Request
@@ -70,31 +61,6 @@ Password reset no longer supported.
 
 ### POST /auth/logout *(auth required)*
 ```json
-// Response data: null
-```
-
-### POST /auth/forgot-password
-```json
-// Request
-{ "email": "user@example.com" }
-
-// Response data: null
-```
-
-### POST /auth/verify-otp
-```json
-// Request
-{ "email": "user@example.com", "otp": "123456" }
-
-// Response data
-{ "reset_token": "token" }
-```
-
-### POST /auth/reset-password
-```json
-// Request
-{ "email": "user@example.com", "reset_token": "...", "new_password": "NewPass123!" }
-
 // Response data: null
 ```
 
@@ -231,18 +197,19 @@ Query: `?language=<language_uuid>&level=beginner|intermediate|advanced&search=<t
 ## Scenarios
 
 ### POST /scenario/chat *(premium)*
-Turn-based roleplay conversation.
+Turn-based roleplay conversation. Language context via header `X-Learning-Language: <code>`.
 
 **First turn** (omit message to get AI greeting):
 ```json
 // Request
-{ "scenario_id": "uuid", "language": "spanish" }
+{ "scenario_id": "uuid" }
+// Header: X-Learning-Language: es
 
 // Response data
 {
   "conversation_id": "uuid",
   "turn_number": 1,
-  "max_turns": 10,
+  "max_turns": 12,
   "message": "Hola! Bienvenido al café. Qué deseas?",
   "completed": false
 }
@@ -252,14 +219,44 @@ Turn-based roleplay conversation.
 ```json
 // Request
 { "conversation_id": "uuid", "scenario_id": "uuid", "message": "Quisiera un café, por favor" }
+// Header: X-Learning-Language: es
 
 // Response data
 {
   "conversation_id": "uuid",
   "turn_number": 2,
-  "max_turns": 10,
+  "max_turns": 12,
   "message": "Excelente! Un café para ti. Algo más?",
   "completed": false
+}
+```
+
+### GET /scenarios/:id *(auth required)*
+Scenario detail with access state (soft-lock, no 403).
+```json
+// Response data
+{
+  "id": "uuid",
+  "title": "Café Conversation",
+  "description": "...",
+  "access_tier": "premium",
+  "is_locked": true,
+  "lock_reason": "premium_required"
+}
+```
+
+### GET /scenario/conversations/:conversation_id *(auth required)*
+Fetch conversation transcript.
+```json
+// Response data
+{
+  "id": "uuid",
+  "scenario_id": "uuid",
+  "turn_number": 5,
+  "messages": [
+    { "role": "user", "text": "..." },
+    { "role": "ai", "text": "..." }
+  ]
 }
 ```
 
@@ -303,9 +300,10 @@ Query: `?language=<language_code>&box=1-5&search=<term>&page=1&limit=20`
 ```
 
 ### POST /vocabulary/review/start *(auth required)*
+Language context via header `X-Learning-Language: <code>`.
 ```json
-// Request
-{ "language": "es" }
+// Request: (empty body)
+// Header: X-Learning-Language: es
 
 // Response data
 {

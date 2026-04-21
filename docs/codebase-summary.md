@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-04-20
-**Generated from:** repomix-output.xml (updated 2026-04-20)
+**Last Updated:** 2026-04-21
+**Generated from:** repomix-output.xml (auto-generated 2026-04-21)
 
 ## Overview
 
@@ -10,10 +10,11 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 ## Metrics
 
 - **Total TypeScript Files:** ~190 files in src/
-- **Code Lines:** ~11,500 LOC in src/
-- **Modules:** 13 feature modules (auth, user, language, ai, onboarding, subscription, email, lesson, scenario, kol-bundle, vocabulary, admin-content, progress)
+- **Code Lines:** ~11,500+ LOC in src/
+- **Modules:** 13 feature modules (admin-content, ai, auth, email, kol-bundle, language, lesson, onboarding, progress, scenario, subscription, user, vocabulary)
 - **Database Entities:** 21 TypeORM entities + 4 enums (AccessTier, ContentStatus, ScenarioType, UserRole)
-- **API Endpoints:** 51+ REST endpoints across all modules
+- **Migrations:** 35 versioned migrations (1615238400000–1778000500000)
+- **API Endpoints:** 55+ REST endpoints + 1 SSE stream across all modules
 - **External Integrations:** 8 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry, Firebase)
 
 ## Tech Stack

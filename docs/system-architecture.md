@@ -1,10 +1,10 @@
 # System Architecture
 
-**Last Updated:** 2026-04-20
+**Last Updated:** 2026-04-21
 
 ## Architecture Overview
 
-AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 11 feature modules and clear separation of concerns. Implements language partitioning strategy for multi-language content isolation.
+AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 13 feature modules and clear separation of concerns. Implements language partitioning strategy for multi-language content isolation.
 
 ## Architecture Layers
 
@@ -33,7 +33,7 @@ AI-powered language learning backend following Clean Architecture principles wit
 ## Core Architecture Patterns
 
 ### 1. Modular Architecture
-12 feature modules with NestJS DI; each self-contained. **Critical:** Register all entities in BOTH:
+13 feature modules with NestJS DI; each self-contained. **Critical:** Register all entities in BOTH:
 1. `database.module.ts` (global entities array)
 2. Feature module's `TypeOrmModule.forFeature([...])` (@InjectRepository)
 
@@ -155,6 +155,59 @@ AI-powered language learning backend following Clean Architecture principles wit
 └──────────────────────────────────────────────────────┘
 ```
 
+### Email Module Flow
+```
+┌──────────────────────────────────────────────────────┐
+│      Email Service (Internal, No Controller)         │
+│  - Nodemailer SMTP configuration                    │
+│  - Graceful initialization with try-catch          │
+│  - Status flag: initialized                         │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Email Service Methods                           │
+│  - sendPasswordResetEmail(email, token)             │
+│  - sendOtpEmail(email, otp)                         │
+│  - sendNotificationEmail(email, content)            │
+└──────────────────────────────────────────────────────┘
+                    ↓
+        [Service initialized?]
+        ↙              ↖
+     Yes            No (graceful degrade)
+      ↓                    ↓
+   Send via          Return error
+   Nodemailer        to caller
+   (configured       (endpoints
+   via env vars)     return proper
+                     error response)
+```
+
+**Configuration:** Loaded from env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS). **Graceful Init:** Constructor wraps Nodemailer initialization in try-catch; sets `initialized = false` on failure. **Error Handling:** Callers check `initialized` flag before sending; return 500 if unavailable.
+
+### Progress Module Flow
+```
+┌──────────────────────────────────────────────────────┐
+│      Progress Service (Internal, No Controller)      │
+│  - upsertProgress(userId, languageId, data)        │
+│  - recordAttempt(userId, exerciseId, data)         │
+│  - getProgressByLanguage(userId, languageId)       │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Progress Entities                               │
+│  - UserProgress (total XP, streak, levels per lang) │
+│  - UserExerciseAttempt (score, time, correctness)  │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Language-Scoped Operations                      │
+│  - Progress tracked per (user, language) pair      │
+│  - UserLanguage links user to enrolled languages   │
+│  - No cross-language progress mixing               │
+└──────────────────────────────────────────────────────┘
+```
+
+**Invariants:** Progress created on-demand (lazy); updated transactionally with exercise attempts. Language context guard enforces scope at request level.
 
 ### Onboarding Module Flow
 ```
@@ -230,19 +283,43 @@ AI-powered language learning backend following Clean Architecture principles wit
 
 **Visibility:** (status = 'published') AND (language_id NULL OR matches context OR user_scenario_access). **Status:** learned / locked (premium, free user) / available.
 
-### Scenario Chat Module Flow
+### Scenario Module Flow (Dual Controllers)
+
+**ScenariosController** (Listing & Detail):
 ```
 ┌──────────────────────────────────────────────────────┐
-│        Scenario Chat Controller                      │
-│  POST /scenario/chat                                │
+│    GET /scenarios (list all, default/personal/redeem)│
+│    GET /scenarios/:id (detail with soft-lock state) │
+│    POST /scenarios/redeem (gift code redeem, 5/min)  │
+└──────────────────────────────────────────────────────┘
+                    ↓
+        [Query filters: default|personal|redeem]
+                 ↓
+┌──────────────────────────────────────────────────────┐
+│    Scenarios Service                                 │
+│  - getDefaultScenarios()                            │
+│  - getPersonalScenarios()                           │
+│  - getScenarioDetail() — soft-lock (no 403)        │
+│  - redeemGiftCode() — grant access via KOL bundle  │
+└──────────────────────────────────────────────────────┘
+```
+
+**ScenarioChatController** (Roleplay Conversations):
+```
+┌──────────────────────────────────────────────────────┐
+│        POST /scenario/chat (roleplay turns)         │
+│        GET /scenario/conversations/:id (transcript)  │
+│        GET /scenario/:scenarioId/conversations      │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │        Scenario Chat Service                         │
+│  - processChat(scenarioId, message?, convId?)       │
 │  - validateScenarioAccess()                         │
 │  - generateAIReply()                                │
 │  - updateConversationState()                        │
-│  - checkCompletionStatus()                          │
+│  - checkCompletionStatus() — max 12 turns          │
+│  - getConversation(convId)                          │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐

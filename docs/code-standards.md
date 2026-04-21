@@ -17,23 +17,24 @@ src/
 │   ├── app-configuration.ts  # Config interface & factory
 │   └── environment-validation-schema.ts  # Joi validation
 ├── database/                  # Database layer
-│   ├── entities/             # TypeORM entities (18 entities + 2 enums)
-│   ├── migrations/           # Database migrations (30 total, timestamped)
-│   ├── database.module.ts    # TypeORM module configuration (18 entities registered)
+│   ├── entities/             # TypeORM entities (21 total + 4 enums)
+│   ├── migrations/           # Database migrations (35 total, timestamped)
+│   ├── database.module.ts    # TypeORM module configuration (21 entities registered)
 │   └── supabase-storage.service.ts   # Supabase Storage wrapper
-└── modules/                   # Feature modules (domain-driven) — 12 total
-    ├── auth/                 # Authentication & authorization
-    ├── user/                 # User management
-    ├── language/             # Language preferences & proficiency
-    ├── ai/                   # AI-powered learning features
-    ├── onboarding/           # Anonymous onboarding chat
-    ├── subscription/         # RevenueCat subscriptions
-    ├── email/                # Nodemailer SMTP service (internal)
-    ├── lesson/               # Lesson catalog & scenario grouping
-    ├── scenario/             # Scenario roleplay conversations
-    ├── vocabulary/           # Vocabulary CRUD + SRS review
+└── modules/                   # Feature modules (domain-driven) — 13 total
     ├── admin-content/        # Admin content generation & lifecycle
-    └── progress/             # Progress tracking (internal)
+    ├── ai/                   # AI-powered learning features (LangChain, STT, Langfuse)
+    ├── auth/                 # Authentication & authorization (Firebase, JWT, email disabled)
+    ├── email/                # Nodemailer SMTP service with graceful init
+    ├── kol-bundle/           # KOL bundle creation & gift codes
+    ├── language/             # Language preferences, proficiency levels (CEFR/JLPT/HSK/TOPIK)
+    ├── lesson/               # Lesson catalog with scenario grouping & auto-enroll
+    ├── onboarding/           # Anonymous session chat, resume support
+    ├── progress/             # Progress tracking service (internal)
+    ├── scenario/             # Scenario chat (2 controllers: listing + chat conversation)
+    ├── subscription/         # RevenueCat webhooks & subscription management
+    ├── user/                 # User profile management
+    └── vocabulary/           # Vocabulary CRUD + Leitner SRS review
 ```
 
 ## API JSON Key Convention
