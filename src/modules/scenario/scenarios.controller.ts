@@ -1,11 +1,15 @@
-import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
 import {
-  ApiBearerAuth,
-  ApiHeader,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import {
@@ -19,8 +23,10 @@ import { ScenarioDefaultDto } from './dto/scenario-default.dto';
 import { ScenarioPersonalDto } from './dto/scenario-personal.dto';
 import { RedeemScenarioDto, RedeemResponseDto } from './dto/redeem-scenario.dto';
 import { ListScenariosResponseDto } from './dto/list-scenarios-response.dto';
+import { ScenarioDetailDto } from './dto/scenario-detail.dto';
 import { ScenariosListingService } from './services/scenarios-listing.service';
 import { ScenariosRedeemService } from './services/scenarios-redeem.service';
+import { ScenariosDetailService } from './services/scenarios-detail.service';
 
 const LANGUAGE_HEADER: Parameters<typeof ApiHeader>[0] = {
   name: 'X-Learning-Language',
@@ -35,6 +41,7 @@ export class ScenariosController {
   constructor(
     private readonly listingService: ScenariosListingService,
     private readonly redeemService: ScenariosRedeemService,
+    private readonly detailService: ScenariosDetailService,
   ) {}
 
   @Get('default')
@@ -62,6 +69,22 @@ export class ScenariosController {
     @Query() query: ListScenariosQueryDto,
   ) {
     return this.listingService.listPersonal(user.id, lang.id, query.page, query.limit);
+  }
+
+  @Get(':id')
+  @AutoEnrollLanguage()
+  @ApiHeader(LANGUAGE_HEADER)
+  @ApiOperation({ summary: 'Get scenario detail' })
+  @ApiResponse({ status: 200, type: ScenarioDetailDto })
+  @ApiResponse({ status: 400, description: 'Missing or invalid X-Learning-Language header' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Scenario not found or language mismatch' })
+  getById(
+    @CurrentUser() user: { id: string },
+    @ActiveLanguage() lang: ActiveLanguageContext,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.detailService.get(user.id, id, lang.id);
   }
 
   @Post('redeem')

@@ -7,6 +7,10 @@ import { AccessTier } from '@/database/entities/access-tier.enum';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
 import { SubscriptionService } from '@/modules/subscription/subscription.service';
 
+export type ScenarioAccessResult =
+  | { scenario: Scenario; isLocked: false; lockReason?: never }
+  | { scenario: Scenario; isLocked: true; lockReason: 'premium_required' };
+
 /**
  * Handles scenario access control:
  * - Verifies scenario exists and is active
@@ -27,7 +31,42 @@ export class ScenarioAccessService {
    * If languageId is provided, also verifies scenario belongs to that language.
    * Throws NotFoundException or ForbiddenException on failure.
    */
-  async findAccessibleScenario(userId: string, scenarioId: string, languageId?: string): Promise<Scenario> {
+  async findAccessibleScenario(
+    userId: string,
+    scenarioId: string,
+    languageId?: string,
+  ): Promise<Scenario> {
+    const scenario = await this.fetchPublishedScenario(scenarioId, languageId);
+
+    if (scenario.accessTier === AccessTier.PREMIUM) {
+      await this.assertPremiumAccess(userId, scenarioId);
+    }
+
+    return scenario;
+  }
+
+  /**
+   * Returns scenario with soft-lock state instead of throwing for premium blocks.
+   * Throws NotFoundException only for hard errors (missing, unpublished, language mismatch).
+   */
+  async checkAccess(
+    userId: string,
+    scenarioId: string,
+    languageId?: string,
+  ): Promise<ScenarioAccessResult> {
+    const scenario = await this.fetchPublishedScenario(scenarioId, languageId);
+
+    if (scenario.accessTier !== AccessTier.PREMIUM) {
+      return { scenario, isLocked: false };
+    }
+
+    const hasAccess = await this.evaluatePremiumAccess(userId, scenarioId);
+    return hasAccess
+      ? { scenario, isLocked: false }
+      : { scenario, isLocked: true, lockReason: 'premium_required' };
+  }
+
+  private async fetchPublishedScenario(scenarioId: string, languageId?: string): Promise<Scenario> {
     const scenario = await this.scenarioRepo.findOne({
       where: { id: scenarioId, status: ContentStatus.PUBLISHED },
       relations: ['category'],
@@ -41,27 +80,22 @@ export class ScenarioAccessService {
       throw new NotFoundException('Scenario not available for active language');
     }
 
-    if (scenario.accessTier === AccessTier.PREMIUM) {
-      await this.assertPremiumAccess(userId, scenarioId);
-    }
-
     return scenario;
   }
 
-  /**
-   * Checks subscription or explicit access grant for a premium scenario.
-   */
   private async assertPremiumAccess(userId: string, scenarioId: string): Promise<void> {
+    const hasAccess = await this.evaluatePremiumAccess(userId, scenarioId);
+    if (!hasAccess) {
+      throw new ForbiddenException('Premium subscription required to access this scenario');
+    }
+  }
+
+  private async evaluatePremiumAccess(userId: string, scenarioId: string): Promise<boolean> {
     const [subscription, explicitAccess] = await Promise.all([
       this.subscriptionService.getUserSubscription(userId),
       this.accessRepo.findOne({ where: { userId, scenarioId } }),
     ]);
 
-    const hasPremium = subscription?.isActive === true;
-    const hasGrant = explicitAccess !== null;
-
-    if (!hasPremium && !hasGrant) {
-      throw new ForbiddenException('Premium subscription required to access this scenario');
-    }
+    return subscription?.isActive === true || explicitAccess !== null;
   }
 }

@@ -176,4 +176,64 @@ describe('ScenarioAccessService', () => {
       });
     });
   });
+
+  describe('checkAccess', () => {
+    const mockLanguageId = 'lang-uuid-en';
+    const mockFreeScenarioWithLang = { ...mockFreeScenario, languageId: mockLanguageId };
+    const mockPremiumScenarioWithLang = { ...mockPremiumScenario, languageId: mockLanguageId };
+
+    it('should throw NotFoundException when scenario not found', async () => {
+      scenarioRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.checkAccess(mockUserId, 'non-existent-id', mockLanguageId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw NotFoundException when language mismatch', async () => {
+      scenarioRepo.findOne.mockResolvedValue({ ...mockFreeScenario, languageId: 'lang-uuid-es' });
+
+      await expect(service.checkAccess(mockUserId, mockFreeScenario.id, mockLanguageId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should return isLocked=false for FREE tier', async () => {
+      scenarioRepo.findOne.mockResolvedValue(mockFreeScenarioWithLang);
+
+      const result = await service.checkAccess(mockUserId, mockFreeScenario.id, mockLanguageId);
+
+      expect(result.isLocked).toBe(false);
+      expect(result.scenario).toEqual(mockFreeScenarioWithLang);
+    });
+
+    it('should return isLocked=false for PREMIUM with active subscription', async () => {
+      scenarioRepo.findOne.mockResolvedValue(mockPremiumScenarioWithLang);
+      subscriptionService.getUserSubscription.mockResolvedValue(mockActiveSubscription);
+      accessRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.checkAccess(mockUserId, mockPremiumScenario.id, mockLanguageId);
+
+      expect(result.isLocked).toBe(false);
+    });
+
+    it('should return isLocked=false for PREMIUM with explicit grant', async () => {
+      scenarioRepo.findOne.mockResolvedValue(mockPremiumScenarioWithLang);
+      subscriptionService.getUserSubscription.mockResolvedValue(null);
+      accessRepo.findOne.mockResolvedValue({ userId: mockUserId, scenarioId: mockPremiumScenario.id });
+
+      const result = await service.checkAccess(mockUserId, mockPremiumScenario.id, mockLanguageId);
+
+      expect(result.isLocked).toBe(false);
+    });
+
+    it('should return isLocked=true with lockReason for PREMIUM without access', async () => {
+      scenarioRepo.findOne.mockResolvedValue(mockPremiumScenarioWithLang);
+      subscriptionService.getUserSubscription.mockResolvedValue(null);
+      accessRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.checkAccess(mockUserId, mockPremiumScenario.id, mockLanguageId);
+
+      expect(result.isLocked).toBe(true);
+      if (result.isLocked) {
+        expect(result.lockReason).toBe('premium_required');
+      }
+    });
+  });
 });
