@@ -49,7 +49,7 @@ export class GeminiLLMProvider implements LLMProvider {
         ? response.content
         : JSON.stringify(response.content);
     } catch (error) {
-      this.logger.error('Gemini chat failed', (error as Error)?.message);
+      this.logFailure('chat', error, options);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
     }
   }
@@ -67,8 +67,30 @@ export class GeminiLLMProvider implements LLMProvider {
         yield typeof content === 'string' ? content : JSON.stringify(content);
       }
     } catch (error) {
-      this.logger.error('Gemini stream failed', error);
+      this.logFailure('stream', error, options);
       throw new ServiceUnavailableException('AI service temporarily unavailable');
     }
+  }
+
+  private logFailure(op: 'chat' | 'stream', error: unknown, options: LLMOptions): void {
+    const err = error as {
+      message?: string;
+      name?: string;
+      status?: number;
+      code?: string | number;
+      response?: { status?: number; data?: unknown };
+      stack?: string;
+    };
+    const details = {
+      op,
+      model: options.model,
+      feature: options.metadata?.feature,
+      name: err?.name,
+      status: err?.status ?? err?.response?.status,
+      code: err?.code,
+      responseData: err?.response?.data,
+      message: err?.message,
+    };
+    this.logger.error(`Gemini ${op} failed: ${JSON.stringify(details)}`, err?.stack);
   }
 }
