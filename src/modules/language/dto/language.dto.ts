@@ -1,8 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * DTO for language response (available languages list)
- */
 export class LanguageDto {
   @ApiProperty({ description: 'Language ID' })
   id!: string;
@@ -13,10 +10,10 @@ export class LanguageDto {
   @ApiProperty({ description: 'Language name in English' })
   name!: string;
 
-  @ApiProperty({ description: 'Language name in native script', required: false })
+  @ApiPropertyOptional({ description: 'Language name in native script' })
   nativeName?: string;
 
-  @ApiProperty({ description: 'URL to language flag image', required: false })
+  @ApiPropertyOptional({ description: 'URL to language flag image' })
   flagUrl?: string;
 
   @ApiProperty({ description: 'Available as native language option' })
@@ -24,4 +21,12 @@ export class LanguageDto {
 
   @ApiProperty({ description: 'Available as learning language option' })
   isLearningAvailable!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Ordered proficiency levels for this language; null for frameworkless languages (vi, th)',
+    example: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+    nullable: true,
+    type: [String],
+  })
+  levels!: string[] | null;
 }

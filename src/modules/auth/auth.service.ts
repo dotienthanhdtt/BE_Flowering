@@ -20,6 +20,7 @@ import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
 import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto, FirebaseAuthDto } from './dto';
 import { UserLanguageDto } from '../language/dto/user-language.dto';
+import { LANGUAGE_FRAMEWORKS, FrameworkCode } from '../../common/constants/language-levels';
 import { FirebaseTokenStrategy, OAuthProvider } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 
@@ -139,11 +140,15 @@ export class AuthService {
     if (user) {
       // Update profile fields that may have changed (e.g. Google avatar, name, email verification)
       const profileUpdate: Partial<User> = {};
-      if (providerUser.displayName && !user.displayName) profileUpdate.displayName = providerUser.displayName;
-      if (providerUser.avatarUrl && providerUser.avatarUrl !== user.avatarUrl) profileUpdate.avatarUrl = providerUser.avatarUrl;
-      if (providerUser.firebaseUid && !user.firebaseUid) profileUpdate.firebaseUid = providerUser.firebaseUid;
+      if (providerUser.displayName && !user.displayName)
+        profileUpdate.displayName = providerUser.displayName;
+      if (providerUser.avatarUrl && providerUser.avatarUrl !== user.avatarUrl)
+        profileUpdate.avatarUrl = providerUser.avatarUrl;
+      if (providerUser.firebaseUid && !user.firebaseUid)
+        profileUpdate.firebaseUid = providerUser.firebaseUid;
       if (providerUser.emailVerified && !user.emailVerified) profileUpdate.emailVerified = true;
-      if (providerUser.phoneNumber && providerUser.phoneNumber !== user.phoneNumber) profileUpdate.phoneNumber = providerUser.phoneNumber;
+      if (providerUser.phoneNumber && providerUser.phoneNumber !== user.phoneNumber)
+        profileUpdate.phoneNumber = providerUser.phoneNumber;
 
       if (Object.keys(profileUpdate).length > 0) {
         await this.userRepository.update({ id: user.id }, profileUpdate);
@@ -161,7 +166,9 @@ export class AuthService {
           [providerColumn]: providerUser.providerId,
           firebaseUid: providerUser.firebaseUid,
           emailVerified: providerUser.emailVerified,
-          ...(providerUser.displayName && !existingEmailUser.displayName ? { displayName: providerUser.displayName } : {}),
+          ...(providerUser.displayName && !existingEmailUser.displayName
+            ? { displayName: providerUser.displayName }
+            : {}),
           ...(providerUser.avatarUrl ? { avatarUrl: providerUser.avatarUrl } : {}),
           ...(providerUser.phoneNumber ? { phoneNumber: providerUser.phoneNumber } : {}),
         };
@@ -380,18 +387,22 @@ export class AuthService {
 
   /**
    * Idempotently create or reactivate the learner's UserLanguage row based on the
-   * onboarding conversation's language. Other active user_languages rows are left
-   * untouched — a user may have multiple active languages simultaneously.
+   * onboarding conversation's language. Deactivates other active languages for this user.
    */
   private async bootstrapUserLanguage(userId: string, languageId: string): Promise<void> {
     await this.userLanguageRepository.manager.transaction(async (mgr) => {
       const repo = mgr.getRepository(UserLanguage);
+
+      // Deactivate any existing active languages for this user
+      await repo.update({ userId, isActive: true }, { isActive: false });
+
+      // Check if a row exists for this specific language
       const existing = await repo.findOne({ where: { userId, languageId } });
       if (existing) {
-        if (!existing.isActive) {
-          await repo.update(existing.id, { isActive: true });
-        }
+        // Reactivate the existing inactive row
+        await repo.update(existing.id, { isActive: true });
       } else {
+        // Create a new active row for this language
         await repo.save(repo.create({ userId, languageId, isActive: true }));
       }
     });
@@ -437,22 +448,26 @@ export class AuthService {
       order: { createdAt: 'DESC' },
     });
 
-    return userLanguages.map((ul) => ({
-      id: ul.id,
-      languageId: ul.languageId,
-      proficiencyLevel: ul.proficiencyLevel,
-      isActive: ul.isActive,
-      createdAt: ul.createdAt,
-      language: {
-        id: ul.language.id,
-        code: ul.language.code,
-        name: ul.language.name,
-        nativeName: ul.language.nativeName,
-        flagUrl: ul.language.flagUrl,
-        isNativeAvailable: ul.language.isNativeAvailable,
-        isLearningAvailable: ul.language.isLearningAvailable,
-      },
-    }));
+    return userLanguages.map((ul) => {
+      const fw = ul.language?.levelFramework as FrameworkCode | null;
+      return {
+        id: ul.id,
+        languageId: ul.languageId,
+        proficiencyLevel: ul.proficiencyLevel,
+        isActive: ul.isActive,
+        createdAt: ul.createdAt,
+        language: {
+          id: ul.language.id,
+          code: ul.language.code,
+          name: ul.language.name,
+          nativeName: ul.language.nativeName,
+          flagUrl: ul.language.flagUrl,
+          isNativeAvailable: ul.language.isNativeAvailable,
+          isLearningAvailable: ul.language.isLearningAvailable,
+          levels: fw ? [...LANGUAGE_FRAMEWORKS[fw]] : null,
+        },
+      };
+    });
   }
 
   private mapToUserDto(user: User): UserResponseDto {

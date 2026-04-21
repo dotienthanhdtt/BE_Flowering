@@ -171,6 +171,7 @@ export class LanguageService implements OnModuleInit {
   }
 
   private mapToLanguageDto(lang: Language): LanguageDto {
+    const fw = lang.levelFramework as FrameworkCode | null;
     return {
       id: lang.id,
       code: lang.code,
@@ -179,6 +180,7 @@ export class LanguageService implements OnModuleInit {
       flagUrl: lang.flagUrl,
       isNativeAvailable: lang.isNativeAvailable,
       isLearningAvailable: lang.isLearningAvailable,
+      levels: fw ? [...LANGUAGE_FRAMEWORKS[fw]] : null,
     };
   }
 
@@ -187,7 +189,6 @@ export class LanguageService implements OnModuleInit {
       id: ul.id,
       languageId: ul.languageId,
       proficiencyLevel: ul.proficiencyLevel,
-      levelFramework: ul.language?.levelFramework ?? null,
       isActive: ul.isActive,
       createdAt: ul.createdAt,
       language: this.mapToLanguageDto(ul.language!),

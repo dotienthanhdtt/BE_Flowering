@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { LanguageDto } from './language.dto';
 
 export class UserLanguageDto {
@@ -11,19 +11,12 @@ export class UserLanguageDto {
   @ApiProperty({ description: 'Proficiency level (framework-native, e.g. A1, N3, HSK2, TOPIK1)' })
   proficiencyLevel!: string;
 
-  @ApiPropertyOptional({
-    description:
-      'Level framework code (CEFR, JLPT, HSK, TOPIK, or null for frameworkless languages)',
-    nullable: true,
-  })
-  levelFramework!: string | null;
-
   @ApiProperty({ description: 'Whether actively learning', default: true })
   isActive!: boolean;
 
   @ApiProperty({ description: 'Date added to learning list' })
   createdAt!: Date;
 
-  @ApiProperty({ description: 'Language details', type: LanguageDto })
+  @ApiProperty({ description: 'Language details including code, names, flag and available levels', type: LanguageDto })
   language!: LanguageDto;
 }
