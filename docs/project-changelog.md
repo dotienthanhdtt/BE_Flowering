@@ -1,9 +1,20 @@
 # Project Changelog
 
-**Last Updated:** 2026-04-20
+**Last Updated:** 2026-04-21
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-04-21
+
+### Added
+
+- **GET /scenarios/:id — Scenario Detail Endpoint:** Returns full scenario detail with soft-lock access state
+  - `isLocked=true, lockReason="premium_required"` for premium scenarios without subscription (no 403)
+  - `ScenarioAccessService.checkAccess()` non-throwing method; existing `findAccessibleScenario` (chat flow) unchanged
+  - `ScenariosDetailService`, `ScenarioDetailDto`, `ScenariosModule` wired with `SubscriptionModule`
+
+---
 
 ## 2026-04-20 — Security Hardening Sprint (Final)
 

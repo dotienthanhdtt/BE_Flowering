@@ -295,7 +295,9 @@ List available languages (public).
 #### GET /languages/user
 Get the caller's learning languages.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "User languages found", data: [{id, language: {...}, proficiency_level, is_active}]}`
+**Auth:** Required | **Response (200):** `{code: 1, message: "User languages found", data: [{id, language: {...}, proficiency_level, level_framework, is_active}]}`
+
+**Note:** `proficiency_level` is now language-specific (e.g., CEFR: A1–C2, JLPT: N5–N1, HSK: HSK1–HSK6, TOPIK: TOPIK1–TOPIK6). `level_framework` indicates the framework (CEFR/JLPT/HSK/TOPIK) or null for native-only languages.
 
 ---
 
@@ -306,9 +308,11 @@ Add language to the caller's learning list.
 ```json
 {
   "language_id": "uuid",
-  "proficiency_level": "beginner|intermediate|advanced|native"
+  "proficiency_level": "A1"
 }
 ```
+
+**Note:** `proficiency_level` must be valid for the language's framework. Framework-specific examples: CEFR (A1–C2), JLPT (N5–N1), HSK (HSK1–HSK6), TOPIK (TOPIK1–TOPIK6). Omit field to auto-default to lowest level.
 
 **Response (201):** `{code: 1, message: "Language added", data: {...}}`
 
@@ -320,9 +324,11 @@ Update language proficiency.
 **Auth:** Required | **Request:**
 ```json
 {
-  "proficiency_level": "intermediate"
+  "proficiency_level": "B1"
 }
 ```
+
+**Note:** `proficiency_level` must be valid for the language's framework.
 
 **Response (200):** `{code: 1, message: "Language updated", data: {...}}`
 
@@ -380,6 +386,30 @@ List user's AI-generated + KOL-granted scenarios (merged). **Auth:** Required | 
 Redeem a KOL gift code to grant access to scenarios. **Auth:** Required | **Rate Limit:** 5 req/min | **Request:** `{gift_code: "string"}` | **Response (200):** `{code: 1, message: "Scenarios redeemed", data: {redeemed_count: int, scenarios: [{id, title}]}}`
 
 **Behavior:** Validates gift code exists + is active in KolBundle. For each bundle scenario, creates UserAiScenario row if user doesn't already have access. Idempotent (duplicate codes succeed without double-grants). **Errors:** 404 (code not found), 400 (invalid), 429 (throttled)
+
+---
+
+#### GET /scenarios/:id
+Get full scenario detail including access state. **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Path:** `id` (uuid)
+
+**Response (200):** `{code: 1, message: "...", data: {id, title, description?, imageUrl?, difficulty, languageId, orderIndex, category: {id, name}, accessTier, isLocked, lockReason?}}`
+
+**Soft-lock behavior:** Premium scenarios return `isLocked=true, lockReason="premium_required"` instead of 403, enabling mobile upgrade CTA in a single round-trip. **Errors:** 401, 404 (not found / wrong language / unpublished)
+
+Sample responses:
+```json
+// FREE tier — 200
+{"code":1,"data":{"id":"uuid","title":"Ordering Food","description":"Learn how to order at a restaurant","difficulty":"beginner","languageId":"uuid","orderIndex":1,"category":{"id":"uuid","name":"Restaurant"},"accessTier":"free","isLocked":false}}
+
+// PREMIUM, no subscription — 200
+{"code":1,"data":{"id":"uuid","title":"Luxury Hotel","description":"Practice checking into a 5-star hotel","difficulty":"intermediate","languageId":"uuid","orderIndex":5,"category":{"id":"uuid","name":"Hotel"},"accessTier":"premium","isLocked":true,"lockReason":"premium_required"}}
+
+// PREMIUM, active subscription — 200
+{"code":1,"data":{"id":"uuid","title":"Luxury Hotel","description":"Practice checking into a 5-star hotel","difficulty":"intermediate","languageId":"uuid","orderIndex":5,"category":{"id":"uuid","name":"Hotel"},"accessTier":"premium","isLocked":false}}
+
+// Not found / language mismatch — 404
+{"code":0,"message":"Scenario not found"}
+```
 
 ---
 
