@@ -17,6 +17,7 @@ import {
 import { UnifiedLLMService } from './unified-llm.service';
 import { PromptLoaderService } from './prompt-loader.service';
 import { LLMModel } from '../providers/llm-models.enum';
+import { LangfuseFeature } from '../langfuse-feature.enum';
 
 export interface WordTranslationResult {
   original: string;
@@ -68,7 +69,7 @@ export class TranslationService {
       model: LLMModel.OPENAI_GPT4_1_NANO,
       temperature: 0,
       metadata: {
-        feature: 'translate-word',
+        feature: LangfuseFeature.TRANSLATE_WORD,
         userId: userId ?? conversationId,
         conversationId,
         sourceLang,
@@ -154,7 +155,7 @@ export class TranslationService {
       model: LLMModel.OPENAI_GPT4_1_NANO,
       temperature: 0,
       metadata: {
-        feature: 'translate-sentence',
+        feature: LangfuseFeature.TRANSLATE_SENTENCE,
         userId: userId ?? conversationId,
         conversationId: message.conversationId,
         messageId,

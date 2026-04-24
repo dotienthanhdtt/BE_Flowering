@@ -21,6 +21,7 @@ import { AccessTier } from '@/database/entities/access-tier.enum';
 import { UnifiedLLMService } from '@/modules/ai/services/unified-llm.service';
 import { LLMModel } from '@/modules/ai/providers/llm-models.enum';
 import { GenerateContentDto, ContentType } from './dto/generate-content.dto';
+import { LangfuseFeature } from '@/modules/ai/langfuse-feature.enum';
 import { ListContentQueryDto } from './dto/list-content-query.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
 
@@ -94,7 +95,7 @@ export class AdminContentService implements OnModuleInit {
       model: LLMModel.OPENAI_GPT4O,
       temperature: 0.7,
       maxTokens: 2048,
-      metadata: { feature: 'admin-content-generate', adminId, contentType: dto.contentType },
+      metadata: { feature: LangfuseFeature.ADMIN_CONTENT_GENERATE, adminId, contentType: dto.contentType },
     });
 
     const items = this.parseJson(raw, dto.count);

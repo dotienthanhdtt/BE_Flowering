@@ -17,6 +17,7 @@ import { LLMModel } from '@/modules/ai/providers/llm-models.enum';
 import { LanguageService } from '@/modules/language/language.service';
 import { VocabularyReviewService } from '@/modules/vocabulary/services/vocabulary-review.service';
 import { ScenarioAccessService } from './scenario-access.service';
+import { LangfuseFeature } from '@/modules/ai/langfuse-feature.enum';
 import { VocabularyInjectionService } from './vocabulary-injection.service';
 import { matchesWord } from './vocabulary-usage-matcher';
 import {
@@ -135,7 +136,8 @@ export class ScenarioChatService {
     const reply = await this.llmService.chat(messages, {
       model: this.defaultModel,
       metadata: {
-        feature: 'scenario_chat',
+        feature: LangfuseFeature.SCENARIO_CHAT,
+        userId,
         conversationId: conversation.id,
         turn: currentTurn,
         scenarioId: scenario.id,

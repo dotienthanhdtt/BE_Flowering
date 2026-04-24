@@ -12,6 +12,7 @@ import { PromptLoaderService } from './prompt-loader.service';
 import { LLMModel, ThinkingLevel } from '../providers/llm-models.enum';
 import { AiConversation, AiConversationMessage, MessageRole } from '../../../database/entities';
 import { ConversationContext } from '../dto';
+import { LangfuseFeature } from '../langfuse-feature.enum';
 
 /**
  * Main AI learning agent service providing tutoring features:
@@ -63,7 +64,7 @@ export class LearningAgentService {
       model: model || this.defaultModel,
       metadata: {
         userId,
-        feature: 'chat',
+        feature: LangfuseFeature.CHAT,
         conversationId: context.conversationId,
       },
     });
@@ -111,7 +112,7 @@ export class LearningAgentService {
       model: model || this.defaultModel,
       metadata: {
         userId,
-        feature: 'chat-stream',
+        feature: LangfuseFeature.CHAT_STREAM,
         conversationId: context.conversationId,
       },
     })) {
@@ -146,7 +147,7 @@ export class LearningAgentService {
       temperature: 0.0,
       maxTokens: 10000,
       thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-      metadata: { feature: 'correction-check', conversationId },
+      metadata: { feature: LangfuseFeature.CORRECTION_CHECK, conversationId },
     });
 
     const trimmed = response.trim().replace(/^["']|["']$/g, '');

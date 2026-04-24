@@ -636,7 +636,8 @@ describe('ScenarioChatService', () => {
         expect.any(Array),
         expect.objectContaining({
           metadata: expect.objectContaining({
-            feature: 'scenario_chat',
+            feature: 'scenario-chat',
+            userId: mockUserId,
             conversationId: mockConversationId,
             turn: 1,
             scenarioId: mockScenarioId,

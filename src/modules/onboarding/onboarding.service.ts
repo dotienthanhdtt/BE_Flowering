@@ -16,6 +16,7 @@ import { UnifiedLLMService } from '../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../ai/services/prompt-loader.service';
 import { onboardingConfig } from './onboarding.config';
 import { OnboardingChatDto, OnboardingCompleteDto } from './dto';
+import { LangfuseFeature } from '../ai/langfuse-feature.enum';
 
 @Injectable()
 export class OnboardingService {
@@ -110,7 +111,7 @@ export class OnboardingService {
       model: onboardingConfig.llmModel,
       temperature: onboardingConfig.temperature,
       maxTokens: onboardingConfig.maxTokens,
-      metadata: { feature: 'onboarding-chat', conversationId: conversation.id, turn: currentTurn },
+      metadata: { feature: LangfuseFeature.ONBOARDING_CHAT, conversationId: conversation.id, turn: currentTurn },
     });
 
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn);
@@ -168,7 +169,7 @@ export class OnboardingService {
       model: onboardingConfig.llmModel,
       temperature: 0,
       maxTokens: 512,
-      metadata: { feature: 'onboarding-extraction', conversationId: conversation.id },
+      metadata: { feature: LangfuseFeature.ONBOARDING_EXTRACTION, conversationId: conversation.id },
     });
 
     const profile = this.parseExtraction(response);
@@ -248,7 +249,7 @@ export class OnboardingService {
         model: onboardingConfig.llmModel,
         temperature: 0,
         maxTokens: 1024,
-        metadata: { feature: 'onboarding-scenarios', conversationId },
+        metadata: { feature: LangfuseFeature.ONBOARDING_SCENARIOS, conversationId },
       });
 
       return this.parseScenarios(response);
