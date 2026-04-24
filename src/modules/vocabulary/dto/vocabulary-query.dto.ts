@@ -3,7 +3,10 @@ import { IsInt, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-
 import { Type } from 'class-transformer';
 
 export class VocabularyQueryDto {
-  @ApiPropertyOptional({ description: 'Filter by target language code (e.g. "en", "es")' })
+  @ApiPropertyOptional({
+    description:
+      'Legacy fallback filter by target language code when X-Learning-Language is not provided',
+  })
   @IsOptional()
   @IsString()
   @Length(2, 10)

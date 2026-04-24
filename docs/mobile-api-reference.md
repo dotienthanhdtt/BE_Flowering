@@ -265,7 +265,8 @@ Fetch conversation transcript.
 ## Vocabulary *(auth required)*
 
 ### GET /vocabulary
-Query: `?language=<language_code>&box=1-5&search=<term>&page=1&limit=20`
+Header: `X-Learning-Language: <language_code>` (preferred; filters `target_lang`)
+Query: `?box=1-5&search=<term>&page=1&limit=20&language_code=<language_code>` (`language_code` is legacy fallback)
 ```json
 // Response data
 {

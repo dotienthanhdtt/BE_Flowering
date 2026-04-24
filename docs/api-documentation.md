@@ -460,7 +460,7 @@ Fetch conversation transcript (owner only, chronological). **Auth:** Required | 
 **Auth:** Required | **Rate Limit:** None (non-AI endpoint)
 
 #### GET /vocabulary
-List user's vocabulary. **Auth:** Required | **Query:** language_code, box (1-5), search, page (default 1), limit (default 20, max 100) | **Response:** `{data: {items: [{id, word, translation, source_lang, target_lang, part_of_speech, pronunciation, definition, examples, box, due_at, last_reviewed_at, review_count, correct_count, created_at}], total, page, limit}}`
+List user's vocabulary for the active learning language. **Auth:** Required | **Header:** `X-Learning-Language: <code>` (preferred, determines `target_lang`) | **Query:** box (1-5), search, page (default 1), limit (default 20, max 100), `language_code` (legacy fallback only) | **Response:** `{data: {items: [{id, word, translation, source_lang, target_lang, part_of_speech, pronunciation, definition, examples, box, due_at, last_reviewed_at, review_count, correct_count, created_at}], total, page, limit}}`
 
 ---
 

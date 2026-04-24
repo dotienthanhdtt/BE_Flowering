@@ -89,6 +89,34 @@ describe('VocabularyService', () => {
       );
     });
 
+    it('uses active language over legacy languageCode filter', async () => {
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.list(
+        'u-1',
+        {
+          languageCode: 'fr',
+          page: 1,
+          limit: 10,
+        } as any,
+        'es',
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('v.targetLang = :lang', { lang: 'es' });
+    });
+
+    it('falls back to legacy languageCode when active language is absent', async () => {
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.list('u-1', {
+        languageCode: 'de',
+        page: 1,
+        limit: 10,
+      } as any);
+
+      expect(qb.andWhere).toHaveBeenCalledWith('v.targetLang = :lang', { lang: 'de' });
+    });
+
     it('computes pagination offset for page > 1', async () => {
       qb.getManyAndCount.mockResolvedValue([[], 0]);
       await service.list('u-1', { page: 3, limit: 15 } as any);

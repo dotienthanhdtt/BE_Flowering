@@ -12,11 +12,16 @@ export class VocabularyService {
     private readonly repo: Repository<Vocabulary>,
   ) {}
 
-  async list(userId: string, q: VocabularyQueryDto): Promise<VocabularyListDto> {
+  async list(
+    userId: string,
+    q: VocabularyQueryDto,
+    activeLanguageCode?: string,
+  ): Promise<VocabularyListDto> {
     const qb = this.repo.createQueryBuilder('v').where('v.userId = :userId', { userId });
+    const languageCode = activeLanguageCode ?? q.languageCode;
 
-    if (q.languageCode) {
-      qb.andWhere('v.targetLang = :lang', { lang: q.languageCode });
+    if (languageCode) {
+      qb.andWhere('v.targetLang = :lang', { lang: languageCode });
     }
     if (q.box !== undefined) {
       qb.andWhere('v.box = :box', { box: q.box });
