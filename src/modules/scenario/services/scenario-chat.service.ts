@@ -79,12 +79,20 @@ export class ScenarioChatService {
 
     // 2. Resolve conversation. If the client supplied a conversationId for a
     //    DONE conversation, transparently start a fresh one instead of erroring.
-    let conversation = dto.conversationId
-      ? await this.resolveExisting(userId, dto.conversationId, dto.scenarioId)
-      : await this.findOrCreate(userId, scenario.id, scenario.languageId);
+    let conversation: AiConversation;
+    let createdNew = false;
+    if (dto.conversationId) {
+      conversation = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
+    } else {
+      const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
+      conversation = result.conversation;
+      createdNew = result.created;
+    }
 
     if (conversation.status === ScenarioChatStatus.DONE) {
-      conversation = await this.findOrCreate(userId, scenario.id, scenario.languageId);
+      const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
+      conversation = result.conversation;
+      createdNew = result.created;
     }
 
     // 4. Load language context for the request's active learning language
@@ -125,12 +133,13 @@ export class ScenarioChatService {
     });
 
     // 8. Build messages for LLM. Gemini requires at least one user message —
-    //    on the opening turn with no user input, push a 'Start' placeholder
-    //    so the model produces the scenario's opening greeting.
+    //    only on the very first turn of a freshly-created conversation, push a
+    //    'Start' placeholder so the model produces the scenario's opening
+    //    greeting. For existing conversations with no user input, do nothing.
     const messages: BaseMessage[] = [new SystemMessage(systemPrompt), ...history];
     if (dto.message) {
       messages.push(new HumanMessage(dto.message));
-    } else if (status === 'opening') {
+    } else if (createdNew && history.length === 0) {
       messages.push(new HumanMessage('Start'));
     }
 
@@ -209,7 +218,7 @@ export class ScenarioChatService {
     userId: string,
     scenarioId: string,
     languageId: string,
-  ): Promise<AiConversation> {
+  ): Promise<{ conversation: AiConversation; created: boolean }> {
     const existing = await this.convoRepo
       .createQueryBuilder('c')
       .where('c.userId = :userId AND c.scenarioId = :scenarioId', { userId, scenarioId })
@@ -217,10 +226,10 @@ export class ScenarioChatService {
       .orderBy('c.createdAt', 'DESC')
       .getOne();
 
-    if (existing) return existing;
+    if (existing) return { conversation: existing, created: false };
 
     try {
-      return await this.convoRepo.save(
+      const inserted = await this.convoRepo.save(
         this.convoRepo.create({
           userId,
           scenarioId,
@@ -230,6 +239,7 @@ export class ScenarioChatService {
           metadata: { maxTurns: MAX_TURNS },
         }),
       );
+      return { conversation: inserted, created: true };
     } catch (err: unknown) {
       // Postgres unique violation (23505): concurrent request already inserted the row.
       // Re-query and return that row instead of propagating the error.
@@ -240,7 +250,7 @@ export class ScenarioChatService {
           .andWhere('c.status = :active', { active: ScenarioChatStatus.CHATTING })
           .orderBy('c.createdAt', 'DESC')
           .getOne();
-        if (race) return race;
+        if (race) return { conversation: race, created: false };
       }
       throw err;
     }
