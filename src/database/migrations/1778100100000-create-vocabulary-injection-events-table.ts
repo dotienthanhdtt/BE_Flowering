@@ -5,7 +5,7 @@ export class CreateVocabularyInjectionEventsTable1778100100000 implements Migrat
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TABLE "vocabulary_injection_events" (
+      CREATE TABLE IF NOT EXISTS "vocabulary_injection_events" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         "conversation_id" uuid NOT NULL REFERENCES "ai_conversations"("id") ON DELETE CASCADE,
         "vocabulary_id" uuid NOT NULL REFERENCES "vocabulary"("id") ON DELETE CASCADE,
@@ -15,10 +15,10 @@ export class CreateVocabularyInjectionEventsTable1778100100000 implements Migrat
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX "idx_vocab_inj_events_conv" ON "vocabulary_injection_events" ("conversation_id")`,
+      `CREATE INDEX IF NOT EXISTS "idx_vocab_inj_events_conv" ON "vocabulary_injection_events" ("conversation_id")`,
     );
     await queryRunner.query(
-      `CREATE INDEX "idx_vocab_inj_events_vocab" ON "vocabulary_injection_events" ("vocabulary_id")`,
+      `CREATE INDEX IF NOT EXISTS "idx_vocab_inj_events_vocab" ON "vocabulary_injection_events" ("vocabulary_id")`,
     );
   }
 

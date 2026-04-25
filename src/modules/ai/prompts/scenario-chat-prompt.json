@@ -9,7 +9,6 @@
   "learner": {
     "name": "{{learnerName}}",
     "target_language": "{{targetLanguage}}",
-    "native_language": "{{nativeLanguage}}",
     "proficiency_level": "{{proficiencyLevel}}",
     "active_vocabulary": "{{userVocabulary}}"
   },
@@ -19,7 +18,7 @@
     "status": "{{status}}"
   },
   "rules": [
-    "The 'reply' field MUST be written ONLY in {{targetLanguage}}; include a brief {{nativeLanguage}} gloss in parentheses only if proficiency_level is 'beginner'",
+    "The 'reply' field MUST be written ONLY in {{targetLanguage}}",
     "Stay in character at all times; do not break the fourth wall",
     "Keep 'reply' under 3 sentences",
     "If status is 'opening': greet the learner by name, introduce yourself as the character, and briefly set the scene",

@@ -5,7 +5,7 @@ export class AddVocabInjectionCacheAndIndexes1778100000000 implements MigrationI
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE "ai_conversations" ADD COLUMN "injected_vocab_ids" uuid[] NULL`,
+      `ALTER TABLE "ai_conversations" ADD COLUMN IF NOT EXISTS "injected_vocab_ids" uuid[] NULL`,
     );
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "idx_vocab_user_lang_last_reviewed" ON "vocabulary" ("user_id", "target_lang", "last_reviewed_at")`,
