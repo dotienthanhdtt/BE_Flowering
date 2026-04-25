@@ -16,6 +16,11 @@ export enum AiConversationType {
   AUTHENTICATED = 'authenticated',
 }
 
+export enum ScenarioChatStatus {
+  CHATTING = 'CHATTING',
+  DONE = 'DONE',
+}
+
 @Entity('ai_conversations')
 export class AiConversation {
   @PrimaryGeneratedColumn('uuid')
@@ -60,6 +65,14 @@ export class AiConversation {
 
   @Column({ type: 'uuid', name: 'scenario_id', nullable: true })
   scenarioId?: string;
+
+  @Column({
+    type: 'enum',
+    enum: ScenarioChatStatus,
+    enumName: 'scenario_chat_status_enum',
+    default: ScenarioChatStatus.CHATTING,
+  })
+  status!: ScenarioChatStatus;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, unknown>;
