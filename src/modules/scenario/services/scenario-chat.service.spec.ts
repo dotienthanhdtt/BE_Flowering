@@ -6,7 +6,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ScenarioChatService } from './scenario-chat.service';
 import { ScenarioAccessService } from './scenario-access.service';
-import { AiConversation, AiConversationMessage, MessageRole, VocabularyInjectionEvent } from '../../../database/entities';
+import { AiConversation, AiConversationMessage, MessageRole, User, VocabularyInjectionEvent } from '../../../database/entities';
 import { AiConversationType, ScenarioChatStatus } from '../../../database/entities/ai-conversation.entity';
 import { UnifiedLLMService } from '../../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../../ai/services/prompt-loader.service';
@@ -47,6 +47,10 @@ const mockEventsRepo = () => ({
   save: jest.fn(() => Promise.resolve([])),
 });
 
+const mockUserRepo = () => ({
+  findOne: jest.fn().mockResolvedValue({ id: 'user-1', displayName: 'Alice' }),
+});
+
 const mockVocabInjectionService = () => ({
   selectVocabularyForConversation: jest.fn().mockResolvedValue([]),
   hydrateByIds: jest.fn().mockResolvedValue([]),
@@ -84,6 +88,7 @@ describe('ScenarioChatService', () => {
         { provide: getRepositoryToken(AiConversation), useFactory: mockConvoRepo },
         { provide: getRepositoryToken(AiConversationMessage), useFactory: mockMsgRepo },
         { provide: getRepositoryToken(VocabularyInjectionEvent), useFactory: mockEventsRepo },
+        { provide: getRepositoryToken(User), useFactory: mockUserRepo },
         { provide: UnifiedLLMService, useValue: { chat: jest.fn() } },
         { provide: PromptLoaderService, useValue: { loadPrompt: jest.fn() } },
         { provide: LanguageService, useFactory: mockLanguageService },
@@ -212,8 +217,8 @@ describe('ScenarioChatService', () => {
           proficiencyLevel: 'intermediate',
           currentTurn: '1',
           maxTurns: '12',
-          isOpening: 'true',
-          isWrapUp: 'false',
+          status: 'opening',
+          learnerName: 'Alice',
         }),
       );
     });

@@ -12,6 +12,7 @@ import {
   AiConversation,
   AiConversationMessage,
   MessageRole,
+  User,
   VocabularyInjectionEvent,
 } from '@/database/entities';
 import { AiConversationType, ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
@@ -54,6 +55,8 @@ export class ScenarioChatService {
     private readonly msgRepo: Repository<AiConversationMessage>,
     @InjectRepository(VocabularyInjectionEvent)
     private readonly eventsRepo: Repository<VocabularyInjectionEvent>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly llmService: UnifiedLLMService,
     private readonly promptLoader: PromptLoaderService,
     private readonly languageService: LanguageService,
@@ -107,8 +110,8 @@ export class ScenarioChatService {
     // 6. Compute turn metadata
     const maxTurns = (conversation.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS;
     const currentTurn = Math.floor(history.length / 2) + 1;
-    const isOpening = history.length === 0;
-    const isWrapUp = currentTurn >= maxTurns;
+    const status =
+      history.length === 0 ? 'opening' : currentTurn >= maxTurns ? 'wrap' : 'mid';
 
     // 6b. Resolve injected vocabulary for this conversation
     const injectedVocab = await this.resolveInjectedVocabulary(
@@ -116,18 +119,21 @@ export class ScenarioChatService {
       langCtx.targetLangCode,
     );
 
+    // 6c. Resolve learner display name (fallback to 'Learner' if unset)
+    const learnerName = await this.resolveLearnerName(userId);
+
     // 7. Build system prompt
     const systemPrompt = this.promptLoader.loadPrompt('scenario-chat-prompt.json', {
       scenarioTitle: scenario.title,
       scenarioDescription: scenario.description ?? '',
       scenarioCategory: scenario.category?.name ?? 'general',
+      learnerName,
       targetLanguage: langCtx.targetLanguage,
       nativeLanguage: langCtx.nativeLanguage,
       proficiencyLevel: langCtx.proficiencyLevel,
       currentTurn: String(currentTurn),
       maxTurns: String(maxTurns),
-      isOpening: String(isOpening),
-      isWrapUp: String(isWrapUp),
+      status,
       userVocabulary: this.formatVocabList(injectedVocab),
     });
 
@@ -137,7 +143,7 @@ export class ScenarioChatService {
     const messages: BaseMessage[] = [new SystemMessage(systemPrompt), ...history];
     if (dto.message) {
       messages.push(new HumanMessage(dto.message));
-    } else if (isOpening) {
+    } else if (status === 'opening') {
       messages.push(new HumanMessage('Start'));
     }
 
@@ -412,6 +418,14 @@ export class ScenarioChatService {
       }
       return [];
     }
+  }
+
+  private async resolveLearnerName(userId: string): Promise<string> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'displayName'],
+    });
+    return user?.displayName?.trim() || 'Learner';
   }
 
   private formatVocabList(vocab: Vocabulary[]): string {
