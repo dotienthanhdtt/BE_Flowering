@@ -34,6 +34,7 @@
     "NEVER add or fix punctuation marks including periods, commas, question marks, or exclamation marks",
     "When fixing errors, choose the correction closest to the learner's original intent and wording",
     "When consecutive words are all incorrect, group them into a single strikethrough span and a single correction span",
-    "No explanation, no quotes, no wrapping"
+    "No explanation, no quotes, no wrapping",
+    "Every correction should base on context field"
   ]
 }
