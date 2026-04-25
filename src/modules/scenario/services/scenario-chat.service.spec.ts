@@ -384,6 +384,52 @@ describe('ScenarioChatService', () => {
         }),
       );
     });
+
+    // Regression: X-Learning-Language header must drive prompt's targetLanguage,
+    // NOT the user's stored isActive flag. Bug surfaced when stored active=English
+    // but request sent X-Learning-Language: zh — AI replied in English.
+    it('should use language from request (header), not user.isActive flag', async () => {
+      jest.clearAllMocks();
+      const enLang = { id: 'lang-en', code: 'en', name: 'English' };
+      const zhLang = { id: 'lang-zh', code: 'zh', name: 'Chinese' };
+      const enUserLang = {
+        id: 'ul-en',
+        languageId: 'lang-en',
+        language: enLang,
+        isActive: true,
+        proficiencyLevel: 'intermediate',
+      };
+      const zhUserLang = {
+        id: 'ul-zh',
+        languageId: 'lang-zh',
+        language: zhLang,
+        isActive: false,
+        proficiencyLevel: 'beginner',
+      };
+
+      scenarioAccessService.findAccessibleScenario.mockResolvedValue({
+        ...mockScenario,
+        languageId: 'lang-zh',
+      });
+      languageService.getUserLanguages.mockResolvedValue([enUserLang, zhUserLang]);
+      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
+      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
+      convoRepo.save.mockResolvedValue({ ...mockConversationEntity, languageId: 'lang-zh' });
+      msgRepo.find.mockResolvedValue([]);
+      promptLoader.loadPrompt.mockReturnValue('system prompt');
+      llmService.chat.mockResolvedValue('reply');
+
+      const dto = { scenarioId: mockScenarioId };
+      await service.chat(mockUserId, dto, 'lang-zh');
+
+      expect(promptLoader.loadPrompt).toHaveBeenCalledWith(
+        'scenario-chat-prompt.json',
+        expect.objectContaining({
+          targetLanguage: 'Chinese',
+          proficiencyLevel: 'beginner',
+        }),
+      );
+    });
   });
 
   describe('chat - message persistence', () => {

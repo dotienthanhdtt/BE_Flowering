@@ -92,8 +92,9 @@ export class ScenarioChatService {
       );
     }
 
-    // 4. Load language context
-    const langCtx = await this.loadLanguageContext(userId);
+    // 4. Load language context for the request's active learning language
+    //    (NOT the user's stored isActive flag — header determines target).
+    const langCtx = await this.loadLanguageContext(userId, languageId);
 
     // 5. Load history
     const history = await this.loadHistory(conversation.id);
@@ -323,20 +324,27 @@ export class ScenarioChatService {
 
   private async loadLanguageContext(
     userId: string,
+    languageId: string,
   ): Promise<{ targetLanguage: string; targetLangCode: string; nativeLanguage: string; proficiencyLevel: string }> {
     const [langs, nativeLang] = await Promise.all([
       this.languageService.getUserLanguages(userId),
       this.languageService.getNativeLanguage(userId),
     ]);
 
-    const active = langs.find((l) => l.isActive) ?? langs[0];
-    if (!active) throw new BadRequestException('User has no active learning language');
+    // Resolve target language by the request's X-Learning-Language (languageId),
+    // not by the user's stored isActive flag. Fallback to isActive only if the
+    // requested language is not yet enrolled (defensive — guard auto-enrolls).
+    const target =
+      langs.find((l) => l.languageId === languageId) ??
+      langs.find((l) => l.isActive) ??
+      langs[0];
+    if (!target) throw new BadRequestException('User has no active learning language');
 
     return {
-      targetLanguage: active.language.name,
-      targetLangCode: active.language.code,
+      targetLanguage: target.language.name,
+      targetLangCode: target.language.code,
       nativeLanguage: nativeLang?.name ?? 'English',
-      proficiencyLevel: active.proficiencyLevel,
+      proficiencyLevel: target.proficiencyLevel,
     };
   }
 
