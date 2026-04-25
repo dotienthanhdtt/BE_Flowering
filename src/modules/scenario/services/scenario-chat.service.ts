@@ -89,6 +89,12 @@ export class ScenarioChatService {
       createdNew = result.created;
     }
 
+    // 3. If conversation is already DONE, return the full transcript without
+    //    calling the LLM or mutating status.
+    if (conversation.status === ScenarioChatStatus.DONE) {
+      return this.getConversation(userId, conversation.id);
+    }
+
     // 4. Load language context for the request's active learning language
     //    (NOT the user's stored isActive flag — header determines target).
     const langCtx = await this.loadLanguageContext(userId, languageId);
