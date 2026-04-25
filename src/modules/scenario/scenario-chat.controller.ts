@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ScenarioChatService } from './services/scenario-chat.service';
@@ -9,9 +10,12 @@ import {
 import {
   ScenarioChatRequestDto,
   ScenarioChatResponseDto,
-  ScenarioConversationDetailDto,
   ScenarioConversationListResponseDto,
 } from './dto/scenario-chat.dto';
+
+interface AuthenticatedRequest extends Request {
+  user?: { id: string };
+}
 
 @ApiTags('Scenario Chat')
 @ApiBearerAuth()
@@ -35,34 +39,37 @@ export class ScenarioChatController {
   })
   @ApiResponse({ status: 403, description: 'Premium subscription required' })
   async chat(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @ActiveLanguage() lang: ActiveLanguageContext,
     @Body() dto: ScenarioChatRequestDto,
   ): Promise<ScenarioChatResponseDto> {
-    return this.service.chat(req.user.id, dto, lang.id);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    return this.service.chat(req.user!.id, dto, lang.id);
   }
 
   // Declared before `/:scenarioId/conversations` so the static `conversations`
   // segment is matched first and not mistaken for a scenarioId path param.
   @Get('conversations/:id')
   @ApiOperation({ summary: 'Get a scenario conversation transcript (owner only)' })
-  @ApiResponse({ status: 200, type: ScenarioConversationDetailDto })
+  @ApiResponse({ status: 200, type: ScenarioChatResponseDto })
   @ApiResponse({ status: 403, description: 'Conversation belongs to another user' })
   @ApiResponse({ status: 404, description: 'Conversation not found' })
   async getConversation(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<ScenarioConversationDetailDto> {
-    return this.service.getConversation(req.user.id, id);
+  ): Promise<ScenarioChatResponseDto> {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    return this.service.getConversation(req.user!.id, id);
   }
 
   @Get(':scenarioId/conversations')
   @ApiOperation({ summary: "List the caller's past conversations for a scenario (newest first)" })
   @ApiResponse({ status: 200, type: ScenarioConversationListResponseDto })
   async listConversations(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Param('scenarioId', ParseUUIDPipe) scenarioId: string,
   ): Promise<ScenarioConversationListResponseDto> {
-    return this.service.listConversations(req.user.id, scenarioId);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    return this.service.listConversations(req.user!.id, scenarioId);
   }
 }

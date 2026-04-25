@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
 
 export class ScenarioChatRequestDto {
   @ApiProperty({ format: 'uuid', description: 'Scenario to engage with' })
@@ -17,8 +18,7 @@ export class ScenarioChatRequestDto {
   scenarioId!: string;
 
   @ApiPropertyOptional({
-    description:
-      'User message. Omit or send empty on first turn to let AI open the conversation.',
+    description: 'User message. Omit or send empty on first turn to let AI open the conversation.',
   })
   // Normalize empty/whitespace-only to undefined so @IsOptional() applies.
   // Clients (e.g. Flutter) often send message: "" on the first turn — that's valid and must not 400.
@@ -45,21 +45,40 @@ export class ScenarioChatRequestDto {
   forceNew?: boolean;
 }
 
-export class ScenarioChatResponseDto {
-  @ApiProperty({ description: 'AI roleplay reply' })
-  reply!: string;
-
+export class ScenarioInfoDto {
   @ApiProperty({ format: 'uuid' })
-  conversationId!: string;
+  conversation_id!: string;
 
-  @ApiProperty({ description: 'Current turn number (1-based)' })
+  @ApiProperty()
+  max_turns!: number;
+
+  @ApiProperty()
   turn!: number;
 
-  @ApiProperty({ description: 'Maximum turns for this conversation' })
-  maxTurns!: number;
+  @ApiProperty({ enum: ScenarioChatStatus })
+  status!: ScenarioChatStatus;
+}
 
-  @ApiProperty({ description: 'True when the conversation has reached the turn cap' })
-  completed!: boolean;
+export class ScenarioChatMessageDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ enum: ['user', 'assistant'] })
+  role!: 'user' | 'assistant';
+
+  @ApiProperty()
+  content!: string;
+
+  @ApiProperty({ description: 'ISO timestamp' })
+  created_at!: string;
+}
+
+export class ScenarioChatResponseDto {
+  @ApiProperty({ type: () => ScenarioInfoDto })
+  scenario!: ScenarioInfoDto;
+
+  @ApiProperty({ type: [ScenarioChatMessageDto] })
+  messages!: ScenarioChatMessageDto[];
 }
 
 export class ScenarioConversationListItemDto {
@@ -75,8 +94,8 @@ export class ScenarioConversationListItemDto {
   @ApiProperty({ description: 'Number of completed user/assistant turn pairs' })
   turnCount!: number;
 
-  @ApiProperty({ description: 'True when the conversation has reached the turn cap' })
-  completed!: boolean;
+  @ApiProperty({ enum: ScenarioChatStatus })
+  status!: ScenarioChatStatus;
 
   @ApiProperty({ description: 'Maximum turns allowed for this conversation' })
   maxTurns!: number;
@@ -85,35 +104,4 @@ export class ScenarioConversationListItemDto {
 export class ScenarioConversationListResponseDto {
   @ApiProperty({ type: [ScenarioConversationListItemDto] })
   items!: ScenarioConversationListItemDto[];
-}
-
-export class ScenarioMessageDto {
-  @ApiProperty({ enum: ['user', 'assistant'] })
-  role!: 'user' | 'assistant';
-
-  @ApiProperty()
-  content!: string;
-
-  @ApiProperty({ description: 'ISO timestamp when the message was created' })
-  createdAt!: string;
-}
-
-export class ScenarioConversationDetailDto {
-  @ApiProperty({ format: 'uuid' })
-  id!: string;
-
-  @ApiProperty({ format: 'uuid' })
-  scenarioId!: string;
-
-  @ApiProperty({ description: 'True when the conversation has reached the turn cap' })
-  completed!: boolean;
-
-  @ApiProperty({ description: 'Current turn number (1-based)' })
-  turn!: number;
-
-  @ApiProperty({ description: 'Maximum turns allowed for this conversation' })
-  maxTurns!: number;
-
-  @ApiProperty({ type: [ScenarioMessageDto] })
-  messages!: ScenarioMessageDto[];
 }

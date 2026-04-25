@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ScenarioChatController } from './scenario-chat.controller';
 import { ScenarioChatService } from './services/scenario-chat.service';
 import { ScenarioChatRequestDto, ScenarioChatResponseDto } from './dto/scenario-chat.dto';
+import { ScenarioChatStatus } from '../../database/entities/ai-conversation.entity';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 const mockScenarioChatService = () => ({
@@ -34,11 +35,13 @@ describe('ScenarioChatController', () => {
   const mockConversationId = 'convo-uuid-1';
 
   const mockResponse: ScenarioChatResponseDto = {
-    reply: 'Welcome to the restaurant!',
-    conversationId: mockConversationId,
-    turn: 1,
-    maxTurns: 12,
-    completed: false,
+    scenario: {
+      conversation_id: mockConversationId,
+      max_turns: 12,
+      turn: 1,
+      status: ScenarioChatStatus.CHATTING,
+    },
+    messages: [],
   };
 
   const mockLang = { id: 'lang-en', code: 'en' };
@@ -87,11 +90,13 @@ describe('ScenarioChatController', () => {
 
     it('should return service response as-is', async () => {
       const customResponse: ScenarioChatResponseDto = {
-        reply: 'Custom reply',
-        conversationId: 'custom-convo-uuid',
-        turn: 5,
-        maxTurns: 12,
-        completed: false,
+        scenario: {
+          conversation_id: 'custom-convo-uuid',
+          max_turns: 12,
+          turn: 5,
+          status: ScenarioChatStatus.CHATTING,
+        },
+        messages: [],
       };
       service.chat.mockResolvedValue(customResponse);
 
@@ -137,7 +142,7 @@ describe('ScenarioChatController', () => {
             startedAt: '2026-04-14T09:00:00.000Z',
             lastTurnAt: '2026-04-14T09:15:00.000Z',
             turnCount: 5,
-            completed: false,
+            status: ScenarioChatStatus.CHATTING,
             maxTurns: 12,
           },
         ],
@@ -154,12 +159,13 @@ describe('ScenarioChatController', () => {
 
   describe('getConversation', () => {
     it('should delegate to service and return transcript', async () => {
-      const detail = {
-        id: mockConversationId,
-        scenarioId: mockScenarioId,
-        completed: true,
-        turn: 12,
-        maxTurns: 12,
+      const detail: ScenarioChatResponseDto = {
+        scenario: {
+          conversation_id: mockConversationId,
+          max_turns: 12,
+          turn: 12,
+          status: ScenarioChatStatus.DONE,
+        },
         messages: [],
       };
       service.getConversation.mockResolvedValue(detail);
