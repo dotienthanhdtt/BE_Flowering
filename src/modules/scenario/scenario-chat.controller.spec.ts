@@ -11,6 +11,10 @@ const mockScenarioChatService = () => ({
   getConversation: jest.fn(),
 });
 
+interface MockRequest {
+  user?: { id: string };
+}
+
 describe('ScenarioChatController', () => {
   let controller: ScenarioChatController;
   let service: ReturnType<typeof mockScenarioChatService>;
@@ -50,13 +54,13 @@ describe('ScenarioChatController', () => {
     it('should delegate to service and return response', async () => {
       service.chat.mockResolvedValue(mockResponse);
 
-      const req = { user: { id: mockUserId } };
+      const req: MockRequest = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = {
         scenarioId: mockScenarioId,
         message: 'Hello',
       };
 
-      const result = await controller.chat(req, mockLang, dto);
+      const result = await controller.chat(req as any, mockLang, dto);
 
       expect(service.chat).toHaveBeenCalledWith(mockUserId, dto, 'lang-en');
       expect(result).toEqual(mockResponse);
@@ -65,10 +69,10 @@ describe('ScenarioChatController', () => {
     it('should pass userId from request to service', async () => {
       service.chat.mockResolvedValue(mockResponse);
 
-      const req = { user: { id: mockUserId } };
+      const req: MockRequest = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId };
 
-      await controller.chat(req, mockLang, dto);
+      await controller.chat(req as any, mockLang, dto);
 
       expect(service.chat).toHaveBeenCalledWith(mockUserId, expect.any(Object), 'lang-en');
     });
@@ -76,14 +80,14 @@ describe('ScenarioChatController', () => {
     it('should pass entire DTO to service', async () => {
       service.chat.mockResolvedValue(mockResponse);
 
-      const req = { user: { id: mockUserId } };
+      const req: MockRequest = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = {
         scenarioId: mockScenarioId,
         message: 'User message',
         conversationId: mockConversationId,
       };
 
-      await controller.chat(req, mockLang, dto);
+      await controller.chat(req as any, mockLang, dto);
 
       expect(service.chat).toHaveBeenCalledWith(mockUserId, dto, 'lang-en');
     });
@@ -100,10 +104,10 @@ describe('ScenarioChatController', () => {
       };
       service.chat.mockResolvedValue(customResponse);
 
-      const req = { user: { id: mockUserId } };
+      const req: MockRequest = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId };
 
-      const result = await controller.chat(req, mockLang, dto);
+      const result = await controller.chat(req as any, mockLang, dto);
 
       expect(result).toBe(customResponse);
     });
@@ -112,18 +116,18 @@ describe('ScenarioChatController', () => {
       const error = new Error('Service error');
       service.chat.mockRejectedValue(error);
 
-      const req = { user: { id: mockUserId } };
+      const req: MockRequest = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId };
 
-      await expect(controller.chat(req, mockLang, dto)).rejects.toThrow('Service error');
+      await expect(controller.chat(req as any, mockLang, dto)).rejects.toThrow('Service error');
     });
 
     it('should pass forceNew flag through to service', async () => {
       service.chat.mockResolvedValue(mockResponse);
-      const req = { user: { id: mockUserId } };
+      const req: MockRequest = { user: { id: mockUserId } };
       const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId, forceNew: true };
 
-      await controller.chat(req, mockLang, dto);
+      await controller.chat(req as any, mockLang, dto);
 
       expect(service.chat).toHaveBeenCalledWith(
         mockUserId,
@@ -149,8 +153,8 @@ describe('ScenarioChatController', () => {
       };
       service.listConversations.mockResolvedValue(listResponse);
 
-      const req = { user: { id: mockUserId } };
-      const result = await controller.listConversations(req, mockScenarioId);
+      const req: MockRequest = { user: { id: mockUserId } };
+      const result = await controller.listConversations(req as any, mockScenarioId);
 
       expect(service.listConversations).toHaveBeenCalledWith(mockUserId, mockScenarioId);
       expect(result).toBe(listResponse);
@@ -170,8 +174,8 @@ describe('ScenarioChatController', () => {
       };
       service.getConversation.mockResolvedValue(detail);
 
-      const req = { user: { id: mockUserId } };
-      const result = await controller.getConversation(req, mockConversationId);
+      const req: MockRequest = { user: { id: mockUserId } };
+      const result = await controller.getConversation(req as any, mockConversationId);
 
       expect(service.getConversation).toHaveBeenCalledWith(mockUserId, mockConversationId);
       expect(result).toBe(detail);
