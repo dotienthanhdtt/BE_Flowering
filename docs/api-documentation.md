@@ -44,6 +44,9 @@ The wrapper keys `code`, `message`, `data` are single-word and unchanged.
 
 URL path params use camelCase (e.g., `:scenarioId`, `:languageId`, `:sessionId`) — those bypass the body middleware. Query-string keys use snake_case (e.g., `?language_code=en`).
 
+#### Snake_case Exception: Scenario Chat
+`POST /scenario/chat`, `GET /scenario/conversations/:id`, and `GET /scenario/:scenarioId/conversations` emit snake_case keys in the response (`conversation_id`, `max_turns`, `turn`, `created_at`, etc.). All other endpoints remain camelCase in the response.
+
 ## Authentication
 
 ### Bearer Token Format
@@ -442,16 +445,60 @@ Transcribe audio (M4A/MP4/MPEG/WAV, max 10MB). **Auth:** Required (Premium) | **
 
 ### Scenario Chat
 
-Engage in roleplay conversations within scenario-based learning activities.
+Engage in roleplay conversations within scenario-based learning activities. Uses snake_case in response fields (see **Snake_case exception** note below).
 
 #### POST /scenario/chat
-Roleplay in scenario. **Auth:** Required (Premium) | **Rate Limit:** 20 req/min, 100 req/hr | **Request:** `{scenario_id, message?, conversation_id?, force_new?}` | **Response:** `{data: {reply, conversation_id, turn, max_turns, completed}}` | **First turn:** omit message. **Resume:** provide conversation_id. **Re-practice:** force_new=true. **Errors:** 400, 401, 403, 404
+Roleplay in scenario. **Auth:** Required (Premium) | **Rate Limit:** 20 req/min, 100 req/hr per user | **Request:** `{scenario_id, message?, conversation_id?, force_new?}` | **Response (200):** `{code: 1, message: "Success", data: {scenario: {conversation_id, max_turns, turn, status}, messages: [{id, role, content, created_at}]}}` | **First turn:** omit message. **Resume:** provide conversation_id. **Re-practice:** force_new=true. **Errors:** 400, 401, 403, 404
+
+**Response Details:**
+- `scenario.status`: enum `"CHATTING"` (in progress) or `"DONE"` (completed)
+- Status is `"DONE"` when: max_turns reached (hard-end) OR LLM emits `is_end: true` in JSON reply (soft-end)
+- `messages`: sorted chronologically (oldest first), includes both user and assistant messages
+- All timestamps in ISO 8601 format
+
+**Example Response:**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "scenario": {
+      "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+      "max_turns": 12,
+      "turn": 1,
+      "status": "CHATTING"
+    },
+    "messages": [
+      {
+        "id": "660e8400-e29b-41d4-a716-446655440001",
+        "role": "assistant",
+        "content": "Welcome to the restaurant scenario!",
+        "created_at": "2026-04-25T10:00:00.000Z"
+      },
+      {
+        "id": "660e8400-e29b-41d4-a716-446655440002",
+        "role": "user",
+        "content": "Hello, I'd like a table for two",
+        "created_at": "2026-04-25T10:00:01.000Z"
+      }
+    ]
+  }
+}
+```
 
 #### GET /scenario/:scenarioId/conversations
-List past conversations (newest first). **Auth:** Required | **Response:** `{data: {items: [{id, started_at, last_turn_at, turn_count, completed, max_turns}]}}` | Owner-filter only. No premium gate. **Errors:** 401
+List user's past conversations for a scenario (newest first). **Auth:** Required | **Response (200):** `{code: 1, message: "...", data: {items: [{id, startedAt, lastTurnAt, turnCount, status, maxTurns}]}}` | Owner-filter only. No premium gate. **Errors:** 401, 404
+
+**Response Details:**
+- `status`: enum `"CHATTING"` or `"DONE"`
+- `turnCount`: number of completed user/assistant turn pairs
 
 #### GET /scenario/conversations/:id
-Fetch conversation transcript (owner only, chronological). **Auth:** Required | **Response:** `{data: {id, scenario_id, completed, turn, max_turns, messages: [{role, content, created_at}]}}` | **Errors:** 401, 403 (not owner), 404
+Fetch conversation transcript (owner only, chronological). **Auth:** Required | **Response (200):** `{code: 1, message: "...", data: {scenario: {conversation_id, max_turns, turn, status}, messages: [{id, role, content, created_at}]}}` | **Errors:** 401, 403 (not owner), 404
+
+**Response Details:**
+- Same response shape as `POST /scenario/chat`
+- Messages ordered chronologically (oldest first)
 
 ---
 

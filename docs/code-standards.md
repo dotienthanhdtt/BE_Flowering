@@ -53,6 +53,10 @@ src/
 - Database column names also use `snake_case` (TypeORM `name` option)
 - Internal TypeScript code stays `camelCase`; only the HTTP wire format is `snake_case`
 
+### Snake_case Exception: Scenario Chat Endpoints
+
+`POST /scenario/chat`, `GET /scenario/conversations/:id`, and `GET /scenario/:scenarioId/conversations` are intentionally designed to emit snake_case keys in response payloads (`conversation_id`, `max_turns`, `turn`, `created_at`, etc.). All other endpoints use the standard camelCase response transformation.
+
 ## Naming Conventions
 
 ### Files and Directories
