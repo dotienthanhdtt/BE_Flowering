@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body } from '@nestjs/common';
+import { Controller, Post, Patch, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { UserProfileDto } from './dto/user-profile.dto';
@@ -17,7 +17,7 @@ import { User } from '../../database/entities/user.entity';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Get('me')
+  @Post('me')
   @ApiOperation({ summary: 'Get current user profile' })
   async getProfile(@CurrentUser() user: User): Promise<UserProfileDto> {
     return this.userService.getProfile(user.id);
