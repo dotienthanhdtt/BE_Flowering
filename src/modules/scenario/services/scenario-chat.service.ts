@@ -77,19 +77,13 @@ export class ScenarioChatService {
       languageId,
     );
 
-    // 2. Resolve conversation. If the client supplied a conversationId for a
-    //    DONE conversation, transparently start a fresh one instead of erroring.
+    // 2. Resolve conversation by (userId, scenarioId). Resume regardless of
+    //    status (CHATTING or DONE); only create when none exists.
     let conversation: AiConversation;
     let createdNew = false;
     if (dto.conversationId) {
       conversation = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
     } else {
-      const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
-      conversation = result.conversation;
-      createdNew = result.created;
-    }
-
-    if (conversation.status === ScenarioChatStatus.DONE) {
       const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
       conversation = result.conversation;
       createdNew = result.created;
@@ -105,8 +99,7 @@ export class ScenarioChatService {
     // 6. Compute turn metadata
     const maxTurns = (conversation.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS;
     const currentTurn = Math.floor(history.length / 2) + 1;
-    const status =
-      history.length === 0 ? 'opening' : currentTurn >= maxTurns ? 'wrap' : 'mid';
+    const status = history.length === 0 ? 'opening' : currentTurn >= maxTurns ? 'wrap' : 'mid';
 
     // 6b. Resolve injected vocabulary for this conversation
     const injectedVocab = await this.resolveInjectedVocabulary(
@@ -228,7 +221,6 @@ export class ScenarioChatService {
     const existing = await this.convoRepo
       .createQueryBuilder('c')
       .where('c.userId = :userId AND c.scenarioId = :scenarioId', { userId, scenarioId })
-      .andWhere('c.status = :active', { active: ScenarioChatStatus.CHATTING })
       .orderBy('c.createdAt', 'DESC')
       .getOne();
 
@@ -253,7 +245,6 @@ export class ScenarioChatService {
         const race = await this.convoRepo
           .createQueryBuilder('c')
           .where('c.userId = :userId AND c.scenarioId = :scenarioId', { userId, scenarioId })
-          .andWhere('c.status = :active', { active: ScenarioChatStatus.CHATTING })
           .orderBy('c.createdAt', 'DESC')
           .getOne();
         if (race) return { conversation: race, created: false };
