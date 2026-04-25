@@ -35,7 +35,7 @@ export class ScenarioChatController {
   @ApiResponse({ status: 200, type: ScenarioChatResponseDto })
   @ApiResponse({
     status: 400,
-    description: 'Conversation completed, invalid body, or conflicting forceNew+conversationId',
+    description: 'Conversation completed or invalid body',
   })
   @ApiResponse({ status: 403, description: 'Premium subscription required' })
   async chat(

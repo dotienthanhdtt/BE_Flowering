@@ -122,19 +122,6 @@ describe('ScenarioChatController', () => {
       await expect(controller.chat(req as any, mockLang, dto)).rejects.toThrow('Service error');
     });
 
-    it('should pass forceNew flag through to service', async () => {
-      service.chat.mockResolvedValue(mockResponse);
-      const req: MockRequest = { user: { id: mockUserId } };
-      const dto: ScenarioChatRequestDto = { scenarioId: mockScenarioId, forceNew: true };
-
-      await controller.chat(req as any, mockLang, dto);
-
-      expect(service.chat).toHaveBeenCalledWith(
-        mockUserId,
-        expect.objectContaining({ forceNew: true }),
-        'lang-en',
-      );
-    });
   });
 
   describe('listConversations', () => {

@@ -70,11 +70,6 @@ export class ScenarioChatService {
     dto: ScenarioChatRequestDto,
     languageId: string,
   ): Promise<ScenarioChatResponseDto> {
-    // 0. Reject conflicting intent: forceNew + conversationId is ambiguous
-    if (dto.forceNew && dto.conversationId) {
-      throw new BadRequestException('Cannot combine forceNew with conversationId');
-    }
-
     // 1. Verify scenario access + language match
     const scenario = await this.scenarioAccessService.findAccessibleScenario(
       userId,
@@ -82,22 +77,14 @@ export class ScenarioChatService {
       languageId,
     );
 
-    // 2. If forceNew, mark any active conversation for this (user, scenario) as completed
-    //    so the subsequent findOrCreate creates a fresh row.
-    if (dto.forceNew) {
-      await this.markActiveAsCompleted(userId, dto.scenarioId);
-    }
-
-    // 3. Resolve conversation
-    const conversation = dto.conversationId
+    // 2. Resolve conversation. If the client supplied a conversationId for a
+    //    DONE conversation, transparently start a fresh one instead of erroring.
+    let conversation = dto.conversationId
       ? await this.resolveExisting(userId, dto.conversationId, dto.scenarioId)
       : await this.findOrCreate(userId, scenario.id, scenario.languageId);
 
-    // 4. Reject if already completed
     if (conversation.status === ScenarioChatStatus.DONE) {
-      throw new BadRequestException(
-        'Conversation is completed. Pass forceNew: true to start a new one.',
-      );
+      conversation = await this.findOrCreate(userId, scenario.id, scenario.languageId);
     }
 
     // 4. Load language context for the request's active learning language
@@ -269,21 +256,6 @@ export class ScenarioChatService {
     if (c.userId !== userId) throw new ForbiddenException();
     if (c.scenarioId !== scenarioId) throw new BadRequestException('scenarioId mismatch');
     return c;
-  }
-
-  /**
-   * Marks every active (non-completed) conversation for the given user+scenario
-   * as completed. Used by the forceNew flow so that the subsequent findOrCreate
-   * lookup will miss the old row and insert a fresh one.
-   */
-  private async markActiveAsCompleted(userId: string, scenarioId: string): Promise<void> {
-    await this.convoRepo
-      .createQueryBuilder()
-      .update(AiConversation)
-      .set({ status: ScenarioChatStatus.DONE })
-      .where('user_id = :userId AND scenario_id = :scenarioId', { userId, scenarioId })
-      .andWhere('status = :active', { active: ScenarioChatStatus.CHATTING })
-      .execute();
   }
 
   /**

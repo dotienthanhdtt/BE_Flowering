@@ -1,5 +1,4 @@
 import {
-  IsBoolean,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -35,14 +34,6 @@ export class ScenarioChatRequestDto {
   @IsOptional()
   @IsUUID()
   conversationId?: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Abandon any active conversation for this scenario and start fresh. Cannot combine with conversationId.',
-  })
-  @IsOptional()
-  @IsBoolean()
-  forceNew?: boolean;
 }
 
 export class ScenarioInfoDto {

@@ -15,9 +15,7 @@ import { VocabularyInjectionService } from './vocabulary-injection.service';
 import { VocabularyReviewService } from '../../vocabulary/services/vocabulary-review.service';
 
 const mockConvoRepo = () => {
-  // Single unified query-builder mock covering both select and update paths
-  // (service uses `createQueryBuilder('c')` for selects and
-  // `createQueryBuilder()` for the forceNew update — both resolve here).
+  // Unified query-builder mock for `createQueryBuilder('c')` selects.
   const mockQb = {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
@@ -270,13 +268,31 @@ describe('ScenarioChatService', () => {
   });
 
   describe('chat - completion and turn tracking', () => {
-    it('should throw BadRequestException when conversation already DONE', async () => {
+    it('should transparently start a fresh conversation when supplied conversationId is DONE', async () => {
+      jest.clearAllMocks();
       scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
+      languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
+      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
+
       const completedConvo = { ...mockConversationEntity, status: ScenarioChatStatus.DONE };
       convoRepo.findOne.mockResolvedValue(completedConvo);
+      // findOrCreate: no active conversation, then insert a fresh row
+      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
+      convoRepo.save.mockResolvedValue({
+        ...mockConversationEntity,
+        id: 'fresh-convo-uuid',
+        status: ScenarioChatStatus.CHATTING,
+        messageCount: 0,
+      });
+      msgRepo.find.mockResolvedValue([]);
+      promptLoader.loadPrompt.mockReturnValue('system prompt');
+      llmService.chat.mockResolvedValue('{"reply":"Fresh opening","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, conversationId: mockConversationId };
-      await expect(service.chat(mockUserId, dto, 'lang-en')).rejects.toThrow(BadRequestException);
+      const result = await service.chat(mockUserId, dto, 'lang-en');
+
+      expect(result.scenario.conversation_id).toBe('fresh-convo-uuid');
+      expect(result.scenario.status).toBe(ScenarioChatStatus.CHATTING);
     });
 
     it('should set status=DONE when turn reaches maxTurns (hard-end at turn 12)', async () => {
@@ -540,39 +556,6 @@ describe('ScenarioChatService', () => {
       await service.chat(mockUserId, dto, 'lang-en');
 
       expect(convoRepo.save).toHaveBeenCalledWith(expect.objectContaining({ messageCount: 7 }));
-    });
-  });
-
-  describe('chat - forceNew', () => {
-    it('should reject when both forceNew and conversationId are provided', async () => {
-      const dto = { scenarioId: mockScenarioId, conversationId: mockConversationId, forceNew: true };
-      await expect(service.chat(mockUserId, dto, 'lang-en')).rejects.toThrow(BadRequestException);
-    });
-
-    it('should mark active conversations as DONE and create a fresh one', async () => {
-      jest.clearAllMocks();
-      scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
-      languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
-      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
-      // After forceNew wipes the active flag, findOrCreate's select returns null → insert.
-      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
-      // Explicit messageCount: 0 to avoid mutation pollution from earlier tests
-      convoRepo.save.mockResolvedValue({ ...mockConversationEntity, id: 'new-convo-uuid', messageCount: 0 });
-      msgRepo.find.mockResolvedValue([]);
-      promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('{"reply":"Fresh opening","is_end":false}');
-
-      const dto = { scenarioId: mockScenarioId, forceNew: true };
-      const result = await service.chat(mockUserId, dto, 'lang-en');
-
-      // The forceNew update chain should have fired.
-      const qb = convoRepo.createQueryBuilder();
-      expect(qb.update).toHaveBeenCalled();
-      expect(qb.set).toHaveBeenCalled();
-      expect(qb.execute).toHaveBeenCalled();
-      expect(result.scenario.conversation_id).toBe('new-convo-uuid');
-      // AI opening (no user message): messageCount=1, turnAfter=floor(1/2)=0
-      expect(result.scenario.turn).toBe(0);
     });
   });
 
