@@ -24,7 +24,7 @@ export class VocabularyReviewService {
       .andWhere('v.dueAt <= NOW()');
 
     if (dto.languageCode) {
-      qb.andWhere('v.targetLang = :lang', { lang: dto.languageCode });
+      qb.andWhere('v.sourceLang = :lang', { lang: dto.languageCode });
     }
 
     const cards = await qb.orderBy('v.dueAt', 'ASC').limit(limit).getMany();

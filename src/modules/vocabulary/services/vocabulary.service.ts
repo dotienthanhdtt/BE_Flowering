@@ -21,7 +21,7 @@ export class VocabularyService {
     const languageCode = activeLanguageCode ?? q.languageCode;
 
     if (languageCode) {
-      qb.andWhere('v.targetLang = :lang', { lang: languageCode });
+      qb.andWhere('v.sourceLang = :lang', { lang: languageCode });
     }
     if (q.box !== undefined) {
       qb.andWhere('v.box = :box', { box: q.box });

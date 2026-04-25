@@ -41,7 +41,7 @@ export class VocabularyInjectionService {
     return this.repo
       .createQueryBuilder('v')
       .where('v.userId = :userId', { userId })
-      .andWhere('v.targetLang = :lang', { lang })
+      .andWhere('v.sourceLang = :lang', { lang })
       .andWhere('v.box < 5')
       .orderBy('v.lastReviewedAt', 'ASC', 'NULLS FIRST')
       .limit(VOCAB_INJECTION_CONFIG.recentBucketSize)
@@ -52,7 +52,7 @@ export class VocabularyInjectionService {
     return this.repo
       .createQueryBuilder('v')
       .where('v.userId = :userId', { userId })
-      .andWhere('v.targetLang = :lang', { lang })
+      .andWhere('v.sourceLang = :lang', { lang })
       .andWhere('v.dueAt <= NOW()')
       .andWhere('v.box <= :maxBox', { maxBox: VOCAB_INJECTION_CONFIG.maxBoxForSrs })
       .orderBy('v.correctCount', 'ASC')

@@ -81,7 +81,7 @@ describe('VocabularyService', () => {
         limit: 10,
       } as any);
 
-      expect(qb.andWhere).toHaveBeenCalledWith('v.targetLang = :lang', { lang: 'es' });
+      expect(qb.andWhere).toHaveBeenCalledWith('v.sourceLang = :lang', { lang: 'es' });
       expect(qb.andWhere).toHaveBeenCalledWith('v.box = :box', { box: 2 });
       expect(qb.andWhere).toHaveBeenCalledWith(
         '(v.word ILIKE :s OR v.translation ILIKE :s)',
@@ -102,7 +102,7 @@ describe('VocabularyService', () => {
         'es',
       );
 
-      expect(qb.andWhere).toHaveBeenCalledWith('v.targetLang = :lang', { lang: 'es' });
+      expect(qb.andWhere).toHaveBeenCalledWith('v.sourceLang = :lang', { lang: 'es' });
     });
 
     it('falls back to legacy languageCode when active language is absent', async () => {
@@ -114,7 +114,7 @@ describe('VocabularyService', () => {
         limit: 10,
       } as any);
 
-      expect(qb.andWhere).toHaveBeenCalledWith('v.targetLang = :lang', { lang: 'de' });
+      expect(qb.andWhere).toHaveBeenCalledWith('v.sourceLang = :lang', { lang: 'de' });
     });
 
     it('computes pagination offset for page > 1', async () => {

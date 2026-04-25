@@ -92,7 +92,7 @@ describe('VocabularyReviewService', () => {
       repo.createQueryBuilder.mockReturnValue(qb);
 
       await service.start('u-1', { languageCode: 'es' } as any);
-      expect(qb.andWhere).toHaveBeenCalledWith('v.targetLang = :lang', { lang: 'es' });
+      expect(qb.andWhere).toHaveBeenCalledWith('v.sourceLang = :lang', { lang: 'es' });
     });
 
     it('applies custom limit', async () => {
