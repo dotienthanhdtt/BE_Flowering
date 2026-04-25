@@ -156,27 +156,33 @@ export class ScenarioChatService {
     });
 
     const { reply, isEnd } = parseScenarioReply(raw);
+    const trimmedReply = reply.trim();
+    const userContent = dto.message?.trim();
 
-    // 10. Persist messages
-    if (dto.message) {
+    // 10. Persist messages — never insert empty content.
+    if (userContent) {
       await this.msgRepo.save(
         this.msgRepo.create({
           conversationId: conversation.id,
           role: MessageRole.USER,
-          content: dto.message,
+          content: userContent,
         }),
       );
     }
-    await this.msgRepo.save(
-      this.msgRepo.create({
-        conversationId: conversation.id,
-        role: MessageRole.ASSISTANT,
-        content: reply,
-      }),
-    );
+    if (trimmedReply) {
+      await this.msgRepo.save(
+        this.msgRepo.create({
+          conversationId: conversation.id,
+          role: MessageRole.ASSISTANT,
+          content: trimmedReply,
+        }),
+      );
+    } else {
+      this.logger.warn(`Empty assistant reply for conv=${conversation.id}; skipping persist.`);
+    }
 
     // 11. Update conversation state
-    conversation.messageCount += dto.message ? 2 : 1;
+    conversation.messageCount += (userContent ? 1 : 0) + (trimmedReply ? 1 : 0);
     const turnAfter = Math.floor(conversation.messageCount / 2);
     const hardEnd = turnAfter >= maxTurns;
     conversation.status = isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
@@ -184,7 +190,7 @@ export class ScenarioChatService {
     await this.convoRepo.save(conversation);
 
     // 12. Fire-and-forget vocab usage tracking
-    void this.trackUsage(conversation.id, userId, currentTurn, injectedVocab, dto.message).catch(
+    void this.trackUsage(conversation.id, userId, currentTurn, injectedVocab, userContent).catch(
       (err) =>
         this.logger.warn(`Usage-track failed conv=${conversation.id}: ${(err as Error).message}`),
     );
