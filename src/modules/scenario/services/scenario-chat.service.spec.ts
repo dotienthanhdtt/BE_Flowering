@@ -7,7 +7,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { ScenarioChatService } from './scenario-chat.service';
 import { ScenarioAccessService } from './scenario-access.service';
 import { AiConversation, AiConversationMessage, MessageRole, VocabularyInjectionEvent } from '../../../database/entities';
-import { AiConversationType } from '../../../database/entities/ai-conversation.entity';
+import { AiConversationType, ScenarioChatStatus } from '../../../database/entities/ai-conversation.entity';
 import { UnifiedLLMService } from '../../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../../ai/services/prompt-loader.service';
 import { LanguageService } from '../../language/language.service';
@@ -142,7 +142,8 @@ describe('ScenarioChatService', () => {
     type: AiConversationType.AUTHENTICATED,
     topic: 'scenario_roleplay',
     messageCount: 0,
-    metadata: { maxTurns: 12, completed: false },
+    status: ScenarioChatStatus.CHATTING,
+    metadata: { maxTurns: 12 },
     injectedVocabIds: null,
   };
 
@@ -155,19 +156,17 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('formatted system prompt');
-      llmService.chat.mockResolvedValue('Welcome to the restaurant!');
+      llmService.chat.mockResolvedValue('{"reply":"Welcome to the restaurant!","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId };
       const result = await service.chat(mockUserId, dto, 'lang-en');
 
       expect(scenarioAccessService.findAccessibleScenario).toHaveBeenCalledWith(mockUserId, mockScenarioId, 'lang-en');
-      expect(result).toEqual({
-        reply: 'Welcome to the restaurant!',
-        conversationId: mockConversationId,
-        turn: 1,
-        maxTurns: 12,
-        completed: false,
-      });
+      expect(result.scenario.conversation_id).toBe(mockConversationId);
+      expect(result.scenario.turn).toBe(0);
+      expect(result.scenario.max_turns).toBe(12);
+      expect(result.scenario.status).toBe(ScenarioChatStatus.CHATTING);
+      expect(Array.isArray(result.messages)).toBe(true);
     });
 
     it('should create new conversation with message and persist both messages', async () => {
@@ -178,7 +177,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('formatted system prompt');
-      llmService.chat.mockResolvedValue('A table for two?');
+      llmService.chat.mockResolvedValue('{"reply":"A table for two?","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, message: 'Hi, I want to order' };
       const result = await service.chat(mockUserId, dto, 'lang-en');
@@ -186,7 +185,7 @@ describe('ScenarioChatService', () => {
       expect(msgRepo.save).toHaveBeenCalledTimes(2);
       expect(msgRepo.save).toHaveBeenNthCalledWith(1, expect.objectContaining({ role: MessageRole.USER }));
       expect(msgRepo.save).toHaveBeenNthCalledWith(2, expect.objectContaining({ role: MessageRole.ASSISTANT }));
-      expect(result.reply).toBe('A table for two?');
+      expect(result.scenario).toBeDefined();
     });
 
     it('should load and pass scenario context to prompt', async () => {
@@ -197,7 +196,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('reply');
+      llmService.chat.mockResolvedValue('{"reply":"reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId };
       await service.chat(mockUserId, dto, 'lang-en');
@@ -228,14 +227,14 @@ describe('ScenarioChatService', () => {
       convoRepo.findOne.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('Continuing the conversation');
+      llmService.chat.mockResolvedValue('{"reply":"Continuing the conversation","is_end":false}');
       convoRepo.save.mockResolvedValue(mockConversationEntity);
 
       const dto = { scenarioId: mockScenarioId, conversationId: mockConversationId, message: 'Next turn' };
       const result = await service.chat(mockUserId, dto, 'lang-en');
 
       expect(convoRepo.findOne).toHaveBeenCalledWith({ where: { id: mockConversationId } });
-      expect(result.conversationId).toBe(mockConversationId);
+      expect(result.scenario.conversation_id).toBe(mockConversationId);
     });
 
     it('should throw ForbiddenException when userId mismatch on resume', async () => {
@@ -266,68 +265,105 @@ describe('ScenarioChatService', () => {
   });
 
   describe('chat - completion and turn tracking', () => {
-    it('should throw BadRequestException when conversation already completed', async () => {
+    it('should throw BadRequestException when conversation already DONE', async () => {
       scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
-      const completedConvo = { ...mockConversationEntity, metadata: { completed: true } };
+      const completedConvo = { ...mockConversationEntity, status: ScenarioChatStatus.DONE };
       convoRepo.findOne.mockResolvedValue(completedConvo);
 
       const dto = { scenarioId: mockScenarioId, conversationId: mockConversationId };
       await expect(service.chat(mockUserId, dto, 'lang-en')).rejects.toThrow(BadRequestException);
     });
 
-    it('should set completed=true when currentTurn >= maxTurns (turn 12)', async () => {
+    it('should set status=DONE when turn reaches maxTurns (hard-end at turn 12)', async () => {
       jest.clearAllMocks();
       scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
       convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
 
       // 22 messages = 11 completed turns (11 user + 11 assistant)
+      const now = new Date();
       const historyWith22Messages = Array.from({ length: 22 }, (_, i) => ({
+        id: `msg-${i}`,
         role: i % 2 === 0 ? MessageRole.USER : MessageRole.ASSISTANT,
         content: `Message ${i}`,
+        createdAt: now,
       }));
 
-      const newConvo = { ...mockConversationEntity, messageCount: 22, metadata: { maxTurns: 12, completed: false } };
+      const newConvo = { ...mockConversationEntity, messageCount: 22, status: ScenarioChatStatus.CHATTING, metadata: { maxTurns: 12 } };
       convoRepo.save.mockResolvedValue(newConvo);
-      msgRepo.find.mockResolvedValue(historyWith22Messages);
+      // First call: loadHistory; second call: transcript re-query after save
+      msgRepo.find
+        .mockResolvedValueOnce(historyWith22Messages)
+        .mockResolvedValue(historyWith22Messages);
       languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
       languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('Turn 12 reply');
+      llmService.chat.mockResolvedValue('{"reply":"Turn 12 reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, message: 'Final turn' };
       const result = await service.chat(mockUserId, dto, 'lang-en');
 
-      expect(result.turn).toBe(12);
-      expect(result.completed).toBe(true);
-      // Check that the saved convo has completed: true in metadata
+      expect(result.scenario.turn).toBe(12);
+      expect(result.scenario.status).toBe(ScenarioChatStatus.DONE);
       const savedCall = convoRepo.save.mock.calls[convoRepo.save.mock.calls.length - 1][0];
-      expect(savedCall.metadata.completed).toBe(true);
+      expect(savedCall.status).toBe(ScenarioChatStatus.DONE);
     });
 
-    it('should mark as not completed before max turns', async () => {
+    it('should remain CHATTING before max turns', async () => {
       jest.clearAllMocks();
       scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
       convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
 
       // 2 messages = 1 completed turn
+      const now = new Date();
       const historyWith2Messages = [
-        { role: MessageRole.USER, content: 'Message 0' },
-        { role: MessageRole.ASSISTANT, content: 'Message 1' },
+        { id: 'msg-0', role: MessageRole.USER, content: 'Message 0', createdAt: now },
+        { id: 'msg-1', role: MessageRole.ASSISTANT, content: 'Message 1', createdAt: now },
       ];
 
-      const newConvo = { ...mockConversationEntity, messageCount: 2, metadata: { maxTurns: 12, completed: false } };
+      const newConvo = { ...mockConversationEntity, messageCount: 2, status: ScenarioChatStatus.CHATTING, metadata: { maxTurns: 12 } };
       convoRepo.save.mockResolvedValue(newConvo);
-      msgRepo.find.mockResolvedValue(historyWith2Messages);
+      // First call: loadHistory; second call: transcript re-query after save
+      msgRepo.find
+        .mockResolvedValueOnce(historyWith2Messages)
+        .mockResolvedValue(historyWith2Messages);
       languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
       languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('Turn 2 reply');
+      llmService.chat.mockResolvedValue('{"reply":"Turn 2 reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, message: 'Turn 2' };
       const result = await service.chat(mockUserId, dto, 'lang-en');
 
-      expect(result.turn).toBe(2);
-      expect(result.completed).toBe(false);
+      expect(result.scenario.turn).toBe(2);
+      expect(result.scenario.status).toBe(ScenarioChatStatus.CHATTING);
+    });
+
+    it('should set status=DONE on soft-end (LLM is_end=true) before maxTurns', async () => {
+      jest.clearAllMocks();
+      scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
+      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
+
+      const newConvo = { ...mockConversationEntity, messageCount: 4, status: ScenarioChatStatus.CHATTING, metadata: { maxTurns: 12 } };
+      convoRepo.save.mockResolvedValue(newConvo);
+      msgRepo.find
+        .mockResolvedValueOnce([
+          { role: MessageRole.USER, content: 'hi', createdAt: new Date() },
+          { role: MessageRole.ASSISTANT, content: 'hello', createdAt: new Date() },
+          { role: MessageRole.USER, content: 'thanks', createdAt: new Date() },
+          { role: MessageRole.ASSISTANT, content: 'sure', createdAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
+      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
+      promptLoader.loadPrompt.mockReturnValue('system prompt');
+      llmService.chat.mockResolvedValue('{"reply":"Goodbye!","is_end":true}');
+
+      const dto = { scenarioId: mockScenarioId, message: 'bye' };
+      const result = await service.chat(mockUserId, dto, 'lang-en');
+
+      expect(result.scenario.status).toBe(ScenarioChatStatus.DONE);
+      const savedCall = convoRepo.save.mock.calls[convoRepo.save.mock.calls.length - 1][0];
+      expect(savedCall.status).toBe(ScenarioChatStatus.DONE);
     });
   });
 
@@ -350,7 +386,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('reply');
+      llmService.chat.mockResolvedValue('{"reply":"reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId };
       await service.chat(mockUserId, dto, 'lang-en');
@@ -372,7 +408,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('reply');
+      llmService.chat.mockResolvedValue('{"reply":"reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId };
       await service.chat(mockUserId, dto, 'lang-en');
@@ -417,7 +453,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue({ ...mockConversationEntity, languageId: 'lang-zh' });
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('reply');
+      llmService.chat.mockResolvedValue('{"reply":"reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId };
       await service.chat(mockUserId, dto, 'lang-zh');
@@ -442,7 +478,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('AI reply');
+      llmService.chat.mockResolvedValue('{"reply":"AI reply","is_end":false}');
 
       const userMessage = 'I want to order now';
       const dto = { scenarioId: mockScenarioId, message: userMessage };
@@ -470,7 +506,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('AI opening');
+      llmService.chat.mockResolvedValue('{"reply":"AI opening","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId };
       await service.chat(mockUserId, dto, 'lang-en');
@@ -493,7 +529,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(convoWithCount);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('reply');
+      llmService.chat.mockResolvedValue('{"reply":"reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, message: 'Hello' };
       await service.chat(mockUserId, dto, 'lang-en');
@@ -508,17 +544,18 @@ describe('ScenarioChatService', () => {
       await expect(service.chat(mockUserId, dto, 'lang-en')).rejects.toThrow(BadRequestException);
     });
 
-    it('should mark active conversations as completed and create a fresh one', async () => {
+    it('should mark active conversations as DONE and create a fresh one', async () => {
       jest.clearAllMocks();
       scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
       languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
       languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
       // After forceNew wipes the active flag, findOrCreate's select returns null → insert.
       convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
-      convoRepo.save.mockResolvedValue({ ...mockConversationEntity, id: 'new-convo-uuid' });
+      // Explicit messageCount: 0 to avoid mutation pollution from earlier tests
+      convoRepo.save.mockResolvedValue({ ...mockConversationEntity, id: 'new-convo-uuid', messageCount: 0 });
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('Fresh opening');
+      llmService.chat.mockResolvedValue('{"reply":"Fresh opening","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, forceNew: true };
       const result = await service.chat(mockUserId, dto, 'lang-en');
@@ -528,8 +565,9 @@ describe('ScenarioChatService', () => {
       expect(qb.update).toHaveBeenCalled();
       expect(qb.set).toHaveBeenCalled();
       expect(qb.execute).toHaveBeenCalled();
-      expect(result.conversationId).toBe('new-convo-uuid');
-      expect(result.turn).toBe(1);
+      expect(result.scenario.conversation_id).toBe('new-convo-uuid');
+      // AI opening (no user message): messageCount=1, turnAfter=floor(1/2)=0
+      expect(result.scenario.turn).toBe(0);
     });
   });
 
@@ -543,14 +581,16 @@ describe('ScenarioChatService', () => {
           createdAt: now,
           updatedAt: now,
           messageCount: 24,
-          metadata: { completed: true, maxTurns: 12 },
+          status: ScenarioChatStatus.DONE,
+          metadata: { maxTurns: 12 },
         },
         {
           id: 'convo-b',
           createdAt: earlier,
           updatedAt: earlier,
           messageCount: 6,
-          metadata: { completed: false, maxTurns: 12 },
+          status: ScenarioChatStatus.CHATTING,
+          metadata: { maxTurns: 12 },
         },
       ]);
 
@@ -566,11 +606,11 @@ describe('ScenarioChatService', () => {
         startedAt: now.toISOString(),
         lastTurnAt: now.toISOString(),
         turnCount: 12,
-        completed: true,
+        status: ScenarioChatStatus.DONE,
         maxTurns: 12,
       });
       expect(result.items[1].turnCount).toBe(3);
-      expect(result.items[1].completed).toBe(false);
+      expect(result.items[1].status).toBe(ScenarioChatStatus.CHATTING);
     });
 
     it('should return empty list when user has no conversations', async () => {
@@ -586,12 +626,13 @@ describe('ScenarioChatService', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           messageCount: 0,
+          status: ScenarioChatStatus.CHATTING,
           metadata: null,
         },
       ]);
       const result = await service.listConversations(mockUserId, mockScenarioId);
       expect(result.items[0].maxTurns).toBe(12);
-      expect(result.items[0].completed).toBe(false);
+      expect(result.items[0].status).toBe(ScenarioChatStatus.CHATTING);
     });
   });
 
@@ -603,24 +644,26 @@ describe('ScenarioChatService', () => {
         userId: mockUserId,
         scenarioId: mockScenarioId,
         messageCount: 2,
-        metadata: { completed: false, maxTurns: 12 },
+        status: ScenarioChatStatus.CHATTING,
+        metadata: { maxTurns: 12 },
       });
       msgRepo.find.mockResolvedValue([
-        { role: MessageRole.USER, content: 'hello', createdAt: created },
-        { role: MessageRole.ASSISTANT, content: 'hi', createdAt: created },
+        { id: 'msg-1', role: MessageRole.USER, content: 'hello', createdAt: created },
+        { id: 'msg-2', role: MessageRole.ASSISTANT, content: 'hi', createdAt: created },
       ]);
 
       const result = await service.getConversation(mockUserId, mockConversationId);
 
       expect(result).toEqual({
-        id: mockConversationId,
-        scenarioId: mockScenarioId,
-        completed: false,
-        turn: 1,
-        maxTurns: 12,
+        scenario: {
+          conversation_id: mockConversationId,
+          max_turns: 12,
+          turn: 1,
+          status: ScenarioChatStatus.CHATTING,
+        },
         messages: [
-          { role: 'user', content: 'hello', createdAt: created.toISOString() },
-          { role: 'assistant', content: 'hi', createdAt: created.toISOString() },
+          { id: 'msg-1', role: 'user', content: 'hello', created_at: created.toISOString() },
+          { id: 'msg-2', role: 'assistant', content: 'hi', created_at: created.toISOString() },
         ],
       });
     });
@@ -631,11 +674,12 @@ describe('ScenarioChatService', () => {
         userId: mockUserId,
         scenarioId: mockScenarioId,
         messageCount: 2,
+        status: ScenarioChatStatus.CHATTING,
         metadata: {},
       });
       msgRepo.find.mockResolvedValue([
-        { role: MessageRole.SYSTEM, content: 'sys', createdAt: new Date() },
-        { role: MessageRole.USER, content: 'hi', createdAt: new Date() },
+        { id: 'sys-1', role: MessageRole.SYSTEM, content: 'sys', createdAt: new Date() },
+        { id: 'msg-1', role: MessageRole.USER, content: 'hi', createdAt: new Date() },
       ]);
       const result = await service.getConversation(mockUserId, mockConversationId);
       expect(result.messages).toHaveLength(1);
@@ -655,6 +699,7 @@ describe('ScenarioChatService', () => {
         userId: 'other-user',
         scenarioId: mockScenarioId,
         messageCount: 0,
+        status: ScenarioChatStatus.CHATTING,
         metadata: {},
       });
       await expect(service.getConversation(mockUserId, mockConversationId)).rejects.toThrow(
@@ -673,7 +718,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('reply');
+      llmService.chat.mockResolvedValue('{"reply":"reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, message: 'Hello' };
       await service.chat(mockUserId, dto, 'lang-en');
@@ -701,7 +746,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(mockConversationEntity);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt text');
-      llmService.chat.mockResolvedValue('reply');
+      llmService.chat.mockResolvedValue('{"reply":"reply","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, message: 'User message' };
       await service.chat(mockUserId, dto, 'lang-en');
@@ -728,7 +773,7 @@ describe('ScenarioChatService', () => {
       convoRepo.save.mockResolvedValue(conv);
       msgRepo.find.mockResolvedValue([]);
       promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('reply');
+      llmService.chat.mockResolvedValue('{"reply":"reply","is_end":false}');
       return conv;
     };
 
@@ -773,7 +818,7 @@ describe('ScenarioChatService', () => {
       const dto = { scenarioId: mockScenarioId };
       const result = await service.chat(mockUserId, dto, 'lang-en');
 
-      expect(result.reply).toBe('reply');
+      expect(result.scenario).toBeDefined();
       const saveCalls = convoRepo.save.mock.calls;
       const errorSave = saveCalls.find((c: any[]) => Array.isArray(c[0]?.injectedVocabIds) && c[0].injectedVocabIds.length === 0);
       expect(errorSave).toBeDefined();

@@ -8,8 +8,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
-import { AiConversation, AiConversationMessage, MessageRole, VocabularyInjectionEvent } from '@/database/entities';
-import { AiConversationType } from '@/database/entities/ai-conversation.entity';
+import {
+  AiConversation,
+  AiConversationMessage,
+  MessageRole,
+  VocabularyInjectionEvent,
+} from '@/database/entities';
+import { AiConversationType, ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
+import { parseScenarioReply } from './scenario-llm-reply-parser';
 import { Vocabulary } from '@/database/entities/vocabulary.entity';
 import { UnifiedLLMService } from '@/modules/ai/services/unified-llm.service';
 import { PromptLoaderService } from '@/modules/ai/services/prompt-loader.service';
@@ -23,7 +29,6 @@ import { matchesWord } from './vocabulary-usage-matcher';
 import {
   ScenarioChatRequestDto,
   ScenarioChatResponseDto,
-  ScenarioConversationDetailDto,
   ScenarioConversationListResponseDto,
 } from '../dto/scenario-chat.dto';
 
@@ -86,7 +91,7 @@ export class ScenarioChatService {
       : await this.findOrCreate(userId, scenario.id, scenario.languageId);
 
     // 4. Reject if already completed
-    if (conversation.metadata?.['completed'] === true) {
+    if (conversation.status === ScenarioChatStatus.DONE) {
       throw new BadRequestException(
         'Conversation is completed. Pass forceNew: true to start a new one.',
       );
@@ -106,7 +111,10 @@ export class ScenarioChatService {
     const isWrapUp = currentTurn >= maxTurns;
 
     // 6b. Resolve injected vocabulary for this conversation
-    const injectedVocab = await this.resolveInjectedVocabulary(conversation, langCtx.targetLangCode);
+    const injectedVocab = await this.resolveInjectedVocabulary(
+      conversation,
+      langCtx.targetLangCode,
+    );
 
     // 7. Build system prompt
     const systemPrompt = this.promptLoader.loadPrompt('scenario-chat-prompt.json', {
@@ -134,7 +142,7 @@ export class ScenarioChatService {
     }
 
     // 9. Call LLM
-    const reply = await this.llmService.chat(messages, {
+    const raw = await this.llmService.chat(messages, {
       model: this.defaultModel,
       metadata: {
         feature: LangfuseFeature.SCENARIO_CHAT,
@@ -144,6 +152,8 @@ export class ScenarioChatService {
         scenarioId: scenario.id,
       },
     });
+
+    const { reply, isEnd } = parseScenarioReply(raw);
 
     // 10. Persist messages
     if (dto.message) {
@@ -164,16 +174,42 @@ export class ScenarioChatService {
     );
 
     // 11. Update conversation state
-    const completed = currentTurn >= maxTurns;
     conversation.messageCount += dto.message ? 2 : 1;
-    conversation.metadata = { ...(conversation.metadata ?? {}), maxTurns, completed };
+    const turnAfter = Math.floor(conversation.messageCount / 2);
+    const hardEnd = turnAfter >= maxTurns;
+    conversation.status = isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
+    conversation.metadata = { ...(conversation.metadata ?? {}), maxTurns };
     await this.convoRepo.save(conversation);
 
     // 12. Fire-and-forget vocab usage tracking
-    void this.trackUsage(conversation.id, userId, currentTurn, injectedVocab, dto.message)
-      .catch((err) => this.logger.warn(`Usage-track failed conv=${conversation.id}: ${(err as Error).message}`));
+    void this.trackUsage(conversation.id, userId, currentTurn, injectedVocab, dto.message).catch(
+      (err) =>
+        this.logger.warn(`Usage-track failed conv=${conversation.id}: ${(err as Error).message}`),
+    );
 
-    return { reply, conversationId: conversation.id, turn: currentTurn, maxTurns, completed };
+    // 13. Re-query transcript for response
+    const messageRows = await this.msgRepo.find({
+      where: { conversationId: conversation.id },
+      order: { createdAt: 'ASC' },
+    });
+    const transcript = messageRows
+      .filter((m) => m.role === MessageRole.USER || m.role === MessageRole.ASSISTANT)
+      .map((m) => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        created_at: m.createdAt.toISOString(),
+      }));
+
+    return {
+      scenario: {
+        conversation_id: conversation.id,
+        max_turns: maxTurns,
+        turn: turnAfter,
+        status: conversation.status,
+      },
+      messages: transcript,
+    };
   }
 
   private async findOrCreate(
@@ -184,7 +220,7 @@ export class ScenarioChatService {
     const existing = await this.convoRepo
       .createQueryBuilder('c')
       .where('c.userId = :userId AND c.scenarioId = :scenarioId', { userId, scenarioId })
-      .andWhere(`c.metadata->>'completed' IS DISTINCT FROM 'true'`)
+      .andWhere('c.status = :active', { active: ScenarioChatStatus.CHATTING })
       .orderBy('c.createdAt', 'DESC')
       .getOne();
 
@@ -198,7 +234,7 @@ export class ScenarioChatService {
           languageId,
           type: AiConversationType.AUTHENTICATED,
           topic: 'scenario_roleplay',
-          metadata: { maxTurns: MAX_TURNS, completed: false },
+          metadata: { maxTurns: MAX_TURNS },
         }),
       );
     } catch (err: unknown) {
@@ -208,7 +244,7 @@ export class ScenarioChatService {
         const race = await this.convoRepo
           .createQueryBuilder('c')
           .where('c.userId = :userId AND c.scenarioId = :scenarioId', { userId, scenarioId })
-          .andWhere(`c.metadata->>'completed' IS DISTINCT FROM 'true'`)
+          .andWhere('c.status = :active', { active: ScenarioChatStatus.CHATTING })
           .orderBy('c.createdAt', 'DESC')
           .getOne();
         if (race) return race;
@@ -238,11 +274,9 @@ export class ScenarioChatService {
     await this.convoRepo
       .createQueryBuilder()
       .update(AiConversation)
-      .set({
-        metadata: () => `COALESCE(metadata, '{}'::jsonb) || '{"completed":true}'::jsonb`,
-      })
+      .set({ status: ScenarioChatStatus.DONE })
       .where('user_id = :userId AND scenario_id = :scenarioId', { userId, scenarioId })
-      .andWhere(`metadata->>'completed' IS DISTINCT FROM 'true'`)
+      .andWhere('status = :active', { active: ScenarioChatStatus.CHATTING })
       .execute();
   }
 
@@ -266,7 +300,7 @@ export class ScenarioChatService {
         startedAt: r.createdAt.toISOString(),
         lastTurnAt: r.updatedAt.toISOString(),
         turnCount: Math.floor(r.messageCount / 2),
-        completed: r.metadata?.['completed'] === true,
+        status: r.status,
         maxTurns: (r.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS,
       })),
     };
@@ -277,10 +311,7 @@ export class ScenarioChatService {
    * Owner-check only — any authenticated user may read their own conversations,
    * even for scenarios they no longer have premium access to.
    */
-  async getConversation(
-    userId: string,
-    conversationId: string,
-  ): Promise<ScenarioConversationDetailDto> {
+  async getConversation(userId: string, conversationId: string): Promise<ScenarioChatResponseDto> {
     const c = await this.convoRepo.findOne({ where: { id: conversationId } });
     if (!c) throw new NotFoundException('Conversation not found');
     if (c.userId !== userId) throw new ForbiddenException();
@@ -290,24 +321,23 @@ export class ScenarioChatService {
       order: { createdAt: 'ASC' },
     });
 
-    // Surface only user/assistant turns to the client (drop any system rows).
-    const messages = rows
-      .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
-      .map((r) => ({
-        role: r.role as 'user' | 'assistant',
-        content: r.content,
-        createdAt: r.createdAt.toISOString(),
-      }));
-
     const maxTurns = (c.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS;
 
     return {
-      id: c.id,
-      scenarioId: c.scenarioId ?? '',
-      completed: c.metadata?.['completed'] === true,
-      turn: Math.floor(c.messageCount / 2),
-      maxTurns,
-      messages,
+      scenario: {
+        conversation_id: c.id,
+        max_turns: maxTurns,
+        turn: Math.floor(c.messageCount / 2),
+        status: c.status,
+      },
+      messages: rows
+        .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
+        .map((r) => ({
+          id: r.id,
+          role: r.role as 'user' | 'assistant',
+          content: r.content,
+          created_at: r.createdAt.toISOString(),
+        })),
     };
   }
 
@@ -325,7 +355,12 @@ export class ScenarioChatService {
   private async loadLanguageContext(
     userId: string,
     languageId: string,
-  ): Promise<{ targetLanguage: string; targetLangCode: string; nativeLanguage: string; proficiencyLevel: string }> {
+  ): Promise<{
+    targetLanguage: string;
+    targetLangCode: string;
+    nativeLanguage: string;
+    proficiencyLevel: string;
+  }> {
     const [langs, nativeLang] = await Promise.all([
       this.languageService.getUserLanguages(userId),
       this.languageService.getNativeLanguage(userId),
@@ -335,9 +370,7 @@ export class ScenarioChatService {
     // not by the user's stored isActive flag. Fallback to isActive only if the
     // requested language is not yet enrolled (defensive — guard auto-enrolls).
     const target =
-      langs.find((l) => l.languageId === languageId) ??
-      langs.find((l) => l.isActive) ??
-      langs[0];
+      langs.find((l) => l.languageId === languageId) ?? langs.find((l) => l.isActive) ?? langs[0];
     if (!target) throw new BadRequestException('User has no active learning language');
 
     return {
@@ -356,17 +389,27 @@ export class ScenarioChatService {
       return this.vocabInjection.hydrateByIds(conversation.injectedVocabIds);
     }
     try {
+      const userId = conversation.userId;
+      if (!userId) {
+        throw new Error('Conversation has no userId');
+      }
       const picked = await this.vocabInjection.selectVocabularyForConversation(
-        conversation.userId!,
+        userId,
         targetLangCode,
       );
       conversation.injectedVocabIds = picked.map((v) => v.id);
       await this.convoRepo.save(conversation);
       return picked;
     } catch (err) {
-      this.logger.warn(`Vocab injection failed for conv ${conversation.id}: ${(err as Error).message}`);
+      this.logger.warn(
+        `Vocab injection failed for conv ${conversation.id}: ${(err as Error).message}`,
+      );
       conversation.injectedVocabIds = [];
-      try { await this.convoRepo.save(conversation); } catch { /* swallow */ }
+      try {
+        await this.convoRepo.save(conversation);
+      } catch {
+        /* swallow */
+      }
       return [];
     }
   }
