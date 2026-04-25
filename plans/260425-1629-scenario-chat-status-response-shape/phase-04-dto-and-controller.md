@@ -6,7 +6,7 @@
 
 ## Overview
 **Priority:** P1
-**Status:** pending
+**Status:** done
 **Effort:** 45 min
 
 Define response DTOs for chat + both GET endpoints with snake_case wire format. Verify @Expose actually emits snake_case under the existing `ResponseTransformInterceptor`. If not, fall back to literal snake_case property names.
@@ -126,15 +126,15 @@ List item keys stay camelCase (existing convention). Only the new shape uses sna
 6. Spot-check Swagger at `http://localhost:3000/api/docs` after `npm run start:dev` — confirm payloads render with snake_case keys.
 
 ## Todo List
-- [ ] Delete old DTOs (don't deprecate)
-- [ ] Add new DTOs with literal snake_case property names
-- [ ] Update `ScenarioConversationListItemDto.completed` → `status`
-- [ ] Service returns objects matching new DTO key names
-- [ ] Controller return types updated
-- [ ] `@ApiResponse` types updated on both endpoints
-- [ ] `npm run build` passes
-- [ ] `npm run lint` passes
-- [ ] Swagger renders snake_case keys (manual verify)
+- [x] Delete old DTOs (don't deprecate)
+- [x] Add new DTOs with literal snake_case property names
+- [x] Update `ScenarioConversationListItemDto.completed` → `status`
+- [x] Service returns objects matching new DTO key names
+- [x] Controller return types updated
+- [x] `@ApiResponse` types updated on both endpoints
+- [x] `npm run build` passes
+- [x] `npm run lint` passes
+- [x] Swagger renders snake_case keys (manual verify)
 
 ## Success Criteria
 - Postman/curl shows `{ "data": { "scenario": { "conversation_id": "...", ... }, "messages": [...] } }`.

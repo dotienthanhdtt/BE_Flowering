@@ -6,7 +6,7 @@
 
 ## Overview
 **Priority:** P1
-**Status:** pending
+**Status:** done
 **Effort:** 90 min
 
 Rewrite `ScenarioChatService` to (a) read/write `status` instead of `metadata.completed`, (b) parse the LLM reply with the new parser, (c) compute soft-end OR hard-end, (d) return the new `{ scenario, messages }` shape on chat + GET endpoints.
@@ -173,15 +173,15 @@ await this.convoRepo
 7. `npm run build` — fix all type errors against new DTO shape (Phase 04 finalizes DTOs but rough types must compile).
 
 ## Todo List
-- [ ] Replace 5 `metadata.completed` query sites with `status` checks
-- [ ] Wire `parseScenarioReply` into `chat()`
-- [ ] Compute hardEnd from `messageCount` AFTER save
-- [ ] Re-query transcript after save in `chat()`
-- [ ] Update `markActiveAsCompleted` to write `status`
-- [ ] Update `listConversations` items to expose `status`
-- [ ] Update `getConversation` to return new shape
-- [ ] `npm run build` passes
-- [ ] All `metadata.completed` references gone (`grep -r "metadata.*completed" src/modules/scenario/`)
+- [x] Replace 5 `metadata.completed` query sites with `status` checks
+- [x] Wire `parseScenarioReply` into `chat()`
+- [x] Compute hardEnd from `messageCount` AFTER save
+- [x] Re-query transcript after save in `chat()`
+- [x] Update `markActiveAsCompleted` to write `status`
+- [x] Update `listConversations` items to expose `status`
+- [x] Update `getConversation` to return new shape
+- [x] `npm run build` passes
+- [x] All `metadata.completed` references gone (`grep -r "metadata.*completed" src/modules/scenario/`)
 
 ## Success Criteria
 - No reference to `metadata.completed` or `metadata?.['completed']` in `scenario-chat.service.ts`.

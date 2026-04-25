@@ -33,7 +33,9 @@ export class RevenuecatWebhookController implements OnModuleInit {
   onModuleInit(): void {
     const secret = this.configService.get('revenuecat.webhookSecret', { infer: true });
     if (!secret) {
-      this.logger.warn('REVENUECAT_WEBHOOK_SECRET not configured — POST /webhooks/revenuecat will reject all requests');
+      this.logger.warn(
+        'REVENUECAT_WEBHOOK_SECRET not configured — POST /webhooks/revenuecat will reject all requests',
+      );
       return;
     }
     this.webhookSecret = secret;

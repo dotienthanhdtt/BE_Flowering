@@ -95,7 +95,11 @@ export class AdminContentService implements OnModuleInit {
       model: LLMModel.OPENAI_GPT4O,
       temperature: 0.7,
       maxTokens: 2048,
-      metadata: { feature: LangfuseFeature.ADMIN_CONTENT_GENERATE, adminId, contentType: dto.contentType },
+      metadata: {
+        feature: LangfuseFeature.ADMIN_CONTENT_GENERATE,
+        adminId,
+        contentType: dto.contentType,
+      },
     });
 
     const items = this.parseJson(raw, dto.count);

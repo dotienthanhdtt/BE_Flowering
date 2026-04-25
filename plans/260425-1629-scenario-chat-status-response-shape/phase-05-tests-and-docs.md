@@ -6,7 +6,7 @@
 
 ## Overview
 **Priority:** P1 — gate for merge
-**Status:** pending
+**Status:** done
 **Effort:** 45 min
 
 Update existing tests to the new shape, add coverage for soft-end + parser fallback, update API docs and code-standards note.
@@ -123,18 +123,18 @@ Update existing tests to the new shape, add coverage for soft-end + parser fallb
    All green before merge.
 
 ## Todo List
-- [ ] Parser unit tests added (5 cases)
-- [ ] Service spec updated to new shape (all assertions)
-- [ ] New service test: soft-end via is_end=true
-- [ ] New service test: status=DONE rejection
-- [ ] Hard-end at maxTurns regression test still passes
-- [ ] DTO spec updated
-- [ ] Controller spec updated if needed
-- [ ] `docs/api-documentation.md` reflects new shape
-- [ ] `docs/code-standards.md` notes snake_case exception
-- [ ] `npm run lint` clean
-- [ ] `npm run build` clean
-- [ ] `npm test` all green
+- [x] Parser unit tests added (5 cases)
+- [x] Service spec updated to new shape (all assertions)
+- [x] New service test: soft-end via is_end=true
+- [x] New service test: status=DONE rejection
+- [x] Hard-end at maxTurns regression test still passes
+- [x] DTO spec updated
+- [x] Controller spec updated if needed
+- [x] `docs/api-documentation.md` reflects new shape
+- [x] `docs/code-standards.md` notes snake_case exception
+- [x] `npm run lint` clean
+- [x] `npm run build` clean
+- [x] `npm test` all green (440 tests pass)
 
 ## Success Criteria
 - Test suite passes with no skipped tests.

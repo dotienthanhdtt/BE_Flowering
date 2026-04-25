@@ -111,7 +111,11 @@ export class OnboardingService {
       model: onboardingConfig.llmModel,
       temperature: onboardingConfig.temperature,
       maxTokens: onboardingConfig.maxTokens,
-      metadata: { feature: LangfuseFeature.ONBOARDING_CHAT, conversationId: conversation.id, turn: currentTurn },
+      metadata: {
+        feature: LangfuseFeature.ONBOARDING_CHAT,
+        conversationId: conversation.id,
+        turn: currentTurn,
+      },
     });
 
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn);

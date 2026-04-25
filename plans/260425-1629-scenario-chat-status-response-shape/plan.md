@@ -1,12 +1,13 @@
 ---
 title: "Scenario Chat — Status Column + New Response Shape"
 description: "Replace metadata.completed with ai_conversations.status enum (CHATTING/DONE), reshape POST/GET scenario chat responses to { scenario, messages } in snake_case, add LLM is_end soft-end signal."
-status: pending
+status: done
 priority: P1
 effort: 4h
 branch: dev
 tags: [backend, scenario-chat, migration, api-change, dto]
 created: 2026-04-25
+completed: 2026-04-25
 brainstorm: plans/reports/brainstormer-260425-scenario-chat-status-response.md
 blockedBy: []
 blocks: []
@@ -20,11 +21,11 @@ Replace the JSONB `metadata.completed` flag with a real `status` enum column on 
 
 | Phase | File | Status | Effort |
 |-------|------|--------|--------|
-| 01 | [Migration: status column + index rebuild](phase-01-migration-status-column.md) | pending | 30m |
-| 02 | [Entity + LLM reply parser](phase-02-entity-and-llm-parser.md) | pending | 30m |
-| 03 | [Service refactor: status logic + new response shape](phase-03-service-status-and-shape.md) | pending | 90m |
-| 04 | [DTOs (snake_case) + controller wiring](phase-04-dto-and-controller.md) | pending | 45m |
-| 05 | [Tests + docs](phase-05-tests-and-docs.md) | pending | 45m |
+| 01 | [Migration: status column + index rebuild](phase-01-migration-status-column.md) | done | 30m |
+| 02 | [Entity + LLM reply parser](phase-02-entity-and-llm-parser.md) | done | 30m |
+| 03 | [Service refactor: status logic + new response shape](phase-03-service-status-and-shape.md) | done | 90m |
+| 04 | [DTOs (snake_case) + controller wiring](phase-04-dto-and-controller.md) | done | 45m |
+| 05 | [Tests + docs](phase-05-tests-and-docs.md) | done | 45m |
 
 ## Key Dependencies
 

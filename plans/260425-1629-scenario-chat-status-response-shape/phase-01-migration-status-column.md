@@ -6,7 +6,7 @@
 
 ## Overview
 **Priority:** P1 — blocks every following phase
-**Status:** pending
+**Status:** done
 **Effort:** 30 min
 
 Add a real enum column `ai_conversations.status` with values `CHATTING` / `DONE`. Backfill from `metadata->>'completed'`. Drop the legacy `metadata.completed` key. Recreate the partial unique index against `status` instead of `metadata`.
@@ -98,11 +98,11 @@ Add a real enum column `ai_conversations.status` with values `CHATTING` / `DONE`
 5. Run `npm run migration:revert` and confirm the original index predicate restored. Then re-run.
 
 ## Todo List
-- [ ] Create migration file with both up/down
-- [ ] `npm run build` passes
-- [ ] Local migration run + revert + re-run confirmed
-- [ ] Verify partial unique index uses `status = 'CHATTING'`
-- [ ] Verify metadata no longer contains `completed` key
+- [x] Create migration file with both up/down
+- [x] `npm run build` passes
+- [x] Local migration run + revert + re-run confirmed
+- [x] Verify partial unique index uses `status = 'CHATTING'`
+- [x] Verify metadata no longer contains `completed` key
 
 ## Success Criteria
 - `ai_conversations.status` column exists with correct enum.

@@ -6,7 +6,7 @@
 
 ## Overview
 **Priority:** P1 — required by Phase 03
-**Status:** pending
+**Status:** done
 **Effort:** 30 min
 
 Add `status` to the `AiConversation` entity. Add a small JSON parser that turns the LLM's structured output into `{ reply, is_end }` with safe fallback.
@@ -95,11 +95,11 @@ Add `status` to the `AiConversation` entity. Add a small JSON parser that turns 
 5. Run `npm run build`. Fix any type errors before moving on.
 
 ## Todo List
-- [ ] Add `ScenarioChatStatus` enum + column to entity
-- [ ] Verify entity registered in `database.module.ts` (already is — no change needed, just confirm)
-- [ ] Create `scenario-llm-reply-parser.ts`
-- [ ] `npm run build` passes
-- [ ] No new lint errors (`npm run lint`)
+- [x] Add `ScenarioChatStatus` enum + column to entity
+- [x] Verify entity registered in `database.module.ts` (already is — no change needed, just confirm)
+- [x] Create `scenario-llm-reply-parser.ts`
+- [x] `npm run build` passes
+- [x] No new lint errors (`npm run lint`)
 
 ## Success Criteria
 - Entity compiles, TypeORM generates no spurious diff (`npm run migration:generate -- src/database/migrations/check` should produce empty migration).

@@ -14,8 +14,12 @@ export class CreateVocabularyInjectionEventsTable1778100100000 implements Migrat
         "created_at" timestamptz NOT NULL DEFAULT NOW()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_vocab_inj_events_conv" ON "vocabulary_injection_events" ("conversation_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_vocab_inj_events_vocab" ON "vocabulary_injection_events" ("vocabulary_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_vocab_inj_events_conv" ON "vocabulary_injection_events" ("conversation_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_vocab_inj_events_vocab" ON "vocabulary_injection_events" ("vocabulary_id")`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
