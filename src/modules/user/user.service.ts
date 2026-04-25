@@ -33,10 +33,7 @@ export class UserService {
    * Get user profile with native language relation
    */
   async getProfile(userId: string): Promise<UserProfileDto> {
-    const user = await this.userRepo.findOne({
-      where: { id: userId },
-      relations: ['nativeLanguage'],
-    });
+    const user = await this.userRepo.findOne({ where: { id: userId } });
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -68,9 +65,7 @@ export class UserService {
       email: user.email,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      nativeLanguageId: user.nativeLanguageId,
-      nativeLanguageCode: user.nativeLanguage?.code,
-      nativeLanguageName: user.nativeLanguage?.name,
+      nativeLanguage: user.nativeLanguage,
       createdAt: user.createdAt,
     };
   }

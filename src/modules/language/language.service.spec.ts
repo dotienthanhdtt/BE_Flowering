@@ -93,29 +93,29 @@ describe('LanguageService', () => {
 
   describe('setNativeLanguage', () => {
     const userId = 'user-uuid';
-    const langId = 'lang-uuid';
+    const langCode = 'en';
 
     it('should set native language successfully', async () => {
-      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId });
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, code: langCode });
       userRepo.update.mockResolvedValue({ affected: 1 });
 
-      const result = await service.setNativeLanguage(userId, { languageId: langId });
+      const result = await service.setNativeLanguage(userId, { languageCode: langCode });
 
-      expect(userRepo.update).toHaveBeenCalledWith(userId, { nativeLanguageId: langId });
-      expect(result.id).toBe(langId);
+      expect(userRepo.update).toHaveBeenCalledWith(userId, { nativeLanguage: langCode });
+      expect(result.code).toBe(langCode);
     });
 
     it('should throw NotFoundException for invalid language', async () => {
       languageRepo.findOne.mockResolvedValue(null);
       await expect(
-        service.setNativeLanguage(userId, { languageId: langId }),
+        service.setNativeLanguage(userId, { languageCode: langCode }),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException for non-native-available language', async () => {
       languageRepo.findOne.mockResolvedValue({ ...mockLang, isNativeAvailable: false });
       await expect(
-        service.setNativeLanguage(userId, { languageId: langId }),
+        service.setNativeLanguage(userId, { languageCode: langCode }),
       ).rejects.toThrow(BadRequestException);
     });
   });

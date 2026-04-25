@@ -5,5 +5,5 @@ Respond with ONLY a JSON object:
 - partOfSpeech: noun, verb, adjective, adverb, etc.
 - pronunciation: phonetic transcription of the original word (IPA format)
 - definition: brief definition of the word in {{sourceLang}} (the original language)
-- examples: exactly 2 example sentences using the word in {{sourceLang}} (the original language)
+- examples: exactly 3 example sentences using the word in {{sourceLang}} (the original language)
 No explanations. No markdown. Only the JSON object.

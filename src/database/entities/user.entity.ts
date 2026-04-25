@@ -4,10 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { Language } from './language.entity';
 
 @Entity('users')
 export class User {
@@ -51,12 +48,8 @@ export class User {
   @Column({ type: 'varchar', length: 20, name: 'phone_number', nullable: true })
   phoneNumber?: string;
 
-  @ManyToOne(() => Language, { nullable: true })
-  @JoinColumn({ name: 'native_language_id' })
-  nativeLanguage?: Language;
-
-  @Column({ type: 'uuid', name: 'native_language_id', nullable: true })
-  nativeLanguageId?: string;
+  @Column({ type: 'varchar', length: 10, name: 'native_language', nullable: true })
+  nativeLanguage?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

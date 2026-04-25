@@ -60,13 +60,13 @@ export class LanguageService implements OnModuleInit {
 
   async setNativeLanguage(userId: string, dto: SetNativeLanguageDto): Promise<LanguageDto> {
     const language = await this.languageRepo.findOne({
-      where: { id: dto.languageId, isActive: true },
+      where: { code: dto.languageCode, isActive: true },
     });
     if (!language) throw new NotFoundException('Language not found');
     if (!language.isNativeAvailable) {
       throw new BadRequestException('Language is not available as a native language');
     }
-    await this.userRepo.update(userId, { nativeLanguageId: dto.languageId });
+    await this.userRepo.update(userId, { nativeLanguage: language.code });
     return this.mapToLanguageDto(language);
   }
 
@@ -140,11 +140,9 @@ export class LanguageService implements OnModuleInit {
   }
 
   async getNativeLanguage(userId: string): Promise<Language | null> {
-    const user = await this.userRepo.findOne({
-      where: { id: userId },
-      relations: ['nativeLanguage'],
-    });
-    return user?.nativeLanguage ?? null;
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user?.nativeLanguage) return null;
+    return this.languageRepo.findOne({ where: { code: user.nativeLanguage } });
   }
 
   async removeUserLanguage(userId: string, languageId: string): Promise<void> {

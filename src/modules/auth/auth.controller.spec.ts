@@ -35,7 +35,7 @@ describe('AuthController', () => {
     appleProviderId: undefined,
     firebaseUid: undefined,
     avatarUrl: undefined,
-    nativeLanguageId: undefined,
+    nativeLanguage: undefined,
     roles: ['user'],
     createdAt: new Date(),
     updatedAt: new Date(),

@@ -383,6 +383,21 @@ export class AuthService {
         error,
       });
     }
+
+    // Bootstrap user.nativeLanguage from onboarding metadata (language code).
+    try {
+      const meta = conversation.metadata as Record<string, string> | null;
+      const nativeLanguageCode = meta?.nativeLanguage;
+      if (nativeLanguageCode) {
+        await this.userRepository.update(userId, { nativeLanguage: nativeLanguageCode });
+      }
+    } catch (error) {
+      this.logger.warn('Failed to bootstrap user native language from onboarding', {
+        conversationId,
+        userId,
+        error,
+      });
+    }
   }
 
   /**

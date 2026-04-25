@@ -16,14 +16,8 @@ export class UserProfileDto {
   @ApiPropertyOptional({ description: 'Avatar URL' })
   avatarUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Native language ID' })
-  nativeLanguageId?: string;
-
-  @ApiPropertyOptional({ description: 'Native language code' })
-  nativeLanguageCode?: string;
-
-  @ApiPropertyOptional({ description: 'Native language name' })
-  nativeLanguageName?: string;
+  @ApiPropertyOptional({ description: 'Native language code (e.g., "vi", "en")' })
+  nativeLanguage?: string;
 
   @ApiProperty({ description: 'Account creation date' })
   createdAt!: Date;

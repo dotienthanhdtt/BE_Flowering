@@ -40,7 +40,7 @@ describe('AuthService', () => {
     googleProviderId: undefined,
     appleProviderId: undefined,
     firebaseUid: undefined,
-    nativeLanguageId: undefined,
+    nativeLanguage: undefined,
     roles: ['user'],
     createdAt: new Date(),
     updatedAt: new Date(),
