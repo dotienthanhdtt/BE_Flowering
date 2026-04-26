@@ -198,6 +198,7 @@ export class TranslationService {
 
   async translateChunk(
     messageId: string,
+    word: string,
     sourceLang: string,
     targetLang: string,
     tapFrom: number,
@@ -206,6 +207,9 @@ export class TranslationService {
   ): Promise<ChunkTranslationResult> {
     if (tapFrom < 0 || tapTo <= tapFrom) {
       throw new BadRequestException('Invalid tap range');
+    }
+    if (!word || !word.trim()) {
+      throw new BadRequestException('word is required');
     }
 
     const message = await this.messageRepo.findOne({
@@ -221,6 +225,7 @@ export class TranslationService {
 
     const prompt = this.promptLoader.loadPrompt('translate_word.md', {
       sentence: message.content,
+      word,
       source_lang: sourceLang,
       target_lang: targetLang,
       tap_from: String(tapFrom),

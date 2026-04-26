@@ -24,6 +24,11 @@ export class TranslateChunkRequestDto {
   @IsUUID()
   messageId!: string;
 
+  @ApiProperty({ example: '科技', description: 'The tapped word/text the client wants to translate' })
+  @IsString()
+  @MaxLength(255)
+  word!: string;
+
   @ApiProperty({ example: 'en' })
   @IsString()
   @MaxLength(10)

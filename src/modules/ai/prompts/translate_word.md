@@ -39,6 +39,7 @@ If the tapped position sits inside an idiom or fixed expression, return the WHOL
 
 # INPUT
 sentence: {{sentence}}
+word: {{word}}
 source_lang: {{source_lang}}
 target_lang: {{target_lang}}
 tap_from: {{tap_from}}

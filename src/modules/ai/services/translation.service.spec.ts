@@ -156,7 +156,7 @@ describe('TranslationService', () => {
         text: '科技公司', type: 'compound_noun', from: 4, to: 8,
         translation: 'công ty công nghệ',
       }));
-      const r = await service.translateChunk(messageId, 'zh', 'vi', 4, 5, userId);
+      const r = await service.translateChunk(messageId, '科技', 'zh', 'vi', 4, 5, userId);
       expect(r.text).toBe('科技公司');
       expect(r.type).toBe('compound_noun');
       expect(r.translation).toBe('công ty công nghệ');
@@ -165,7 +165,7 @@ describe('TranslationService', () => {
 
     it('throws 404 when message not found', async () => {
       messageRepo.findOne.mockResolvedValue(null);
-      await expect(service.translateChunk(messageId, 'zh', 'vi', 0, 1, userId))
+      await expect(service.translateChunk(messageId, '科技', 'zh', 'vi', 0, 1, userId))
         .rejects.toThrow(NotFoundException);
     });
 
@@ -174,22 +174,22 @@ describe('TranslationService', () => {
         id: messageId, content: sentence, conversationId: 'c',
         conversation: { id: 'c', userId: 'other-user', type: AiConversationType.AUTHENTICATED },
       });
-      await expect(service.translateChunk(messageId, 'zh', 'vi', 0, 1, userId))
+      await expect(service.translateChunk(messageId, '科技', 'zh', 'vi', 0, 1, userId))
         .rejects.toThrow(ForbiddenException);
     });
 
     it('throws 400 on invalid tap range (from >= to)', async () => {
-      await expect(service.translateChunk(messageId, 'zh', 'vi', 5, 5, userId))
+      await expect(service.translateChunk(messageId, '科技', 'zh', 'vi', 5, 5, userId))
         .rejects.toThrow(BadRequestException);
     });
 
     it('throws 400 on invalid tap range (negative from)', async () => {
-      await expect(service.translateChunk(messageId, 'zh', 'vi', -1, 2, userId))
+      await expect(service.translateChunk(messageId, '科技', 'zh', 'vi', -1, 2, userId))
         .rejects.toThrow(BadRequestException);
     });
 
     it('throws 400 when tapTo exceeds sentence length', async () => {
-      await expect(service.translateChunk(messageId, 'zh', 'vi', 0, 999, userId))
+      await expect(service.translateChunk(messageId, '科技', 'zh', 'vi', 0, 999, userId))
         .rejects.toThrow(BadRequestException);
     });
 
@@ -198,7 +198,7 @@ describe('TranslationService', () => {
         text: '科技', type: 'NONSENSE', from: 4, to: 6,
         translation: 'tech',
       }));
-      const r = await service.translateChunk(messageId, 'zh', 'vi', 4, 5, userId);
+      const r = await service.translateChunk(messageId, '科技', 'zh', 'vi', 4, 5, userId);
       expect(r.type).toBe('word');
     });
 
@@ -207,7 +207,7 @@ describe('TranslationService', () => {
         text: '科技', type: 'word', from: -5, to: 9999,
         translation: 'tech',
       }));
-      const r = await service.translateChunk(messageId, 'zh', 'vi', 4, 5, userId);
+      const r = await service.translateChunk(messageId, '科技', 'zh', 'vi', 4, 5, userId);
       expect(r.from).toBe(4);
       expect(r.to).toBe(5);
     });
@@ -216,7 +216,7 @@ describe('TranslationService', () => {
       llmService.chat.mockResolvedValue(
         '```json\n{"text":"科技","type":"word","from":4,"to":6,"translation":"tech"}\n```',
       );
-      const r = await service.translateChunk(messageId, 'zh', 'vi', 4, 5, userId);
+      const r = await service.translateChunk(messageId, '科技', 'zh', 'vi', 4, 5, userId);
       expect(r.text).toBe('科技');
     });
   });

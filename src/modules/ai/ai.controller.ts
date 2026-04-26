@@ -146,6 +146,7 @@ export class AiController {
   async translateChunk(@CurrentUser() user: User, @Body() dto: TranslateChunkRequestDto) {
     return this.translationService.translateChunk(
       dto.messageId,
+      dto.word,
       dto.sourceLang,
       dto.targetLang,
       dto.tapFrom,
