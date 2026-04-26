@@ -32,6 +32,7 @@ import {
   TranslateRequestDto,
   TranslateType,
   TranscribeResponseDto,
+  TranslateChunkRequestDto,
 } from './dto';
 
 /**
@@ -133,6 +134,23 @@ export class AiController {
       dto.targetLang,
       userId,
       dto.conversationId,
+    );
+  }
+
+  @SkipLanguageContext()
+  @RequirePremium(false)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('translate/word')
+  @ApiOperation({ summary: 'Translate a context-aware chunk in a sentence' })
+  @ApiResponse({ status: 200, description: 'Chunk translation result' })
+  async translateChunk(@CurrentUser() user: User, @Body() dto: TranslateChunkRequestDto) {
+    return this.translationService.translateChunk(
+      dto.messageId,
+      dto.sourceLang,
+      dto.targetLang,
+      dto.tapFrom,
+      dto.tapTo,
+      user.id,
     );
   }
 

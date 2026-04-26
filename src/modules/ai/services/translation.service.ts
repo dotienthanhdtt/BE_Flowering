@@ -35,6 +35,27 @@ export interface SentenceTranslationResult {
   translation: string;
 }
 
+export interface ChunkTranslationResult {
+  text: string;
+  type: string;
+  from: number;
+  to: number;
+  translation: string;
+  pronunciation?: string;
+  vocabularyId?: string;
+}
+
+const ALLOWED_CHUNK_TYPES = new Set([
+  'word',
+  'phrase',
+  'idiom',
+  'phrasal_verb',
+  'compound_noun',
+  'particle',
+  'article',
+  'fixed_expression',
+]);
+
 @Injectable()
 export class TranslationService {
   private readonly logger = new Logger(TranslationService.name);
@@ -59,7 +80,7 @@ export class TranslationService {
       throw new BadRequestException('Authentication or conversationId required');
     }
 
-    const prompt = this.promptLoader.loadPrompt('translate-word.md', {
+    const prompt = this.promptLoader.loadPrompt('translate_phase.md', {
       word: text,
       sourceLang,
       targetLang,
@@ -176,6 +197,80 @@ export class TranslationService {
     };
   }
 
+  async translateChunk(
+    messageId: string,
+    sourceLang: string,
+    targetLang: string,
+    tapFrom: number,
+    tapTo: number,
+    userId: string,
+  ): Promise<ChunkTranslationResult> {
+    if (tapFrom < 0 || tapTo <= tapFrom) {
+      throw new BadRequestException('Invalid tap range');
+    }
+
+    const message = await this.messageRepo.findOne({
+      where: { id: messageId },
+      relations: ['conversation'],
+    });
+    if (!message) throw new NotFoundException('Message not found');
+    this.verifyMessageOwnership(message, userId);
+
+    if (tapTo > message.content.length) {
+      throw new BadRequestException('tapTo exceeds message length');
+    }
+
+    const prompt = this.promptLoader.loadPrompt('translate_word.md', {
+      sentence: message.content,
+      source_lang: sourceLang,
+      target_lang: targetLang,
+      tap_from: String(tapFrom),
+      tap_to: String(tapTo),
+    });
+
+    const response = await this.llmService.chat([new HumanMessage(prompt)], {
+      model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
+      temperature: 0,
+      metadata: {
+        feature: LangfuseFeature.TRANSLATE_CHUNK,
+        userId,
+        messageId,
+        conversationId: message.conversationId,
+        sourceLang,
+        targetLang,
+      },
+    });
+
+    const parsed = this.parseChunkResponse(response, message.content, tapFrom, tapTo);
+    const chunkText = parsed.text.slice(0, 255);
+
+    const result = await this.vocabularyRepo
+      .createQueryBuilder()
+      .insert()
+      .into(Vocabulary)
+      .values({
+        userId,
+        word: chunkText,
+        translation: parsed.translation,
+        sourceLang,
+        targetLang,
+        type: parsed.type,
+        pronunciation: parsed.pronunciation,
+      })
+      .orUpdate(
+        ['translation', 'type', 'pronunciation'],
+        ['user_id', 'word', 'source_lang', 'target_lang'],
+      )
+      .returning('id')
+      .execute();
+
+    return {
+      ...parsed,
+      text: chunkText,
+      vocabularyId: result.generatedMaps[0]?.id ?? result.raw[0]?.id,
+    };
+  }
+
   /** Verify the caller owns the message's conversation via userId or conversationId */
   private verifyMessageOwnership(
     message: AiConversationMessage & { conversation: AiConversation },
@@ -190,6 +285,44 @@ export class TranslationService {
     )
       return;
     throw new ForbiddenException('You do not own this conversation');
+  }
+
+  private parseChunkResponse(
+    raw: string,
+    sentence: string,
+    tapFrom: number,
+    tapTo: number,
+  ): Omit<ChunkTranslationResult, 'vocabularyId'> {
+    let obj: Record<string, unknown> = {};
+    try {
+      obj = JSON.parse(raw.trim());
+    } catch {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) {
+        try {
+          obj = JSON.parse(m[0]);
+        } catch {
+          /* fall through */
+        }
+      }
+    }
+
+    const text = String(obj.text ?? sentence.slice(tapFrom, tapTo));
+    const typeRaw = String(obj.type ?? 'word');
+    const type = ALLOWED_CHUNK_TYPES.has(typeRaw) ? typeRaw : 'word';
+    let from = Number.isInteger(obj.from) ? (obj.from as number) : tapFrom;
+    let to = Number.isInteger(obj.to) ? (obj.to as number) : tapTo;
+    if (from < 0 || to > sentence.length || from >= to) {
+      this.logger.warn(
+        `LLM returned invalid range [${from},${to}], clamping to [${tapFrom},${tapTo}]`,
+      );
+      from = tapFrom;
+      to = tapTo;
+    }
+    const translation = String(obj.translation ?? '').slice(0, 255);
+    const pronunciation = obj.pronunciation == null ? undefined : String(obj.pronunciation);
+
+    return { text, type, from, to, translation, pronunciation };
   }
 
   private parseWordResponse(response: string): ReturnType<typeof this.extractWordFields> {

@@ -1,6 +1,6 @@
 # API Documentation
 
-**Last Updated:** 2026-04-18
+**Last Updated:** 2026-04-27
 **Base URL:** `http://localhost:3000` (development)
 **API Version:** 2.0.0
 
@@ -435,6 +435,60 @@ Check grammar/vocabulary. **Auth:** Optional (Public) | **Rate Limit:** 5 req/mi
 
 #### POST /ai/translate
 Translate WORD or SENTENCE. **Auth:** Optional | **Rate Limit:** 5 req/min | **Request (WORD):** `{type: "WORD", text, source_lang, target_lang}` → **Response:** `{data: {translation, word, pronunciation}}` | **Request (SENTENCE):** `{type: "SENTENCE", message_id, source_lang, target_lang, conversation_id?}` → **Response:** `{data: {translated_content}}`
+
+---
+
+#### POST /ai/translate/word
+Resolve and translate the smallest meaning-bearing chunk at a tapped position in a chat message. **Auth:** Required | **Rate Limit:** 5 req/60s | **Request:**
+```json
+{
+  "message_id": "uuid",
+  "source_lang": "en",
+  "target_lang": "vi",
+  "tap_from": 4,
+  "tap_to": 9
+}
+```
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "text": "going",
+    "type": "word|phrase|idiom|phrasal_verb|compound_noun|particle|article|fixed_expression",
+    "from": 4,
+    "to": 9,
+    "translation": "đi",
+    "pronunciation": "ɡoʊ.ɪŋ",
+    "vocabulary_id": "uuid"
+  }
+}
+```
+
+**Behavior:**
+- Resolves the exact chunk at character positions [tap_from, tap_to) in the message
+- LLM identifies the smallest grammatically complete unit (word, phrase, idiom, etc.)
+- Translates the resolved chunk
+- Upserts to Vocabulary table with chunk type for future reference
+- Anonymous users (no auth) return 401
+
+**Error Cases:**
+- **400** (Bad Request): Invalid tap range (tap_from < 0, tap_to <= tap_from, or tap_to > message length)
+- **401** (Unauthorized): Missing or invalid JWT token
+- **403** (Forbidden): Caller does not own the message's conversation
+- **404** (Not Found): Message ID not found
+
+**Chunk Type Values:**
+- `word` — single morpheme unit (e.g., "run", "going")
+- `phrase` — multi-word collocation (e.g., "take care of")
+- `idiom` — fixed expression (e.g., "piece of cake")
+- `phrasal_verb` — verb + particle(s) (e.g., "look up")
+- `compound_noun` — noun compound (e.g., "coffee table")
+- `particle` — grammatical particle (e.g., "to" in infinitive)
+- `article` — article (e.g., "a", "the")
+- `fixed_expression` — formulaic sequence (e.g., "nice to meet you")
 
 ---
 

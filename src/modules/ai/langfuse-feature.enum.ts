@@ -11,6 +11,7 @@ export enum LangfuseFeature {
   ONBOARDING_SCENARIOS = 'onboarding-scenarios',
   TRANSLATE_WORD = 'translate-word',
   TRANSLATE_SENTENCE = 'translate-sentence',
+  TRANSLATE_CHUNK = 'translate-chunk',
   SCENARIO_CHAT = 'scenario-chat',
   ADMIN_CONTENT_GENERATE = 'admin-content-generate',
 }
