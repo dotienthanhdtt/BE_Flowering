@@ -154,12 +154,12 @@ describe('TranslationService', () => {
     it('returns chunk with vocabularyId on success', async () => {
       llmService.chat.mockResolvedValue(JSON.stringify({
         text: '科技公司', type: 'compound_noun', from: 4, to: 8,
-        translation: 'công ty công nghệ', pronunciation: 'kējì gōngsī',
+        translation: 'công ty công nghệ',
       }));
       const r = await service.translateChunk(messageId, 'zh', 'vi', 4, 5, userId);
       expect(r.text).toBe('科技公司');
       expect(r.type).toBe('compound_noun');
-      expect(r.pronunciation).toBe('kējì gōngsī');
+      expect(r.translation).toBe('công ty công nghệ');
       expect(r.vocabularyId).toBe('vocab-uuid');
     });
 
@@ -196,7 +196,7 @@ describe('TranslationService', () => {
     it('defaults to word type when LLM returns invalid type', async () => {
       llmService.chat.mockResolvedValue(JSON.stringify({
         text: '科技', type: 'NONSENSE', from: 4, to: 6,
-        translation: 'tech', pronunciation: 'kējì',
+        translation: 'tech',
       }));
       const r = await service.translateChunk(messageId, 'zh', 'vi', 4, 5, userId);
       expect(r.type).toBe('word');
@@ -205,7 +205,7 @@ describe('TranslationService', () => {
     it('clamps out-of-bounds from/to returned by LLM', async () => {
       llmService.chat.mockResolvedValue(JSON.stringify({
         text: '科技', type: 'word', from: -5, to: 9999,
-        translation: 'tech', pronunciation: 'kējì',
+        translation: 'tech',
       }));
       const r = await service.translateChunk(messageId, 'zh', 'vi', 4, 5, userId);
       expect(r.from).toBe(4);
@@ -214,7 +214,7 @@ describe('TranslationService', () => {
 
     it('handles code-fenced JSON response', async () => {
       llmService.chat.mockResolvedValue(
-        '```json\n{"text":"科技","type":"word","from":4,"to":6,"translation":"tech","pronunciation":"kējì"}\n```',
+        '```json\n{"text":"科技","type":"word","from":4,"to":6,"translation":"tech"}\n```',
       );
       const r = await service.translateChunk(messageId, 'zh', 'vi', 4, 5, userId);
       expect(r.text).toBe('科技');

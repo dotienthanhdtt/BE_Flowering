@@ -41,7 +41,6 @@ export interface ChunkTranslationResult {
   from: number;
   to: number;
   translation: string;
-  pronunciation?: string;
   vocabularyId?: string;
 }
 
@@ -255,10 +254,9 @@ export class TranslationService {
         sourceLang,
         targetLang,
         type: parsed.type,
-        pronunciation: parsed.pronunciation,
       })
       .orUpdate(
-        ['translation', 'type', 'pronunciation'],
+        ['translation', 'type'],
         ['user_id', 'word', 'source_lang', 'target_lang'],
       )
       .returning('id')
@@ -320,9 +318,8 @@ export class TranslationService {
       to = tapTo;
     }
     const translation = String(obj.translation ?? '').slice(0, 255);
-    const pronunciation = obj.pronunciation == null ? undefined : String(obj.pronunciation);
 
-    return { text, type, from, to, translation, pronunciation };
+    return { text, type, from, to, translation };
   }
 
   private parseWordResponse(response: string): ReturnType<typeof this.extractWordFields> {
