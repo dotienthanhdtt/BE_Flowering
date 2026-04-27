@@ -175,7 +175,7 @@ export class TranslationService {
     });
 
     const translation = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: LLMModel.OPENAI_GPT4_1_NANO,
+      model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
       temperature: 0,
       metadata: {
         feature: LangfuseFeature.TRANSLATE_SENTENCE,
@@ -236,7 +236,7 @@ export class TranslationService {
     });
 
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
+      model: LLMModel.OPENAI_GPT4_1_NANO,
       temperature: 0,
       metadata: {
         feature: LangfuseFeature.TRANSLATE_CHUNK,
@@ -314,6 +314,9 @@ export class TranslationService {
           /* fall through */
         }
       }
+    }
+    if (!obj.translation) {
+      this.logger.warn(`Chunk LLM response missing translation. Raw: ${raw.slice(0, 500)}`);
     }
 
     const text = String(obj.text ?? sentence.slice(tapFrom, tapTo));
