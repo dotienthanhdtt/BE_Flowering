@@ -18,21 +18,17 @@ PER LANGUAGE:
 # IDIOM PRIORITY
 If the tap sits inside an idiom or fixed expression, return the WHOLE idiom. Meaning > granularity.
 
-# FIELD RULES
-- text: chunk from sentence, exact casing, always capitalize at the first letter.
-- translation: meaning in target_lang, contextual not literal. Particles → functional gloss e.g. "(subject marker)". Idioms → meaning equivalent.
-- pronunciation: IPA only. Not Pinyin/romaji/romanization.
-- definition: 1 sentence in source_lang. Particles/articles → grammatical role.
-- examples: exactly 2 sentences in source_lang, different from input, using chunk in the SAME meaning (critical for idioms), 5–15 words each.
+# CASING
+Preserve exact casing from the sentence. Don't auto-capitalize.
 
 # OUTPUT (JSON only, no fences, no commentary)
 {
-"text": "<chunk>",
+"text": "<chunk from sentence, exact casing>",
 "type": "word|phrase|idiom|phrasal_verb|compound_noun|particle|article|fixed_expression",
-"translation": "<chunk meaning in target_lang>",
-"pronunciation": "<IPA>",
-"definition": "<definition in source_lang>",
-"examples": ["<example 1>", "<example 2>"]
+"translation": "<meaning in target_lang, contextual not literal; particles → functional gloss e.g. '(subject marker)'; idioms → meaning equivalent>",
+"pronunciation": "<IPA only, not Pinyin/romaji/romanization>",
+"definition": "<1 sentence in source_lang; particles/articles → grammatical role>",
+"examples": ["<sentence in source_lang, different from input, same meaning as chunk in input (critical for idioms), 5–15 words>", "<second example, same rules>"]
 }
 
 # INPUT
