@@ -249,7 +249,7 @@ export class TranslationService {
     });
 
     const parsed = this.parseChunkResponse(response, message.content, tapFrom, tapTo);
-    const chunkText = parsed.text.slice(0, 255);
+    const chunkText = this.capitalizeFirst(parsed.text.slice(0, 255));
 
     const result = await this.vocabularyRepo
       .createQueryBuilder()
@@ -275,9 +275,15 @@ export class TranslationService {
 
     return {
       ...parsed,
-      text: chunkText,
+      text: this.capitalizeFirst(chunkText),
       vocabularyId: result.generatedMaps[0]?.id ?? result.raw[0]?.id,
     };
+  }
+
+  /** Uppercase the first character; safe for non-cased scripts (CJK) where it is a no-op. */
+  private capitalizeFirst(s: string): string {
+    if (!s) return s;
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
   /** Verify the caller owns the message's conversation via userId or conversationId */

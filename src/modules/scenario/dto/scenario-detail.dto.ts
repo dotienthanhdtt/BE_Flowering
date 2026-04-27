@@ -12,6 +12,8 @@ export class CategoryRefDto {
 
 export type LockReason = 'premium_required';
 
+export type ScenarioSource = 'default' | 'kol' | 'personalized';
+
 export class ScenarioDetailDto {
   @ApiProperty()
   id!: string;
@@ -34,8 +36,8 @@ export class ScenarioDetailDto {
   @ApiProperty()
   orderIndex!: number;
 
-  @ApiProperty({ type: CategoryRefDto })
-  category!: CategoryRefDto;
+  @ApiPropertyOptional({ type: CategoryRefDto })
+  category?: CategoryRefDto;
 
   @ApiProperty({ enum: AccessTier })
   accessTier!: AccessTier;
@@ -48,4 +50,7 @@ export class ScenarioDetailDto {
 
   @ApiProperty({ enum: ['available', 'learned', 'locked'] })
   userStatus!: 'available' | 'learned' | 'locked';
+
+  @ApiPropertyOptional({ enum: ['default', 'kol', 'personalized'] })
+  source?: ScenarioSource;
 }
