@@ -80,13 +80,11 @@ export class ScenarioChatService {
     // 2. Resolve conversation by (userId, scenarioId). Resume regardless of
     //    status (CHATTING or DONE); only create when none exists.
     let conversation: AiConversation;
-    let createdNew = false;
     if (dto.conversationId) {
       conversation = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
     } else {
       const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
       conversation = result.conversation;
-      createdNew = result.created;
     }
 
     // 3. If conversation is already DONE, return the full transcript without
@@ -131,14 +129,16 @@ export class ScenarioChatService {
       userVocabulary: this.formatVocabList(injectedVocab),
     });
 
-    // 8. Build messages for LLM. Gemini requires at least one user message —
-    //    only on the very first turn of a freshly-created conversation, push a
-    //    'Start' placeholder so the model produces the scenario's opening
-    //    greeting. For existing conversations with no user input, do nothing.
+    // 8. Build messages for LLM. Gemini requires at least one user message;
+    //    a request with only systemInstruction returns 400 "contents is not
+    //    specified". Push a 'Start' placeholder whenever there is no user input
+    //    and no prior history — covers both fresh conversations and resumes of
+    //    empty conversations (e.g. previous turn produced an empty reply that
+    //    was skipped on persist).
     const messages: BaseMessage[] = [new SystemMessage(systemPrompt), ...history];
     if (dto.message) {
       messages.push(new HumanMessage(dto.message));
-    } else if (createdNew && history.length === 0) {
+    } else if (history.length === 0) {
       messages.push(new HumanMessage('Start'));
     }
 
