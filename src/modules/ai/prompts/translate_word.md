@@ -18,11 +18,8 @@ PER LANGUAGE:
 # IDIOM PRIORITY
 If the tap sits inside an idiom or fixed expression, return the WHOLE idiom. Meaning > granularity.
 
-# CASING
-Preserve exact casing from the sentence. Don't auto-capitalize.
-
 # FIELD RULES
-- text: chunk from sentence, exact casing.
+- text: chunk from sentence, exact casing, always capitalize at the first letter.
 - translation: meaning in target_lang, contextual not literal. Particles → functional gloss e.g. "(subject marker)". Idioms → meaning equivalent.
 - pronunciation: IPA only. Not Pinyin/romaji/romanization.
 - definition: 1 sentence in source_lang. Particles/articles → grammatical role.
