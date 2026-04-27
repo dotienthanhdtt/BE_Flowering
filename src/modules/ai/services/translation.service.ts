@@ -41,6 +41,9 @@ export interface ChunkTranslationResult {
   from: number;
   to: number;
   translation: string;
+  pronunciation?: string;
+  definition?: string;
+  examples?: string[];
   vocabularyId?: string;
 }
 
@@ -258,10 +261,13 @@ export class TranslationService {
         translation: parsed.translation,
         sourceLang,
         targetLang,
-        type: parsed.type,
+        partOfSpeech: parsed.type,
+        pronunciation: parsed.pronunciation,
+        definition: parsed.definition,
+        examples: parsed.examples,
       })
       .orUpdate(
-        ['translation', 'type'],
+        ['translation', 'part_of_speech', 'pronunciation', 'definition', 'examples'],
         ['user_id', 'word', 'source_lang', 'target_lang'],
       )
       .returning('id')
@@ -323,8 +329,19 @@ export class TranslationService {
       to = tapTo;
     }
     const translation = String(obj.translation ?? '').slice(0, 255);
+    const pronunciation =
+      typeof obj.pronunciation === 'string' && obj.pronunciation.trim()
+        ? obj.pronunciation.slice(0, 255)
+        : undefined;
+    const definition =
+      typeof obj.definition === 'string' && obj.definition.trim() ? obj.definition : undefined;
+    const examples = Array.isArray(obj.examples)
+      ? (obj.examples as unknown[])
+          .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
+          .slice(0, 2)
+      : undefined;
 
-    return { text, type, from, to, translation };
+    return { text, type, from, to, translation, pronunciation, definition, examples };
   }
 
   private parseWordResponse(response: string): ReturnType<typeof this.extractWordFields> {

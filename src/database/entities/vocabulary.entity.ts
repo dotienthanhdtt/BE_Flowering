@@ -46,9 +46,6 @@ export class Vocabulary {
   @Column({ type: 'jsonb', nullable: true })
   examples?: string[];
 
-  @Column({ type: 'varchar', length: 30, nullable: true })
-  type?: string;
-
   @Column({ type: 'smallint', default: 1 })
   box!: number;
 
