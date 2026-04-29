@@ -10,7 +10,6 @@ import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserLanguage } from '@/database/entities/user-language.entity';
-import { LANGUAGE_FRAMEWORKS, FrameworkCode } from '@common/constants/language-levels';
 import { Language } from '@/database/entities/language.entity';
 import { User } from '@/database/entities/user.entity';
 import { IS_PUBLIC_KEY } from '@common/decorators/public-route.decorator';
@@ -119,15 +118,12 @@ export class LanguageContextGuard implements CanActivate {
         throw new BadRequestException(`Language "${lang.code}" is not available for learning`);
       }
 
-      const fw = language.levelFramework as FrameworkCode | null;
-      const defaultLevel = fw ? LANGUAGE_FRAMEWORKS[fw][0] : 'beginner';
-
+      // proficiencyLevel omitted → DB trigger fills with framework's lowest level
       await this.userLanguageRepo.save(
         this.userLanguageRepo.create({
           userId,
           languageId: lang.id,
           lastLearned: false,
-          proficiencyLevel: defaultLevel,
         }),
       );
       this.logger.log(`Auto-enrolled user ${userId} in language "${lang.code}"`);

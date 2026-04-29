@@ -64,6 +64,10 @@ describe('OnboardingService', () => {
         { provide: getRepositoryToken(Language), useFactory: mockLanguageRepo },
         { provide: UnifiedLLMService, useFactory: mockLLMService },
         { provide: PromptLoaderService, useFactory: mockPromptLoader },
+        {
+          provide: require('../../common/services/framework-levels.service').FrameworkLevelsService,
+          useValue: { getLevels: () => [], getDescription: () => '' },
+        },
       ],
     }).compile();
 

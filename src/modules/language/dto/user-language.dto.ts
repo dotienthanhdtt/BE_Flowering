@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LanguageDto } from './language.dto';
 
 export class UserLanguageDto {
@@ -10,7 +10,7 @@ export class UserLanguageDto {
 
   @ApiProperty({
     description:
-      "Current proficiency level (framework-native). Valid values depend on the language's levelFramework (CEFR: A1-C2, JLPT: N5-N1, HSK: HSK1-HSK6, TOPIK: TOPIK1-TOPIK6).",
+      "Current proficiency level (framework-native). Valid values come from the language's framework levels.",
     examples: {
       CEFR: { value: 'A1', summary: 'CEFR beginner' },
       JLPT: { value: 'N5', summary: 'JLPT beginner' },
@@ -19,6 +19,11 @@ export class UserLanguageDto {
     },
   })
   proficiencyLevel!: string;
+
+  @ApiPropertyOptional({
+    description: "Human-readable description of the user's current proficiency level",
+  })
+  description?: string;
 
   @ApiProperty({
     description: 'True if this is the most recently learned language for the user',

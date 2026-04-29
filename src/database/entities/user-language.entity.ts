@@ -28,8 +28,8 @@ export class UserLanguage {
   @Column({ type: 'uuid', name: 'language_id' })
   languageId!: string;
 
-  @Column({ type: 'varchar', length: 16, name: 'proficiency_level', default: 'A1' })
-  proficiencyLevel!: string;
+  @Column({ type: 'varchar', length: 16, name: 'proficiency_level', nullable: true })
+  proficiencyLevel?: string;
 
   @Column({ type: 'boolean', name: 'last_learned', default: true })
   lastLearned!: boolean;

@@ -1,9 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
-import {
-  mapGenericToFramework,
-  LANGUAGE_FRAMEWORKS,
-  FrameworkCode,
-} from '../../common/constants/language-levels';
+import { mapGenericToFramework } from '../../common/constants/language-levels';
+import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
 import { OnboardingScenarioDto, SCENARIO_ACCENT_COLORS } from './dto/onboarding-scenario.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -31,6 +28,7 @@ export class OnboardingService {
     private languageRepo: Repository<Language>,
     private llmService: UnifiedLLMService,
     private promptLoader: PromptLoaderService,
+    private frameworkLevels: FrameworkLevelsService,
   ) {}
 
   async handleChat(dto: OnboardingChatDto): Promise<{
@@ -333,18 +331,18 @@ export class OnboardingService {
     }
   }
 
-  // Maps onboarding AI suggestion (generic) to framework-native level. Falls back to framework[0] on bad input.
+  // Maps onboarding AI suggestion (generic) to framework-native level. Falls back to framework's lowest level on bad input.
   private mapOnboardingLevel(framework: string | null, suggestion: string | undefined): string {
     const generic = (suggestion ?? 'beginner').toLowerCase();
     if (!framework) return generic;
     try {
-      return mapGenericToFramework(framework as FrameworkCode, generic);
+      return mapGenericToFramework(framework, generic);
     } catch {
-      const fallback = LANGUAGE_FRAMEWORKS[framework as FrameworkCode]?.[0] ?? generic;
+      const lowest = this.frameworkLevels.getLevels(framework)[0]?.code ?? generic;
       this.logger.warn(
-        `Invalid onboarding suggestion '${generic}' for framework ${framework}; defaulting to ${fallback}`,
+        `Invalid onboarding suggestion '${generic}' for framework ${framework}; defaulting to ${lowest}`,
       );
-      return fallback;
+      return lowest;
     }
   }
 

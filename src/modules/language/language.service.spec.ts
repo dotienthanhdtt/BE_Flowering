@@ -6,6 +6,7 @@ import { Language } from '../../database/entities/language.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
 import { User } from '../../database/entities/user.entity';
 import { LanguageType } from './dto/language-query.dto';
+import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
 
 const mockLanguageRepo = () => ({
   find: jest.fn(),
@@ -25,6 +26,11 @@ const mockUserRepo = () => ({
   update: jest.fn(),
 });
 
+const mockFrameworkLevels = () => ({
+  getLevels: jest.fn().mockReturnValue([]),
+  getDescription: jest.fn().mockReturnValue(''),
+});
+
 describe('LanguageService', () => {
   let service: LanguageService;
   let languageRepo: ReturnType<typeof mockLanguageRepo>;
@@ -38,6 +44,7 @@ describe('LanguageService', () => {
         { provide: getRepositoryToken(Language), useFactory: mockLanguageRepo },
         { provide: getRepositoryToken(UserLanguage), useFactory: mockUserLanguageRepo },
         { provide: getRepositoryToken(User), useFactory: mockUserRepo },
+        { provide: FrameworkLevelsService, useFactory: mockFrameworkLevels },
       ],
     }).compile();
 
@@ -146,16 +153,21 @@ describe('LanguageService', () => {
       );
     });
 
-    it('should reject invalid level for CEFR language with BadRequestException', async () => {
-      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, levelFramework: 'CEFR' });
-      userLanguageRepo.findOne.mockResolvedValue(null);
+    it('passes proficiencyLevel through verbatim — DB trigger validates', async () => {
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, levelFramework: 'JLPT' });
+      userLanguageRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue(mockUserLang);
+      userLanguageRepo.create.mockReturnValue(mockUserLang);
+      userLanguageRepo.save.mockResolvedValue({ id: 'ul-1' });
+      userLanguageRepo.update.mockResolvedValue({ affected: 1 });
 
-      await expect(
-        service.addUserLanguage(userId, { languageId: langId, proficiencyLevel: 'N3' }),
-      ).rejects.toThrow(BadRequestException);
+      await service.addUserLanguage(userId, { languageId: langId, proficiencyLevel: 'N3' });
+
+      expect(userLanguageRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ proficiencyLevel: 'N3' }),
+      );
     });
 
-    it('should default to framework[0] when proficiencyLevel omitted', async () => {
+    it('omits proficiencyLevel when not supplied — DB trigger fills default', async () => {
       languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, levelFramework: 'JLPT' });
       userLanguageRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue(mockUserLang);
       userLanguageRepo.create.mockReturnValue(mockUserLang);
@@ -165,7 +177,7 @@ describe('LanguageService', () => {
       await service.addUserLanguage(userId, { languageId: langId });
 
       expect(userLanguageRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ proficiencyLevel: 'N5' }),
+        expect.objectContaining({ proficiencyLevel: undefined }),
       );
     });
   });

@@ -23,9 +23,11 @@ import { UserAiScenario } from './entities/user-ai-scenario.entity';
 import { KolBundle } from './entities/kol-bundle.entity';
 import { KolBundleScenario } from './entities/kol-bundle-scenario.entity';
 import { VocabularyInjectionEvent } from './entities/vocabulary-injection-event.entity';
+import { FrameworkLevel } from './entities/framework-level.entity';
 
 const entities = [
   Language,
+  FrameworkLevel,
   User,
   UserLanguage,
   Lesson,

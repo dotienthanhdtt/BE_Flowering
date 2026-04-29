@@ -1,11 +1,17 @@
 import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { QueryFailedError } from 'typeorm';
 import * as Sentry from '@sentry/node';
 import { BaseResponseDto } from '../dto/base-response.dto';
 
 interface ErrorResponse {
   message?: string | string[];
   error?: string;
+}
+
+interface PgError {
+  code?: string;
+  message?: string;
 }
 
 @Catch()
@@ -17,6 +23,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
+
+    if (exception instanceof QueryFailedError) {
+      const pg = exception as unknown as PgError;
+      // P0001 = user-defined RAISE EXCEPTION (e.g. proficiency-level trigger)
+      if (pg.code === 'P0001') {
+        status = HttpStatus.BAD_REQUEST;
+        message = pg.message ?? 'Invalid input';
+        const errorResponse = BaseResponseDto.error(message);
+        response.status(status).json(errorResponse);
+        return;
+      }
+    }
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();

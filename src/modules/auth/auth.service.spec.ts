@@ -13,6 +13,7 @@ import { UserLanguage } from '../../database/entities/user-language.entity';
 import { RegisterDto, LoginDto, FirebaseAuthDto } from './dto';
 import { FirebaseTokenStrategy, FirebaseAuthUser } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
+import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
 
 jest.mock('bcrypt');
 
@@ -119,6 +120,13 @@ describe('AuthService', () => {
           provide: EmailService,
           useValue: {
             sendOtp: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: FrameworkLevelsService,
+          useValue: {
+            getLevels: jest.fn().mockReturnValue([]),
+            getDescription: jest.fn().mockReturnValue(''),
           },
         },
       ],

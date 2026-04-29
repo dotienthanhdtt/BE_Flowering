@@ -149,7 +149,7 @@ describe('LanguageContextGuard', () => {
 
   // --- Auto-enroll new behavior ---
 
-  it('should auto-enroll with isActive=false and BEGINNER when @AutoEnrollLanguage is set', async () => {
+  it('should auto-enroll without proficiencyLevel (DB trigger fills) when @AutoEnrollLanguage is set', async () => {
     languageCache.resolve.mockResolvedValue(mockLangFr);
     userLanguageRepo.findOne
       .mockResolvedValueOnce(null) // not enrolled check
@@ -170,9 +170,11 @@ describe('LanguageContextGuard', () => {
     expect(userLanguageRepo.create).toHaveBeenCalledWith({
       userId: mockUserId,
       languageId: mockLangFr.id,
-      isActive: false,
-      proficiencyLevel: 'A1', // CEFR framework[0]
+      lastLearned: false,
     });
+    expect(userLanguageRepo.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ proficiencyLevel: expect.anything() }),
+    );
     expect(userLanguageRepo.save).toHaveBeenCalled();
 
     const request = ctx.switchToHttp().getRequest() as any;
@@ -216,7 +218,7 @@ describe('LanguageContextGuard', () => {
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
   });
 
-  it('should NOT deactivate existing active user_language rows during auto-enroll', async () => {
+  it('should NOT deactivate existing user_language rows during auto-enroll', async () => {
     languageCache.resolve.mockResolvedValue(mockLangFr);
     userLanguageRepo.findOne.mockResolvedValue(null);
     languageRepo.findOne.mockResolvedValue({ id: mockLangFr.id, isActive: true, isLearningAvailable: true });
@@ -232,13 +234,9 @@ describe('LanguageContextGuard', () => {
 
     await guard.canActivate(ctx);
 
-    // Saved row must have isActive: false — existing active row untouched
+    // Saved row must have lastLearned: false — existing active row untouched
     expect(userLanguageRepo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ isActive: false }),
-    );
-    // No update call that could flip other rows
-    expect(userLanguageRepo.findOne).not.toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: mockUserId, isActive: true } }),
+      expect.objectContaining({ lastLearned: false }),
     );
   });
 

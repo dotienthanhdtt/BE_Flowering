@@ -23,6 +23,7 @@ import { AdminContentModule } from './modules/admin-content/admin-content.module
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { LanguageContextGuard } from './common/guards/language-context.guard';
 import { LanguageContextModule } from './common/language-context.module';
+import { FrameworkLevelsModule } from './common/framework-levels.module';
 import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware';
 import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-case.middleware';
 
@@ -37,6 +38,7 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
       },
     }),
     DatabaseModule,
+    FrameworkLevelsModule,
     LanguageContextModule,
     AuthModule,
     AiModule,

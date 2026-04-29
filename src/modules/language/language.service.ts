@@ -17,11 +17,7 @@ import { AddUserLanguageDto } from './dto/add-user-language.dto';
 import { UpdateUserLanguageDto } from './dto/update-user-language.dto';
 import { SetNativeLanguageDto } from './dto/set-native-language.dto';
 import { LanguageType } from './dto/language-query.dto';
-import {
-  isValidLevel,
-  LANGUAGE_FRAMEWORKS,
-  FrameworkCode,
-} from '../../common/constants/language-levels';
+import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
 
 @Injectable()
 export class LanguageService implements OnModuleInit {
@@ -34,16 +30,15 @@ export class LanguageService implements OnModuleInit {
     private readonly userLanguageRepo: Repository<UserLanguage>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly frameworkLevels: FrameworkLevelsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     const nullFramework = await this.languageRepo.find({
       where: { isLearningAvailable: true, levelFramework: IsNull() },
     });
-    const frameworkless = new Set(['vi', 'th']);
-    const bad = nullFramework.filter((l) => !frameworkless.has(l.code));
-    if (bad.length) {
-      const msg = `Languages missing levelFramework: ${bad.map((b) => b.code).join(', ')}`;
+    if (nullFramework.length) {
+      const msg = `Languages missing levelFramework: ${nullFramework.map((b) => b.code).join(', ')}`;
       if (process.env.NODE_ENV !== 'production') throw new Error(msg);
       else this.logger.warn(msg);
     }
@@ -55,7 +50,7 @@ export class LanguageService implements OnModuleInit {
     else if (type === LanguageType.LEARNING) where.isLearningAvailable = true;
 
     const languages = await this.languageRepo.find({ where, order: { name: 'ASC' } });
-    return languages.map(this.mapToLanguageDto);
+    return languages.map((l) => this.mapToLanguageDto(l));
   }
 
   async setNativeLanguage(userId: string, dto: SetNativeLanguageDto): Promise<LanguageDto> {
@@ -93,14 +88,13 @@ export class LanguageService implements OnModuleInit {
     });
     if (existing) throw new ConflictException('Language already added to learning list');
 
-    const level = this.resolveAndValidateLevel(language, dto.proficiencyLevel);
-
     await this.userLanguageRepo.update({ userId, lastLearned: true }, { lastLearned: false });
 
+    // proficiencyLevel left undefined → DB trigger fills default; invalid → DB raises P0001
     const userLanguage = this.userLanguageRepo.create({
       userId,
       languageId: dto.languageId,
-      proficiencyLevel: level,
+      proficiencyLevel: dto.proficiencyLevel,
       lastLearned: true,
     });
     const saved = await this.userLanguageRepo.save(userLanguage);
@@ -124,7 +118,7 @@ export class LanguageService implements OnModuleInit {
     if (!userLanguage) throw new NotFoundException('User language not found');
 
     if (dto.proficiencyLevel !== undefined) {
-      this.resolveAndValidateLevel(userLanguage.language, dto.proficiencyLevel);
+      // DB trigger validates
       userLanguage.proficiencyLevel = dto.proficiencyLevel;
     }
 
@@ -153,26 +147,7 @@ export class LanguageService implements OnModuleInit {
     if (result.affected === 0) throw new NotFoundException('User language not found');
   }
 
-  // Returns the resolved level (default or provided). Throws BadRequestException on invalid input.
-  private resolveAndValidateLevel(language: Language, provided?: string): string {
-    const framework = language.levelFramework as FrameworkCode | null;
-
-    if (!provided) {
-      return framework ? LANGUAGE_FRAMEWORKS[framework][0] : 'beginner';
-    }
-
-    if (framework && !isValidLevel(framework, provided)) {
-      const valid = LANGUAGE_FRAMEWORKS[framework].join(', ');
-      throw new BadRequestException(
-        `Invalid level '${provided}' for ${language.code}. Valid: ${valid}`,
-      );
-    }
-
-    return provided;
-  }
-
   private mapToLanguageDto(lang: Language): LanguageDto {
-    const fw = lang.levelFramework as FrameworkCode | null;
     return {
       id: lang.id,
       code: lang.code,
@@ -181,15 +156,17 @@ export class LanguageService implements OnModuleInit {
       flagUrl: lang.flagUrl,
       isNativeAvailable: lang.isNativeAvailable,
       isLearningAvailable: lang.isLearningAvailable,
-      levels: fw ? [...LANGUAGE_FRAMEWORKS[fw]] : null,
+      levels: this.frameworkLevels.getLevels(lang.levelFramework),
     };
   }
 
   private mapToUserLanguageDto(ul: UserLanguage): UserLanguageDto {
+    const level = ul.proficiencyLevel ?? '';
     return {
       id: ul.id,
       languageId: ul.languageId,
-      proficiencyLevel: ul.proficiencyLevel,
+      proficiencyLevel: level,
+      description: this.frameworkLevels.getDescription(ul.language?.levelFramework, level),
       lastLearned: ul.lastLearned,
       createdAt: ul.createdAt,
       language: this.mapToLanguageDto(ul.language!),

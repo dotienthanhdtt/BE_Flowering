@@ -20,7 +20,7 @@ import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
 import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto, FirebaseAuthDto } from './dto';
 import { UserLanguageDto } from '../language/dto/user-language.dto';
-import { LANGUAGE_FRAMEWORKS, FrameworkCode } from '../../common/constants/language-levels';
+import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
 import { FirebaseTokenStrategy, OAuthProvider } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 
@@ -56,6 +56,7 @@ export class AuthService {
     private passwordResetRepository: Repository<PasswordReset>,
     @InjectRepository(UserLanguage)
     private userLanguageRepository: Repository<UserLanguage>,
+    private frameworkLevels: FrameworkLevelsService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -464,11 +465,13 @@ export class AuthService {
     });
 
     return userLanguages.map((ul) => {
-      const fw = ul.language?.levelFramework as FrameworkCode | null;
+      const fw = ul.language?.levelFramework ?? null;
+      const level = ul.proficiencyLevel ?? '';
       return {
         id: ul.id,
         languageId: ul.languageId,
-        proficiencyLevel: ul.proficiencyLevel,
+        proficiencyLevel: level,
+        description: this.frameworkLevels.getDescription(fw, level),
         lastLearned: ul.lastLearned,
         createdAt: ul.createdAt,
         language: {
@@ -479,7 +482,7 @@ export class AuthService {
           flagUrl: ul.language.flagUrl,
           isNativeAvailable: ul.language.isNativeAvailable,
           isLearningAvailable: ul.language.isLearningAvailable,
-          levels: fw ? [...LANGUAGE_FRAMEWORKS[fw]] : null,
+          levels: this.frameworkLevels.getLevels(fw),
         },
       };
     });

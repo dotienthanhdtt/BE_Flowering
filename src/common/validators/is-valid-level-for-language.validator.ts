@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Language } from '../../database/entities/language.entity';
+import { FrameworkLevel } from '../../database/entities/framework-level.entity';
 import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
@@ -9,7 +10,6 @@ import {
   ValidationOptions,
 } from 'class-validator';
 import { DataSource } from 'typeorm';
-import { isValidLevel, LANGUAGE_FRAMEWORKS, FrameworkCode } from '../constants/language-levels';
 
 @ValidatorConstraint({ async: true })
 @Injectable()
@@ -25,27 +25,23 @@ export class IsValidLevelForLanguageConstraint implements ValidatorConstraintInt
 
     if (!languageId || typeof languageId !== 'string') return true; // let @IsUUID catch it
 
-    const row = await this.dataSource
+    const lang = await this.dataSource
       .getRepository(Language)
       .createQueryBuilder('lang')
       .select('lang.level_framework', 'levelFramework')
       .where('lang.id = :id', { id: languageId })
       .getRawOne<{ levelFramework: string | null }>();
 
-    if (!row) return true; // language not found — let other validators handle it
+    if (!lang || !lang.levelFramework) return true; // unknown lang or frameworkless — let DB / other validators handle
 
-    const framework = row.levelFramework as FrameworkCode | null;
-    if (!framework) return true; // frameworkless language (vi/th) — any string accepted
-
-    return isValidLevel(framework, value);
+    const exists = await this.dataSource.getRepository(FrameworkLevel).findOne({
+      where: { frameworkCode: lang.levelFramework, levelCode: value },
+    });
+    return !!exists;
   }
 
   defaultMessage(args: ValidationArguments): string {
-    const dto = args.object as Record<string, unknown>;
-    const languageIdField = args.constraints[0] as string;
-    const _ = dto[languageIdField]; // unused; message is generic until framework known
-    void _;
-    return `Invalid level '${args.value}' for the selected language. Valid values per framework: CEFR: ${LANGUAGE_FRAMEWORKS.CEFR.join(', ')} | JLPT: ${LANGUAGE_FRAMEWORKS.JLPT.join(', ')} | HSK: ${LANGUAGE_FRAMEWORKS.HSK.join(', ')} | TOPIK: ${LANGUAGE_FRAMEWORKS.TOPIK.join(', ')}`;
+    return `Invalid level '${args.value}' for the selected language`;
   }
 }
 
