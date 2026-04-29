@@ -51,10 +51,11 @@ export class ScenariosController {
   @ApiResponse({ status: 200, type: ListScenariosResponseDto<ScenarioDefaultDto> })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   listDefault(
+    @CurrentUser() user: { id: string },
     @ActiveLanguage() lang: ActiveLanguageContext,
     @Query() query: ListScenariosQueryDto,
   ) {
-    return this.listingService.listDefault(lang.id, query.page, query.limit);
+    return this.listingService.listDefault(user.id, lang.id, query.page, query.limit);
   }
 
   @Get('personal')

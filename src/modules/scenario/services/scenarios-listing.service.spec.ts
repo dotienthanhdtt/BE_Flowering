@@ -4,6 +4,7 @@ import { Repository, SelectQueryBuilder } from 'typeorm';
 import { ScenariosListingService } from './scenarios-listing.service';
 import { Scenario, ScenarioDifficulty } from '@/database/entities/scenario.entity';
 import { UserAiScenario } from '@/database/entities/user-ai-scenario.entity';
+import { UserLanguage } from '@/database/entities/user-language.entity';
 import { ContentStatus } from '@/database/entities/content-status.enum';
 import { ScenarioType } from '@/database/entities/scenario-type.enum';
 
@@ -63,6 +64,18 @@ describe('ScenariosListingService', () => {
             find: jest.fn(),
           } as unknown as Repository<UserAiScenario>,
         },
+        {
+          provide: getRepositoryToken(UserLanguage),
+          useValue: {
+            update: jest.fn().mockResolvedValue({ affected: 1 }),
+            manager: {
+              transaction: jest.fn(async (cb: any) => {
+                const repo = { update: jest.fn().mockResolvedValue({ affected: 1 }) };
+                await cb({ getRepository: () => repo });
+              }),
+            },
+          } as unknown as Repository<UserLanguage>,
+        },
       ],
     }).compile();
 
@@ -79,7 +92,7 @@ describe('ScenariosListingService', () => {
       ];
       jest.spyOn(scenarioRepo, 'findAndCount').mockResolvedValue([scenarios, 2]);
 
-      const result = await service.listDefault('lang-1', 1, 10);
+      const result = await service.listDefault('user-1', 'lang-1', 1, 10);
 
       expect(result.total).toBe(2);
       expect(result.items).toHaveLength(2);
@@ -97,7 +110,7 @@ describe('ScenariosListingService', () => {
     it('passes correct where clause (type=DEFAULT, status=PUBLISHED)', async () => {
       jest.spyOn(scenarioRepo, 'findAndCount').mockResolvedValue([[], 0]);
 
-      await service.listDefault('lang-1', 1, 10);
+      await service.listDefault('user-1', 'lang-1', 1, 10);
 
       expect(scenarioRepo.findAndCount).toHaveBeenCalledWith({
         where: {
@@ -114,7 +127,7 @@ describe('ScenariosListingService', () => {
     it('applies pagination correctly', async () => {
       jest.spyOn(scenarioRepo, 'findAndCount').mockResolvedValue([[], 100]);
 
-      await service.listDefault('lang-1', 2, 20);
+      await service.listDefault('user-1', 'lang-1', 2, 20);
 
       expect(scenarioRepo.findAndCount).toHaveBeenCalledWith(
         expect.objectContaining({

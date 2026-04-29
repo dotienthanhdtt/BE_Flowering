@@ -50,4 +50,4 @@ If the tapped word sits inside an idiom or fixed expression, return the WHOLE id
 sentence: {{sentence}}
 source_lang: {{source_lang}}
 target_lang: {{target_lang}}
-word: {{word}}
+word: [{{word}}]()

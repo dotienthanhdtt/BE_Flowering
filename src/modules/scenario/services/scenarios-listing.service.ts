@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Scenario } from '@/database/entities/scenario.entity';
 import { UserAiScenario } from '@/database/entities/user-ai-scenario.entity';
+import { UserLanguage } from '@/database/entities/user-language.entity';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
 import { ContentStatus } from '@/database/entities/content-status.enum';
 import { ScenarioType } from '@/database/entities/scenario-type.enum';
@@ -16,13 +17,18 @@ export class ScenariosListingService {
     private readonly scenarioRepo: Repository<Scenario>,
     @InjectRepository(UserAiScenario)
     private readonly userAiScenarioRepo: Repository<UserAiScenario>,
+    @InjectRepository(UserLanguage)
+    private readonly userLanguageRepo: Repository<UserLanguage>,
   ) {}
 
   async listDefault(
+    userId: string,
     languageId: string,
     page: number,
     limit: number,
   ): Promise<{ items: ScenarioDefaultDto[]; total: number }> {
+    await this.markLastLearned(userId, languageId);
+
     const [rows, total] = await this.scenarioRepo.findAndCount({
       where: { type: ScenarioType.DEFAULT, status: ContentStatus.PUBLISHED, languageId },
       order: { orderIndex: 'ASC', createdAt: 'DESC' },
@@ -90,5 +96,13 @@ export class ScenariosListingService {
     const total = merged.length;
     const offset = (page - 1) * limit;
     return { items: merged.slice(offset, offset + limit), total };
+  }
+
+  private async markLastLearned(userId: string, languageId: string): Promise<void> {
+    await this.userLanguageRepo.manager.transaction(async (mgr) => {
+      const repo = mgr.getRepository(UserLanguage);
+      await repo.update({ userId }, { lastLearned: false });
+      await repo.update({ userId, languageId }, { lastLearned: true });
+    });
   }
 }

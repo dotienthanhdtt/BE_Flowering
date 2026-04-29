@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { Scenario } from '@/database/entities/scenario.entity';
 import { UserAiScenario } from '@/database/entities/user-ai-scenario.entity';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
+import { UserLanguage } from '@/database/entities/user-language.entity';
 import { KolBundle } from '@/database/entities/kol-bundle.entity';
 import { KolBundleScenario } from '@/database/entities/kol-bundle-scenario.entity';
 import { SubscriptionModule } from '@/modules/subscription/subscription.module';
@@ -19,6 +20,7 @@ import { ScenariosDetailService } from './services/scenarios-detail.service';
       Scenario,
       UserAiScenario,
       UserScenarioAccess,
+      UserLanguage,
       KolBundle,
       KolBundleScenario,
     ]),

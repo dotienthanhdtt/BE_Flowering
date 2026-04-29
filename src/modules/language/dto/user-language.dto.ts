@@ -20,8 +20,11 @@ export class UserLanguageDto {
   })
   proficiencyLevel!: string;
 
-  @ApiProperty({ description: 'Whether actively learning', default: true })
-  isActive!: boolean;
+  @ApiProperty({
+    description: 'True if this is the most recently learned language for the user',
+    default: true,
+  })
+  lastLearned!: boolean;
 
   @ApiProperty({ description: 'Date added to learning list' })
   createdAt!: Date;

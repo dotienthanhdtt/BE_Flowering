@@ -123,7 +123,7 @@ describe('LanguageService', () => {
   describe('addUserLanguage', () => {
     const userId = 'user-uuid';
     const langId = 'lang-uuid';
-    const mockUserLang = { id: 'ul-1', userId, languageId: langId, isActive: true, language: mockLang };
+    const mockUserLang = { id: 'ul-1', userId, languageId: langId, lastLearned: true, language: mockLang };
 
     it('should throw BadRequestException for non-learning-available language', async () => {
       languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, isLearningAvailable: false });
@@ -141,8 +141,8 @@ describe('LanguageService', () => {
       await service.addUserLanguage(userId, { languageId: langId });
 
       expect(userLanguageRepo.update).toHaveBeenCalledWith(
-        { userId, isActive: true },
-        { isActive: false },
+        { userId, lastLearned: true },
+        { lastLearned: false },
       );
     });
 
@@ -174,28 +174,28 @@ describe('LanguageService', () => {
     const userId = 'user-uuid';
     const languageId = 'lang-uuid';
     const existingUL = {
-      id: 'ul-1', userId, languageId, isActive: false, language: mockLang,
+      id: 'ul-1', userId, languageId, lastLearned: false, language: mockLang,
       proficiencyLevel: 'beginner',
     };
 
-    it('should deactivate all other languages when setting isActive to true', async () => {
+    it('should clear lastLearned on others when setting lastLearned to true', async () => {
       userLanguageRepo.findOne.mockResolvedValue({ ...existingUL });
       userLanguageRepo.update.mockResolvedValue({ affected: 1 });
-      userLanguageRepo.save.mockResolvedValue({ ...existingUL, isActive: true });
+      userLanguageRepo.save.mockResolvedValue({ ...existingUL, lastLearned: true });
 
-      await service.updateUserLanguage(userId, languageId, { isActive: true });
+      await service.updateUserLanguage(userId, languageId, { lastLearned: true });
 
       expect(userLanguageRepo.update).toHaveBeenCalledWith(
-        { userId, isActive: true },
-        { isActive: false },
+        { userId, lastLearned: true },
+        { lastLearned: false },
       );
     });
 
-    it('should NOT deactivate others when setting isActive to false', async () => {
-      userLanguageRepo.findOne.mockResolvedValue({ ...existingUL, isActive: true });
-      userLanguageRepo.save.mockResolvedValue({ ...existingUL, isActive: false });
+    it('should NOT clear others when setting lastLearned to false', async () => {
+      userLanguageRepo.findOne.mockResolvedValue({ ...existingUL, lastLearned: true });
+      userLanguageRepo.save.mockResolvedValue({ ...existingUL, lastLearned: false });
 
-      await service.updateUserLanguage(userId, languageId, { isActive: false });
+      await service.updateUserLanguage(userId, languageId, { lastLearned: false });
 
       expect(userLanguageRepo.update).not.toHaveBeenCalled();
     });
@@ -203,7 +203,7 @@ describe('LanguageService', () => {
     it('should throw NotFoundException when user language not found', async () => {
       userLanguageRepo.findOne.mockResolvedValue(null);
       await expect(
-        service.updateUserLanguage(userId, languageId, { isActive: true }),
+        service.updateUserLanguage(userId, languageId, { lastLearned: true }),
       ).rejects.toThrow(NotFoundException);
     });
   });

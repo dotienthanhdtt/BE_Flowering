@@ -408,17 +408,17 @@ export class AuthService {
     await this.userLanguageRepository.manager.transaction(async (mgr) => {
       const repo = mgr.getRepository(UserLanguage);
 
-      // Deactivate any existing active languages for this user
-      await repo.update({ userId, isActive: true }, { isActive: false });
+      // Clear last_learned flag from other languages for this user
+      await repo.update({ userId, lastLearned: true }, { lastLearned: false });
 
       // Check if a row exists for this specific language
       const existing = await repo.findOne({ where: { userId, languageId } });
       if (existing) {
-        // Reactivate the existing inactive row
-        await repo.update(existing.id, { isActive: true });
+        // Mark the existing row as last learned
+        await repo.update(existing.id, { lastLearned: true });
       } else {
-        // Create a new active row for this language
-        await repo.save(repo.create({ userId, languageId, isActive: true }));
+        // Create a new row marked as last learned
+        await repo.save(repo.create({ userId, languageId, lastLearned: true }));
       }
     });
   }
@@ -469,7 +469,7 @@ export class AuthService {
         id: ul.id,
         languageId: ul.languageId,
         proficiencyLevel: ul.proficiencyLevel,
-        isActive: ul.isActive,
+        lastLearned: ul.lastLearned,
         createdAt: ul.createdAt,
         language: {
           id: ul.language.id,

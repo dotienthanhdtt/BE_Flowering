@@ -95,13 +95,13 @@ export class LanguageService implements OnModuleInit {
 
     const level = this.resolveAndValidateLevel(language, dto.proficiencyLevel);
 
-    await this.userLanguageRepo.update({ userId, isActive: true }, { isActive: false });
+    await this.userLanguageRepo.update({ userId, lastLearned: true }, { lastLearned: false });
 
     const userLanguage = this.userLanguageRepo.create({
       userId,
       languageId: dto.languageId,
       proficiencyLevel: level,
-      isActive: true,
+      lastLearned: true,
     });
     const saved = await this.userLanguageRepo.save(userLanguage);
 
@@ -128,11 +128,14 @@ export class LanguageService implements OnModuleInit {
       userLanguage.proficiencyLevel = dto.proficiencyLevel;
     }
 
-    if (dto.isActive !== undefined) {
-      if (dto.isActive) {
-        await this.userLanguageRepo.update({ userId, isActive: true }, { isActive: false });
+    if (dto.lastLearned !== undefined) {
+      if (dto.lastLearned) {
+        await this.userLanguageRepo.update(
+          { userId, lastLearned: true },
+          { lastLearned: false },
+        );
       }
-      userLanguage.isActive = dto.isActive;
+      userLanguage.lastLearned = dto.lastLearned;
     }
 
     const saved = await this.userLanguageRepo.save(userLanguage);
@@ -187,7 +190,7 @@ export class LanguageService implements OnModuleInit {
       id: ul.id,
       languageId: ul.languageId,
       proficiencyLevel: ul.proficiencyLevel,
-      isActive: ul.isActive,
+      lastLearned: ul.lastLearned,
       createdAt: ul.createdAt,
       language: this.mapToLanguageDto(ul.language!),
     };

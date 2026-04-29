@@ -799,16 +799,16 @@ describe('AuthService', () => {
 
       // Deactivate any existing active row (none here) then create new
       expect(userLanguageRepository.update).toHaveBeenCalledWith(
-        { userId: mockUser.id, isActive: true },
-        { isActive: false },
+        { userId: mockUser.id, lastLearned: true },
+        { lastLearned: false },
       );
       expect(userLanguageRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: mockUser.id, languageId: 'lang-es', isActive: true }),
+        expect.objectContaining({ userId: mockUser.id, languageId: 'lang-es', lastLearned: true }),
       );
     });
 
     it('reactivates existing row instead of inserting duplicate', async () => {
-      const existing = { id: 'ul-existing', userId: mockUser.id, languageId: 'lang-es', isActive: false };
+      const existing = { id: 'ul-existing', userId: mockUser.id, languageId: 'lang-es', lastLearned: false };
       userLanguageRepository.findOne.mockResolvedValue(existing);
       userLanguageRepository.update.mockResolvedValue({ affected: 1 } as any);
 
@@ -816,11 +816,11 @@ describe('AuthService', () => {
 
       // Deactivate others first
       expect(userLanguageRepository.update).toHaveBeenCalledWith(
-        { userId: mockUser.id, isActive: true },
-        { isActive: false },
+        { userId: mockUser.id, lastLearned: true },
+        { lastLearned: false },
       );
       // Flip existing row to active
-      expect(userLanguageRepository.update).toHaveBeenCalledWith('ul-existing', { isActive: true });
+      expect(userLanguageRepository.update).toHaveBeenCalledWith('ul-existing', { lastLearned: true });
       expect(userLanguageRepository.save).not.toHaveBeenCalled();
     });
 
@@ -834,8 +834,8 @@ describe('AuthService', () => {
       // First update call deactivates all active rows for this user
       const updateCalls = userLanguageRepository.update.mock.calls;
       expect(updateCalls[0]).toEqual([
-        { userId: mockUser.id, isActive: true },
-        { isActive: false },
+        { userId: mockUser.id, lastLearned: true },
+        { lastLearned: false },
       ]);
     });
 

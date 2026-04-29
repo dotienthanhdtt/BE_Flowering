@@ -31,8 +31,8 @@ export class UserLanguage {
   @Column({ type: 'varchar', length: 16, name: 'proficiency_level', default: 'A1' })
   proficiencyLevel!: string;
 
-  @Column({ type: 'boolean', name: 'is_active', default: true })
-  isActive!: boolean;
+  @Column({ type: 'boolean', name: 'last_learned', default: true })
+  lastLearned!: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

@@ -63,7 +63,7 @@ export class LanguageContextGuard implements CanActivate {
     // No header — authenticated fallback
     if (user) {
       const activeUserLang = await this.userLanguageRepo.findOne({
-        where: { userId: user.id, isActive: true },
+        where: { userId: user.id, lastLearned: true },
         relations: ['language'],
       });
 
@@ -74,7 +74,7 @@ export class LanguageContextGuard implements CanActivate {
       }
 
       this.logger.warn(
-        `X-Learning-Language header missing for user ${user.id}; falling back to UserLanguage.isActive`,
+        `X-Learning-Language header missing for user ${user.id}; falling back to UserLanguage.lastLearned`,
       );
 
       const lang: ActiveLanguageContext = {
@@ -126,7 +126,7 @@ export class LanguageContextGuard implements CanActivate {
         this.userLanguageRepo.create({
           userId,
           languageId: lang.id,
-          isActive: false,
+          lastLearned: false,
           proficiencyLevel: defaultLevel,
         }),
       );
