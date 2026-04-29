@@ -8,11 +8,16 @@ export interface FrameworkLevelDescriptor {
   description: string;
 }
 
+interface LanguageEntry {
+  frameworkCode: string;
+  levels: FrameworkLevelDescriptor[];
+}
+
 @Injectable()
 export class FrameworkLevelsService implements OnModuleInit {
   private readonly logger = new Logger(FrameworkLevelsService.name);
-  private byFramework = new Map<string, FrameworkLevelDescriptor[]>();
-  private byKey = new Map<string, string>(); // `${framework}:${level}` -> description
+  private byLanguage = new Map<string, LanguageEntry>();
+  private byKey = new Map<string, string>(); // `${languageId}:${levelCode}` -> description
 
   constructor(
     @InjectRepository(FrameworkLevel)
@@ -24,27 +29,38 @@ export class FrameworkLevelsService implements OnModuleInit {
   }
 
   async refresh(): Promise<void> {
-    const rows = await this.repo.find({ order: { frameworkCode: 'ASC', orderIndex: 'ASC' } });
-    const byFramework = new Map<string, FrameworkLevelDescriptor[]>();
+    const rows = await this.repo.find({ order: { languageId: 'ASC', orderIndex: 'ASC' } });
+    const byLanguage = new Map<string, LanguageEntry>();
     const byKey = new Map<string, string>();
     for (const row of rows) {
-      const list = byFramework.get(row.frameworkCode) ?? [];
-      list.push({ code: row.levelCode, description: row.description });
-      byFramework.set(row.frameworkCode, list);
-      byKey.set(`${row.frameworkCode}:${row.levelCode}`, row.description);
+      let entry = byLanguage.get(row.languageId);
+      if (!entry) {
+        entry = { frameworkCode: row.frameworkCode, levels: [] };
+        byLanguage.set(row.languageId, entry);
+      }
+      entry.levels.push({ code: row.levelCode, description: row.description });
+      byKey.set(`${row.languageId}:${row.levelCode}`, row.description);
     }
-    this.byFramework = byFramework;
+    this.byLanguage = byLanguage;
     this.byKey = byKey;
-    this.logger.log(`Loaded ${rows.length} framework_levels rows`);
+    this.logger.log(`Loaded ${rows.length} framework_levels rows for ${byLanguage.size} languages`);
   }
 
-  getLevels(framework: string | null | undefined): FrameworkLevelDescriptor[] {
-    if (!framework) return [];
-    return this.byFramework.get(framework) ?? [];
+  getLevels(languageId: string | null | undefined): FrameworkLevelDescriptor[] {
+    if (!languageId) return [];
+    return this.byLanguage.get(languageId)?.levels ?? [];
   }
 
-  getDescription(framework: string | null | undefined, level: string | null | undefined): string {
-    if (!framework || !level) return '';
-    return this.byKey.get(`${framework}:${level}`) ?? '';
+  getDescription(
+    languageId: string | null | undefined,
+    level: string | null | undefined,
+  ): string {
+    if (!languageId || !level) return '';
+    return this.byKey.get(`${languageId}:${level}`) ?? '';
+  }
+
+  getFrameworkCode(languageId: string | null | undefined): string | null {
+    if (!languageId) return null;
+    return this.byLanguage.get(languageId)?.frameworkCode ?? null;
   }
 }

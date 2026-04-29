@@ -63,7 +63,6 @@ describe('LanguageService', () => {
     isActive: true,
     isNativeAvailable: true,
     isLearningAvailable: true,
-    levelFramework: 'CEFR',
   };
 
   describe('findAll', () => {
@@ -154,7 +153,7 @@ describe('LanguageService', () => {
     });
 
     it('passes proficiencyLevel through verbatim — DB trigger validates', async () => {
-      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, levelFramework: 'JLPT' });
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId });
       userLanguageRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue(mockUserLang);
       userLanguageRepo.create.mockReturnValue(mockUserLang);
       userLanguageRepo.save.mockResolvedValue({ id: 'ul-1' });
@@ -168,7 +167,7 @@ describe('LanguageService', () => {
     });
 
     it('omits proficiencyLevel when not supplied — DB trigger fills default', async () => {
-      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, levelFramework: 'JLPT' });
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId });
       userLanguageRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue(mockUserLang);
       userLanguageRepo.create.mockReturnValue(mockUserLang);
       userLanguageRepo.save.mockResolvedValue({ id: 'ul-1' });

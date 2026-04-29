@@ -154,7 +154,7 @@ describe('LanguageContextGuard', () => {
     userLanguageRepo.findOne
       .mockResolvedValueOnce(null) // not enrolled check
       .mockResolvedValueOnce(null); // race-check not triggered (no error thrown)
-    languageRepo.findOne.mockResolvedValue({ id: mockLangFr.id, isActive: true, isLearningAvailable: true, levelFramework: 'CEFR' });
+    languageRepo.findOne.mockResolvedValue({ id: mockLangFr.id, isActive: true, isLearningAvailable: true });
     userLanguageRepo.save.mockResolvedValue({});
     reflector.getAllAndOverride.mockImplementation((key) =>
       key === AUTO_ENROLL_LANGUAGE ? true : false,

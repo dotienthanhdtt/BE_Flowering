@@ -25,7 +25,4 @@ export class Language {
 
   @Column({ type: 'text', name: 'flag_url', nullable: true })
   flagUrl?: string;
-
-  @Column({ type: 'varchar', length: 16, name: 'level_framework' })
-  levelFramework!: string;
 }

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { Language } from '../../database/entities/language.entity';
 import { FrameworkLevel } from '../../database/entities/framework-level.entity';
 import {
   ValidatorConstraint,
@@ -25,17 +24,8 @@ export class IsValidLevelForLanguageConstraint implements ValidatorConstraintInt
 
     if (!languageId || typeof languageId !== 'string') return true; // let @IsUUID catch it
 
-    const lang = await this.dataSource
-      .getRepository(Language)
-      .createQueryBuilder('lang')
-      .select('lang.level_framework', 'levelFramework')
-      .where('lang.id = :id', { id: languageId })
-      .getRawOne<{ levelFramework: string | null }>();
-
-    if (!lang || !lang.levelFramework) return true; // unknown lang or frameworkless — let DB / other validators handle
-
     const exists = await this.dataSource.getRepository(FrameworkLevel).findOne({
-      where: { frameworkCode: lang.levelFramework, levelCode: value },
+      where: { languageId, levelCode: value },
     });
     return !!exists;
   }

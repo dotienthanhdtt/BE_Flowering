@@ -10,24 +10,20 @@ blocks: []
 # Framework Levels — DB-Driven Proficiency
 
 ## Goal
-Move proficiency-level resolution + validation out of TypeScript into Postgres. Add shared per-(framework, level) descriptions in a new `framework_levels` lookup table. Code stops setting defaults; DB does it via trigger.
+Move proficiency-level resolution + validation out of TypeScript into Postgres. Per-language `framework_levels` rows carry descriptions (in the learning language) and validation source. Code stops setting defaults; DB does it via trigger.
 
 ## Why
 - Single source of truth for level metadata (descriptions editable without code deploy)
+- Descriptions written in the learning language itself (N1 in Japanese, A1 in English, etc.)
 - Removes duplicated default-pick logic in `language.service.ts` and `language-context.guard.ts`
-- Enables future admin UI to manage level descriptions
-- Frontend can render level descriptions without hard-coded copy
+- Enables future admin UI to manage level descriptions per language
 
 ## Scope
 - `user_languages.proficiency_level` keeps `VARCHAR(16)` but loses default; trigger fills it
-- New `framework_levels(framework_code, level_code, description, order_index)` table
-- All existing `LANGUAGE_FRAMEWORKS`-based code paths replaced with DB queries
-- `AllExceptionsFilter` learns to map Postgres `P0001` → 400
-
-## Non-goals
-- No change to gamification/XP system (separate concern)
-- No rename of `proficiency_level` column
-- No FK migration on `user_languages` (trigger handles validation; cross-table FK awkward)
+- `framework_levels(language_id, framework_code, level_code, description, order_index)` per-language table
+- All `LANGUAGE_FRAMEWORKS`-based code paths replaced with DB-cached lookups
+- `AllExceptionsFilter` maps Postgres `P0001` → 400
+- `languages.level_framework` column dropped (Phase 05); framework code lives on `framework_levels` rows
 
 ## Phases
 
@@ -37,12 +33,12 @@ Move proficiency-level resolution + validation out of TypeScript into Postgres. 
 | 02 | [phase-02-trigger-and-user-languages-cleanup.md](./phase-02-trigger-and-user-languages-cleanup.md) | completed |
 | 03 | [phase-03-code-refactor-remove-level-logic.md](./phase-03-code-refactor-remove-level-logic.md) | completed |
 | 04 | [phase-04-exception-mapping-and-tests.md](./phase-04-exception-mapping-and-tests.md) | completed |
+| 05 | [phase-05-restructure-framework-levels-per-language.md](./phase-05-restructure-framework-levels-per-language.md) | completed |
+| 06 | [phase-06-code-refactor-per-language.md](./phase-06-code-refactor-per-language.md) | completed |
 
 ## Key Dependencies
-- Phase 02 depends on Phase 01 (trigger reads from `framework_levels`)
-- Phase 03 depends on Phase 02 (code can omit level only after DB defaults work)
-- Phase 04 depends on Phase 03
-
-## Open Items (resolve before Phase 01)
-1. Description copy — placeholder `'TBD'` for now or canonical text from CEFR/JLPT bodies?
-2. Confirm `LanguageDto.levels[]` may become `{ code, description }[]` (frontend impact)
+- Phase 02 → Phase 01 (trigger reads from `framework_levels`)
+- Phase 03 → Phase 02
+- Phase 04 → Phase 03
+- Phase 05 → Phase 04 (per-language redesign on top of shipped foundation)
+- Phase 06 → Phase 05 (code follows DB shape)

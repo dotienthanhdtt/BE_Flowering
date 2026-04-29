@@ -66,7 +66,7 @@ describe('OnboardingService', () => {
         { provide: PromptLoaderService, useFactory: mockPromptLoader },
         {
           provide: require('../../common/services/framework-levels.service').FrameworkLevelsService,
-          useValue: { getLevels: () => [], getDescription: () => '' },
+          useValue: { getLevels: () => [], getDescription: () => '', getFrameworkCode: () => null },
         },
       ],
     }).compile();

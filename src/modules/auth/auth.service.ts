@@ -465,13 +465,12 @@ export class AuthService {
     });
 
     return userLanguages.map((ul) => {
-      const fw = ul.language?.levelFramework ?? null;
       const level = ul.proficiencyLevel ?? '';
       return {
         id: ul.id,
         languageId: ul.languageId,
         proficiencyLevel: level,
-        description: this.frameworkLevels.getDescription(fw, level),
+        description: this.frameworkLevels.getDescription(ul.languageId, level),
         lastLearned: ul.lastLearned,
         createdAt: ul.createdAt,
         language: {
@@ -482,7 +481,7 @@ export class AuthService {
           flagUrl: ul.language.flagUrl,
           isNativeAvailable: ul.language.isNativeAvailable,
           isLearningAvailable: ul.language.isLearningAvailable,
-          levels: this.frameworkLevels.getLevels(fw),
+          levels: this.frameworkLevels.getLevels(ul.languageId),
         },
       };
     });

@@ -149,7 +149,7 @@ export class OnboardingService {
       return {
         ...cached,
         suggestedFrameworkLevel: this.mapOnboardingLevel(
-          language?.levelFramework ?? null,
+          this.frameworkLevels.getFrameworkCode(language?.id),
           cached.suggestedProficiency as string | undefined,
         ),
         scenarios: conversation.scenarios as unknown as OnboardingScenarioDto[],
@@ -193,7 +193,7 @@ export class OnboardingService {
     return {
       ...profile,
       suggestedFrameworkLevel: this.mapOnboardingLevel(
-        language?.levelFramework ?? null,
+        this.frameworkLevels.getFrameworkCode(language?.id),
         profile.suggestedProficiency as string | undefined,
       ),
       scenarios,

@@ -7,7 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Language } from '../../database/entities/language.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
 import { User } from '../../database/entities/user.entity';
@@ -34,11 +34,10 @@ export class LanguageService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    const nullFramework = await this.languageRepo.find({
-      where: { isLearningAvailable: true, levelFramework: IsNull() },
-    });
-    if (nullFramework.length) {
-      const msg = `Languages missing levelFramework: ${nullFramework.map((b) => b.code).join(', ')}`;
+    const learning = await this.languageRepo.find({ where: { isLearningAvailable: true } });
+    const missing = learning.filter((l) => this.frameworkLevels.getLevels(l.id).length === 0);
+    if (missing.length) {
+      const msg = `Languages missing framework_levels rows: ${missing.map((b) => b.code).join(', ')}`;
       if (process.env.NODE_ENV !== 'production') throw new Error(msg);
       else this.logger.warn(msg);
     }
@@ -156,7 +155,7 @@ export class LanguageService implements OnModuleInit {
       flagUrl: lang.flagUrl,
       isNativeAvailable: lang.isNativeAvailable,
       isLearningAvailable: lang.isLearningAvailable,
-      levels: this.frameworkLevels.getLevels(lang.levelFramework),
+      levels: this.frameworkLevels.getLevels(lang.id),
     };
   }
 
@@ -166,7 +165,7 @@ export class LanguageService implements OnModuleInit {
       id: ul.id,
       languageId: ul.languageId,
       proficiencyLevel: level,
-      description: this.frameworkLevels.getDescription(ul.language?.levelFramework, level),
+      description: this.frameworkLevels.getDescription(ul.languageId, level),
       lastLearned: ul.lastLearned,
       createdAt: ul.createdAt,
       language: this.mapToLanguageDto(ul.language!),
