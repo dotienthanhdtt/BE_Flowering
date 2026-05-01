@@ -77,17 +77,13 @@ export class FrameworkLevelsPerLanguage1779700000000 implements MigrationInterfa
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Restore level_framework column on languages, backfill from framework_levels
-    await queryRunner.query(
-      `ALTER TABLE languages ADD COLUMN level_framework VARCHAR(16)`,
-    );
+    await queryRunner.query(`ALTER TABLE languages ADD COLUMN level_framework VARCHAR(16)`);
     await queryRunner.query(`
       UPDATE languages l SET level_framework = (
         SELECT framework_code FROM framework_levels WHERE language_id = l.id LIMIT 1
       )
     `);
-    await queryRunner.query(
-      `ALTER TABLE languages ALTER COLUMN level_framework SET NOT NULL`,
-    );
+    await queryRunner.query(`ALTER TABLE languages ALTER COLUMN level_framework SET NOT NULL`);
 
     // Drop new trigger + function + per-language table
     await queryRunner.query(
@@ -107,14 +103,29 @@ export class FrameworkLevelsPerLanguage1779700000000 implements MigrationInterfa
       )
     `);
     const seed: Array<[string, string, number]> = [
-      ['CEFR', 'A1', 1], ['CEFR', 'A2', 2], ['CEFR', 'B1', 3],
-      ['CEFR', 'B2', 4], ['CEFR', 'C1', 5], ['CEFR', 'C2', 6],
-      ['JLPT', 'N5', 1], ['JLPT', 'N4', 2], ['JLPT', 'N3', 3],
-      ['JLPT', 'N2', 4], ['JLPT', 'N1', 5],
-      ['HSK', 'HSK1', 1], ['HSK', 'HSK2', 2], ['HSK', 'HSK3', 3],
-      ['HSK', 'HSK4', 4], ['HSK', 'HSK5', 5], ['HSK', 'HSK6', 6],
-      ['TOPIK', 'TOPIK1', 1], ['TOPIK', 'TOPIK2', 2], ['TOPIK', 'TOPIK3', 3],
-      ['TOPIK', 'TOPIK4', 4], ['TOPIK', 'TOPIK5', 5], ['TOPIK', 'TOPIK6', 6],
+      ['CEFR', 'A1', 1],
+      ['CEFR', 'A2', 2],
+      ['CEFR', 'B1', 3],
+      ['CEFR', 'B2', 4],
+      ['CEFR', 'C1', 5],
+      ['CEFR', 'C2', 6],
+      ['JLPT', 'N5', 1],
+      ['JLPT', 'N4', 2],
+      ['JLPT', 'N3', 3],
+      ['JLPT', 'N2', 4],
+      ['JLPT', 'N1', 5],
+      ['HSK', 'HSK1', 1],
+      ['HSK', 'HSK2', 2],
+      ['HSK', 'HSK3', 3],
+      ['HSK', 'HSK4', 4],
+      ['HSK', 'HSK5', 5],
+      ['HSK', 'HSK6', 6],
+      ['TOPIK', 'TOPIK1', 1],
+      ['TOPIK', 'TOPIK2', 2],
+      ['TOPIK', 'TOPIK3', 3],
+      ['TOPIK', 'TOPIK4', 4],
+      ['TOPIK', 'TOPIK5', 5],
+      ['TOPIK', 'TOPIK6', 6],
       ['FRAMEWORKLESS', 'beginner', 1],
     ];
     for (const [framework, level, order] of seed) {

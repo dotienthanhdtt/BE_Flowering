@@ -14,6 +14,7 @@ export enum SubscriptionStatus {
   EXPIRED = 'expired',
   CANCELLED = 'cancelled',
   TRIAL = 'trial',
+  PAUSED = 'paused',
 }
 
 export enum SubscriptionPlan {
@@ -52,6 +53,22 @@ export class Subscription {
 
   @Column({ type: 'boolean', name: 'cancel_at_period_end', default: false })
   cancelAtPeriodEnd!: boolean;
+
+  /**
+   * Timestamp (ms) of the last RC event applied to this row.
+   * NULL on rows created before this column was added — treated as -Infinity
+   * so any incoming event always wins on first apply after migration.
+   */
+  @Column({
+    type: 'bigint',
+    name: 'event_timestamp_ms',
+    nullable: true,
+    transformer: {
+      to: (v: number | null) => v,
+      from: (v: string | null) => (v === null ? null : Number(v)),
+    },
+  })
+  eventTimestampMs!: number | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

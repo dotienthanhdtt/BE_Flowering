@@ -34,6 +34,8 @@ export interface AppConfiguration {
   revenuecat: {
     apiKey?: string;
     webhookSecret?: string;
+    /** Secret key for RC REST API v1 subscriber lookups (fallback + reconciliation). */
+    restApiKey?: string;
   };
   firebase: {
     projectId?: string;
@@ -78,6 +80,7 @@ export default (): AppConfiguration => ({
   revenuecat: {
     apiKey: process.env.REVENUECAT_API_KEY,
     webhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET,
+    restApiKey: process.env.REVENUECAT_REST_API_KEY,
   },
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID,

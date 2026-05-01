@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import appConfiguration from './config/app-configuration';
 import { environmentValidationSchema } from './config/environment-validation-schema';
@@ -37,6 +38,7 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
         abortEarly: false,
       },
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     FrameworkLevelsModule,
     LanguageContextModule,
@@ -74,7 +76,7 @@ export class AppModule implements NestModule {
     consumer.apply(HttpLoggerMiddleware).forRoutes('*');
     consumer
       .apply(SnakeToCamelCaseMiddleware)
-      .exclude({ path: 'subscription/webhook', method: RequestMethod.ALL })
+      .exclude({ path: 'webhooks/revenuecat', method: RequestMethod.ALL })
       .forRoutes('*');
   }
 }

@@ -9,4 +9,6 @@ export class ScenarioDefaultDto {
   @ApiProperty({ enum: ScenarioDifficulty }) difficulty!: ScenarioDifficulty;
   @ApiProperty() languageId!: string;
   @ApiProperty() orderIndex!: number;
+  /** Present and true when the user is free and this is a premium scenario */
+  @ApiPropertyOptional() locked?: boolean;
 }

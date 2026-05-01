@@ -70,15 +70,11 @@ export class CreateFrameworkLevelsTable1779500000000 implements MigrationInterfa
         AND ul.proficiency_level <> 'beginner'
     `);
 
-    await queryRunner.query(
-      `ALTER TABLE languages ALTER COLUMN level_framework SET NOT NULL`,
-    );
+    await queryRunner.query(`ALTER TABLE languages ALTER COLUMN level_framework SET NOT NULL`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE languages ALTER COLUMN level_framework DROP NOT NULL`,
-    );
+    await queryRunner.query(`ALTER TABLE languages ALTER COLUMN level_framework DROP NOT NULL`);
     // Restore NULL for langs we backfilled to FRAMEWORKLESS (best-effort: only those
     // that had no framework before — vi, th)
     await queryRunner.query(

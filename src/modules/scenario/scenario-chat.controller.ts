@@ -7,6 +7,8 @@ import {
   ActiveLanguage,
   ActiveLanguageContext,
 } from '../../common/decorators/active-language.decorator';
+import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
+import { RequireResourceAccess } from '@common/decorators/require-resource-access.decorator';
 import {
   ScenarioChatRequestDto,
   ScenarioChatResponseDto,
@@ -31,6 +33,8 @@ export class ScenarioChatController {
 
   @Post('chat')
   @Throttle({ 'ai-short': { limit: 20, ttl: 60_000 }, 'ai-medium': { limit: 100, ttl: 3_600_000 } })
+  @UseGuards(ResourceAccessGuard)
+  @RequireResourceAccess({ resource: 'scenario', bodyKey: 'scenarioId' })
   @ApiOperation({ summary: 'Send a turn in a scenario roleplay conversation' })
   @ApiResponse({ status: 200, type: ScenarioChatResponseDto })
   @ApiResponse({

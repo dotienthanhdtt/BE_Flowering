@@ -7,6 +7,7 @@ import { BaseResponseDto } from '../dto/base-response.dto';
 interface ErrorResponse {
   message?: string | string[];
   error?: string;
+  error_code?: string;
 }
 
 interface PgError {
@@ -36,6 +37,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     }
 
+    let errorCode: string | undefined;
+
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
@@ -51,6 +54,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         } else if (errorResponse.error) {
           message = errorResponse.error;
         }
+        errorCode = errorResponse.error_code;
       }
     } else if (exception instanceof Error) {
       message = exception.message;
@@ -66,7 +70,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       });
     }
 
-    const errorResponse = BaseResponseDto.error(message);
+    const errorResponse: BaseResponseDto<null> & { error_code?: string } =
+      BaseResponseDto.error(message);
+    if (errorCode) errorResponse.error_code = errorCode;
     response.status(status).json(errorResponse);
   }
 }

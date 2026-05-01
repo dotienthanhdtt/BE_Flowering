@@ -46,9 +46,7 @@ export class KolBundleService {
     if (rows.length !== scenarioIds.length) {
       throw new BadRequestException('One or more scenarios not found');
     }
-    const invalid = rows.filter(
-      (s) => s.type !== ScenarioType.KOL || s.ownerId != null,
-    );
+    const invalid = rows.filter((s) => s.type !== ScenarioType.KOL || s.ownerId != null);
     if (invalid.length > 0) {
       throw new BadRequestException('Only KOL scenarios can be attached to a bundle');
     }

@@ -51,10 +51,7 @@ export class FrameworkLevelsService implements OnModuleInit {
     return this.byLanguage.get(languageId)?.levels ?? [];
   }
 
-  getDescription(
-    languageId: string | null | undefined,
-    level: string | null | undefined,
-  ): string {
+  getDescription(languageId: string | null | undefined, level: string | null | undefined): string {
     if (!languageId || !level) return '';
     return this.byKey.get(`${languageId}:${level}`) ?? '';
   }

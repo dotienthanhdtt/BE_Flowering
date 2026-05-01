@@ -18,7 +18,7 @@ export class UpdateUserLanguageDto {
   proficiencyLevel?: string;
 
   @ApiPropertyOptional({
-    description: 'Mark this as the user\'s most recently learned language',
+    description: "Mark this as the user's most recently learned language",
   })
   @IsOptional()
   @IsBoolean()

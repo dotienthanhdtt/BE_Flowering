@@ -10,4 +10,6 @@ export class ScenarioPersonalDto {
   @ApiProperty() languageId!: string;
   @ApiProperty() addedAt!: Date;
   @ApiProperty({ enum: ['kol', 'personalized'] }) source!: 'kol' | 'personalized';
+  /** Present and true when the user is free and this is a premium scenario */
+  @ApiPropertyOptional() locked?: boolean;
 }

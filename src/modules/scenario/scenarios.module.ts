@@ -7,6 +7,8 @@ import { UserLanguage } from '@/database/entities/user-language.entity';
 import { KolBundle } from '@/database/entities/kol-bundle.entity';
 import { KolBundleScenario } from '@/database/entities/kol-bundle-scenario.entity';
 import { SubscriptionModule } from '@/modules/subscription/subscription.module';
+import { AccessTierCacheService } from '@common/services/access-tier-cache.service';
+import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
 import { ScenariosController } from './scenarios.controller';
 import { ScenariosListingService } from './services/scenarios-listing.service';
 import { ScenariosRedeemService } from './services/scenarios-redeem.service';
@@ -31,6 +33,8 @@ import { ScenariosDetailService } from './services/scenarios-detail.service';
     ScenariosRedeemService,
     ScenarioAccessService,
     ScenariosDetailService,
+    AccessTierCacheService,
+    ResourceAccessGuard,
   ],
 })
 export class ScenariosModule {}

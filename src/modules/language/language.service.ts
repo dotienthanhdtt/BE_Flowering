@@ -123,10 +123,7 @@ export class LanguageService implements OnModuleInit {
 
     if (dto.lastLearned !== undefined) {
       if (dto.lastLearned) {
-        await this.userLanguageRepo.update(
-          { userId, lastLearned: true },
-          { lastLearned: false },
-        );
+        await this.userLanguageRepo.update({ userId, lastLearned: true }, { lastLearned: false });
       }
       userLanguage.lastLearned = dto.lastLearned;
     }

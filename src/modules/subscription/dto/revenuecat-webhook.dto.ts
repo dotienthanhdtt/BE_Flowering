@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsNumber, IsIn, ValidateNested, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
-/** RevenueCat webhook event types */
+/** All RevenueCat webhook event types */
 export type RevenueCatEventType =
   | 'INITIAL_PURCHASE'
   | 'RENEWAL'
@@ -10,7 +10,23 @@ export type RevenueCatEventType =
   | 'UNCANCELLATION'
   | 'EXPIRATION'
   | 'BILLING_ISSUE'
-  | 'PRODUCT_CHANGE';
+  | 'PRODUCT_CHANGE'
+  | 'REFUND'
+  | 'SUBSCRIPTION_PAUSED'
+  | 'TRANSFER';
+
+/**
+ * Cancel reason values from RevenueCat CANCELLATION events.
+ * UNSUBSCRIBE = user-initiated; access continues until period end.
+ * CUSTOMER_SUPPORT / BILLING_ERROR = immediate revoke.
+ */
+export type RevenueCatCancelReason =
+  | 'UNSUBSCRIBE'
+  | 'BILLING_ERROR'
+  | 'DEVELOPER'
+  | 'PRICE_INCREASE'
+  | 'CUSTOMER_SUPPORT'
+  | 'UNKNOWN';
 
 /** DTO for RevenueCat event payload */
 export class RevenueCatEventDto {
@@ -54,6 +70,37 @@ export class RevenueCatEventDto {
   @IsOptional()
   @IsNumber()
   purchased_at_ms?: number;
+
+  @ApiPropertyOptional({ description: 'Event timestamp in ms — used for out-of-order guard' })
+  @IsOptional()
+  @IsNumber()
+  event_timestamp_ms?: number;
+
+  @ApiPropertyOptional({ description: 'Cancel reason for CANCELLATION events' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  cancel_reason?: RevenueCatCancelReason;
+
+  /**
+   * TRANSFER only: the app_user_id of the source user losing the subscription.
+   * RC docs call this field "transferred_from" inside the event object.
+   */
+  @ApiPropertyOptional({ description: 'TRANSFER: source user ID losing the subscription' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  transferred_from?: string;
+
+  /**
+   * TRANSFER only: the app_user_id of the destination user gaining the subscription.
+   * RC docs call this field "transferred_to" inside the event object.
+   */
+  @ApiPropertyOptional({ description: 'TRANSFER: destination user ID gaining the subscription' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  transferred_to?: string;
 
   @ApiProperty({ description: 'Environment', enum: ['SANDBOX', 'PRODUCTION'] })
   @IsIn(['SANDBOX', 'PRODUCTION'])

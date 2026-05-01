@@ -383,7 +383,9 @@ export class ScenarioChatService {
     // falling back to the user's most recently learned language if not yet enrolled
     // (defensive — guard auto-enrolls).
     const target =
-      langs.find((l) => l.languageId === languageId) ?? langs.find((l) => l.lastLearned) ?? langs[0];
+      langs.find((l) => l.languageId === languageId) ??
+      langs.find((l) => l.lastLearned) ??
+      langs[0];
     if (!target) throw new BadRequestException('User has no active learning language');
 
     return {

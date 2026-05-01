@@ -12,6 +12,8 @@ import { AiModule } from '@/modules/ai/ai.module';
 import { LanguageModule } from '@/modules/language/language.module';
 import { SubscriptionModule } from '@/modules/subscription/subscription.module';
 import { VocabularyModule } from '@/modules/vocabulary/vocabulary.module';
+import { AccessTierCacheService } from '@common/services/access-tier-cache.service';
+import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
 import { ScenarioChatController } from './scenario-chat.controller';
 import { ScenarioChatService } from './services/scenario-chat.service';
 import { ScenarioAccessService } from './services/scenario-access.service';
@@ -38,6 +40,12 @@ import { VocabularyInjectionService } from './services/vocabulary-injection.serv
     VocabularyModule,
   ],
   controllers: [ScenarioChatController],
-  providers: [ScenarioChatService, ScenarioAccessService, VocabularyInjectionService],
+  providers: [
+    ScenarioChatService,
+    ScenarioAccessService,
+    VocabularyInjectionService,
+    AccessTierCacheService,
+    ResourceAccessGuard,
+  ],
 })
 export class ScenarioChatModule {}

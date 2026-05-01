@@ -1,6 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsString, IsUUID, MaxLength, Min, registerDecorator, ValidationOptions, ValidationArguments } from 'class-validator';
+import {
+  IsInt,
+  IsString,
+  IsUUID,
+  MaxLength,
+  Min,
+  registerDecorator,
+  ValidationOptions,
+  ValidationArguments,
+} from 'class-validator';
 
 function IsTapRangeValid(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string) {
@@ -12,7 +21,11 @@ function IsTapRangeValid(validationOptions?: ValidationOptions) {
       validator: {
         validate(_value: unknown, args: ValidationArguments) {
           const obj = args.object as TranslateChunkRequestDto;
-          return typeof obj.tapFrom === 'number' && typeof obj.tapTo === 'number' && obj.tapTo > obj.tapFrom;
+          return (
+            typeof obj.tapFrom === 'number' &&
+            typeof obj.tapTo === 'number' &&
+            obj.tapTo > obj.tapFrom
+          );
         },
       },
     });
@@ -24,7 +37,10 @@ export class TranslateChunkRequestDto {
   @IsUUID()
   messageId!: string;
 
-  @ApiProperty({ example: '科技', description: 'The tapped word/text the client wants to translate' })
+  @ApiProperty({
+    example: '科技',
+    description: 'The tapped word/text the client wants to translate',
+  })
   @IsString()
   @MaxLength(255)
   word!: string;

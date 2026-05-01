@@ -78,7 +78,9 @@ export class MergeUserAiScenariosSchemaAndBackfill1779800100000 implements Migra
     `);
 
     // Drop CHECK + new columns + index + remove personal rows from scenarios.
-    await queryRunner.query(`ALTER TABLE scenarios DROP CONSTRAINT IF EXISTS scenarios_type_owner_check`);
+    await queryRunner.query(
+      `ALTER TABLE scenarios DROP CONSTRAINT IF EXISTS scenarios_type_owner_check`,
+    );
     await queryRunner.query(`DELETE FROM scenarios WHERE type = 'personal'`);
     await queryRunner.query(`DROP INDEX IF EXISTS idx_scenarios_owner_lang`);
     await queryRunner.query(`ALTER TABLE scenarios DROP COLUMN IF EXISTS source_conversation_id`);

@@ -106,10 +106,7 @@ export class ScenarioAccessService {
   }
 
   /** Personal scenarios owned by the requesting user. */
-  async listPersonalForUser(
-    userId: string,
-    languageId: string,
-  ): Promise<Scenario[]> {
+  async listPersonalForUser(userId: string, languageId: string): Promise<Scenario[]> {
     return this.scenarioRepo.find({
       where: {
         type: ScenarioType.PERSONAL,
