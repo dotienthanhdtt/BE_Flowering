@@ -18,6 +18,7 @@ import {
 import { AiConversationType, ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
 import { parseScenarioReply } from './scenario-llm-reply-parser';
 import { Vocabulary } from '@/database/entities/vocabulary.entity';
+import { UserAiScenario } from '@/database/entities/user-ai-scenario.entity';
 import { UnifiedLLMService } from '@/modules/ai/services/unified-llm.service';
 import { PromptLoaderService } from '@/modules/ai/services/prompt-loader.service';
 import { LLMModel } from '@/modules/ai/providers/llm-models.enum';
@@ -57,6 +58,8 @@ export class ScenarioChatService {
     private readonly eventsRepo: Repository<VocabularyInjectionEvent>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(UserAiScenario)
+    private readonly userAiScenarioRepo: Repository<UserAiScenario>,
     private readonly llmService: UnifiedLLMService,
     private readonly promptLoader: PromptLoaderService,
     private readonly languageService: LanguageService,
@@ -70,12 +73,10 @@ export class ScenarioChatService {
     dto: ScenarioChatRequestDto,
     languageId: string,
   ): Promise<ScenarioChatResponseDto> {
-    // 1. Verify scenario access + language match
-    const scenario = await this.scenarioAccessService.findAccessibleScenario(
-      userId,
-      dto.scenarioId,
-      languageId,
-    );
+    // 1. Verify scenario access + language match. Curated scenarios live in
+    //    `scenarios`; personalized AI-generated scenarios live in `user_ai_scenarios`.
+    //    Try curated first, then fall back to the user's AI scenarios.
+    const scenario = await this.resolveChatScenario(userId, dto.scenarioId, languageId);
 
     // 2. Resolve conversation by (userId, scenarioId). Resume regardless of
     //    status (CHATTING or DONE); only create when none exists.
@@ -217,6 +218,46 @@ export class ScenarioChatService {
       },
       messages: transcript,
     };
+  }
+
+  private async resolveChatScenario(
+    userId: string,
+    scenarioId: string,
+    languageId: string,
+  ): Promise<{
+    id: string;
+    title: string;
+    description: string | null;
+    languageId: string;
+    category: { name: string } | null;
+  }> {
+    try {
+      const s = await this.scenarioAccessService.findAccessibleScenario(
+        userId,
+        scenarioId,
+        languageId,
+      );
+      return {
+        id: s.id,
+        title: s.title,
+        description: s.description ?? null,
+        languageId: s.languageId,
+        category: s.category ? { name: s.category.name } : null,
+      };
+    } catch (err) {
+      if (!(err instanceof NotFoundException)) throw err;
+      const personal = await this.userAiScenarioRepo.findOne({
+        where: { id: scenarioId, userId, languageId },
+      });
+      if (!personal) throw err;
+      return {
+        id: personal.id,
+        title: personal.title,
+        description: personal.description ?? null,
+        languageId: personal.languageId,
+        category: null,
+      };
+    }
   }
 
   private async findOrCreate(

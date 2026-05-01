@@ -7,6 +7,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { ScenarioChatService } from './scenario-chat.service';
 import { ScenarioAccessService } from './scenario-access.service';
 import { AiConversation, AiConversationMessage, MessageRole, User, VocabularyInjectionEvent } from '../../../database/entities';
+import { UserAiScenario } from '../../../database/entities/user-ai-scenario.entity';
 import { AiConversationType, ScenarioChatStatus } from '../../../database/entities/ai-conversation.entity';
 import { UnifiedLLMService } from '../../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../../ai/services/prompt-loader.service';
@@ -76,6 +77,7 @@ describe('ScenarioChatService', () => {
   let promptLoader: any;
   let languageService: ReturnType<typeof mockLanguageService>;
   let scenarioAccessService: ReturnType<typeof mockScenarioAccessService>;
+  let userAiScenarioRepo: { findOne: jest.Mock };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -87,6 +89,7 @@ describe('ScenarioChatService', () => {
         { provide: getRepositoryToken(AiConversationMessage), useFactory: mockMsgRepo },
         { provide: getRepositoryToken(VocabularyInjectionEvent), useFactory: mockEventsRepo },
         { provide: getRepositoryToken(User), useFactory: mockUserRepo },
+        { provide: getRepositoryToken(UserAiScenario), useFactory: () => ({ findOne: jest.fn() }) },
         { provide: UnifiedLLMService, useValue: { chat: jest.fn() } },
         { provide: PromptLoaderService, useValue: { loadPrompt: jest.fn() } },
         { provide: LanguageService, useFactory: mockLanguageService },
@@ -103,6 +106,7 @@ describe('ScenarioChatService', () => {
     promptLoader = module.get(PromptLoaderService);
     languageService = module.get(LanguageService);
     scenarioAccessService = module.get(ScenarioAccessService);
+    userAiScenarioRepo = module.get(getRepositoryToken(UserAiScenario));
   });
 
   const mockUserId = 'user-uuid-1';
@@ -219,6 +223,54 @@ describe('ScenarioChatService', () => {
           learnerName: 'Alice',
         }),
       );
+    });
+  });
+
+  describe('chat - personalized AI scenario fallback', () => {
+    it('falls back to user_ai_scenarios when scenarios table misses', async () => {
+      scenarioAccessService.findAccessibleScenario.mockRejectedValue(
+        new NotFoundException('Scenario not found'),
+      );
+      userAiScenarioRepo.findOne.mockResolvedValue({
+        id: mockScenarioId,
+        userId: mockUserId,
+        languageId: mockLanguageId,
+        title: 'My Custom Scenario',
+        description: 'A personalized story',
+      });
+      languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
+      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
+      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
+      convoRepo.save.mockResolvedValue(mockConversationEntity);
+      msgRepo.find.mockResolvedValue([]);
+      promptLoader.loadPrompt.mockReturnValue('system prompt');
+      llmService.chat.mockResolvedValue('{"reply":"Hi!","is_end":false}');
+
+      const dto = { scenarioId: mockScenarioId };
+      const result = await service.chat(mockUserId, dto, 'lang-en');
+
+      expect(userAiScenarioRepo.findOne).toHaveBeenCalledWith({
+        where: { id: mockScenarioId, userId: mockUserId, languageId: 'lang-en' },
+      });
+      expect(promptLoader.loadPrompt).toHaveBeenCalledWith(
+        'scenario-chat-prompt.json',
+        expect.objectContaining({
+          scenarioTitle: 'My Custom Scenario',
+          scenarioCategory: 'general',
+        }),
+      );
+      expect(result.scenario.conversation_id).toBe(mockConversationId);
+    });
+
+    it('rethrows NotFound when neither table has the scenario', async () => {
+      scenarioAccessService.findAccessibleScenario.mockRejectedValue(
+        new NotFoundException('Scenario not found'),
+      );
+      userAiScenarioRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.chat(mockUserId, { scenarioId: mockScenarioId }, 'lang-en'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
