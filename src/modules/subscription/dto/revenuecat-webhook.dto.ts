@@ -1,19 +1,34 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNumber, IsIn, ValidateNested, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsIn,
+  IsObject,
+  IsArray,
+  MaxLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
-/** All RevenueCat webhook event types */
+/** All RevenueCat webhook event types — see https://www.revenuecat.com/docs/integrations/webhooks/event-types-and-fields */
 export type RevenueCatEventType =
+  | 'TEST'
   | 'INITIAL_PURCHASE'
   | 'RENEWAL'
   | 'CANCELLATION'
   | 'UNCANCELLATION'
+  | 'NON_RENEWING_PURCHASE'
+  | 'SUBSCRIPTION_PAUSED'
   | 'EXPIRATION'
   | 'BILLING_ISSUE'
   | 'PRODUCT_CHANGE'
-  | 'REFUND'
-  | 'SUBSCRIPTION_PAUSED'
-  | 'TRANSFER';
+  | 'TRANSFER'
+  | 'SUBSCRIPTION_EXTENDED'
+  | 'TEMPORARY_ENTITLEMENT_GRANT'
+  | 'REFUND_REVERSED'
+  | 'INVOICE_ISSUANCE'
+  | 'VIRTUAL_CURRENCY_TRANSACTION'
+  | 'EXPERIMENT_ENROLLMENT';
 
 /**
  * Cancel reason values from RevenueCat CANCELLATION events.
@@ -23,12 +38,20 @@ export type RevenueCatEventType =
 export type RevenueCatCancelReason =
   | 'UNSUBSCRIBE'
   | 'BILLING_ERROR'
-  | 'DEVELOPER'
+  | 'DEVELOPER_INITIATED'
   | 'PRICE_INCREASE'
   | 'CUSTOMER_SUPPORT'
   | 'UNKNOWN';
 
-/** DTO for RevenueCat event payload */
+/** EXPIRATION reason — superset of cancel reasons + SUBSCRIPTION_PAUSED. */
+export type RevenueCatExpirationReason = RevenueCatCancelReason | 'SUBSCRIPTION_PAUSED';
+
+/**
+ * DTO for RevenueCat event payload.
+ * Only fields the backend reads are declared. The webhook controller does NOT
+ * use @ValidateNested() on this object so unknown RC fields are accepted
+ * untouched (RC adds new fields over time and the docs warn against rejecting them).
+ */
 export class RevenueCatEventDto {
   @ApiProperty({ description: 'Unique event ID for idempotency' })
   @IsString()
@@ -37,29 +60,39 @@ export class RevenueCatEventDto {
 
   @ApiProperty({ description: 'Event type' })
   @IsString()
-  @MaxLength(50)
+  @MaxLength(64)
   type!: RevenueCatEventType;
 
-  @ApiProperty({ description: 'App user ID (our user ID)' })
-  @IsString()
-  @MaxLength(255)
-  app_user_id!: string;
-
-  @ApiProperty({ description: 'Original app user ID' })
-  @IsString()
-  @MaxLength(255)
-  original_app_user_id!: string;
-
-  @ApiProperty({ description: 'Product ID from store' })
-  @IsString()
-  @MaxLength(255)
-  product_id!: string;
-
-  @ApiPropertyOptional({ description: 'Entitlement ID' })
+  @ApiPropertyOptional({ description: 'App user ID — absent on TRANSFER events' })
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  entitlement_id?: string;
+  app_user_id?: string;
+
+  @ApiPropertyOptional({ description: 'First app user ID ever used by the subscriber' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  original_app_user_id?: string;
+
+  @ApiPropertyOptional({ description: 'All app user IDs ever used by the subscriber' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  aliases?: string[];
+
+  @ApiPropertyOptional({ description: 'Product ID from store' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  product_id?: string;
+
+  /** PRODUCT_CHANGE only — the new product the subscriber switched to. */
+  @ApiPropertyOptional({ description: 'New product ID for PRODUCT_CHANGE events' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  new_product_id?: string;
 
   @ApiPropertyOptional({ description: 'Expiration timestamp in ms' })
   @IsOptional()
@@ -76,35 +109,48 @@ export class RevenueCatEventDto {
   @IsNumber()
   event_timestamp_ms?: number;
 
+  /** BILLING_ISSUE only — when grace period expires. */
+  @ApiPropertyOptional({ description: 'Grace period expiration in ms (BILLING_ISSUE)' })
+  @IsOptional()
+  @IsNumber()
+  grace_period_expiration_at_ms?: number;
+
+  /** SUBSCRIPTION_PAUSED (Play Store) — when the subscription auto-resumes. */
+  @ApiPropertyOptional({ description: 'Auto-resume timestamp in ms (SUBSCRIPTION_PAUSED)' })
+  @IsOptional()
+  @IsNumber()
+  auto_resume_at_ms?: number;
+
   @ApiPropertyOptional({ description: 'Cancel reason for CANCELLATION events' })
   @IsOptional()
   @IsString()
-  @MaxLength(50)
+  @MaxLength(64)
   cancel_reason?: RevenueCatCancelReason;
 
-  /**
-   * TRANSFER only: the app_user_id of the source user losing the subscription.
-   * RC docs call this field "transferred_from" inside the event object.
-   */
-  @ApiPropertyOptional({ description: 'TRANSFER: source user ID losing the subscription' })
+  @ApiPropertyOptional({ description: 'Expiration reason for EXPIRATION events' })
   @IsOptional()
   @IsString()
-  @MaxLength(255)
-  transferred_from?: string;
+  @MaxLength(64)
+  expiration_reason?: RevenueCatExpirationReason;
 
-  /**
-   * TRANSFER only: the app_user_id of the destination user gaining the subscription.
-   * RC docs call this field "transferred_to" inside the event object.
-   */
-  @ApiPropertyOptional({ description: 'TRANSFER: destination user ID gaining the subscription' })
+  /** TRANSFER only: source user IDs losing the subscription (RC sends as array). */
+  @ApiPropertyOptional({ description: 'TRANSFER: source user IDs losing the subscription' })
   @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  transferred_to?: string;
+  @IsArray()
+  @IsString({ each: true })
+  transferred_from?: string[];
 
-  @ApiProperty({ description: 'Environment', enum: ['SANDBOX', 'PRODUCTION'] })
+  /** TRANSFER only: destination user IDs gaining the subscription (RC sends as array). */
+  @ApiPropertyOptional({ description: 'TRANSFER: destination user IDs gaining the subscription' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  transferred_to?: string[];
+
+  @ApiPropertyOptional({ description: 'Environment', enum: ['SANDBOX', 'PRODUCTION'] })
+  @IsOptional()
   @IsIn(['SANDBOX', 'PRODUCTION'])
-  environment!: 'SANDBOX' | 'PRODUCTION';
+  environment?: 'SANDBOX' | 'PRODUCTION';
 }
 
 /** DTO for RevenueCat webhook payload */
@@ -115,7 +161,7 @@ export class RevenueCatWebhookDto {
   api_version!: string;
 
   @ApiProperty({ description: 'Event data', type: RevenueCatEventDto })
-  @ValidateNested()
+  @IsObject()
   @Type(() => RevenueCatEventDto)
   event!: RevenueCatEventDto;
 }

@@ -7,7 +7,6 @@ import {
   UnauthorizedException,
   Logger,
   OnModuleInit,
-  ValidationPipe,
 } from '@nestjs/common';
 import { ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
@@ -49,15 +48,7 @@ export class RevenuecatWebhookController implements OnModuleInit {
   @ApiExcludeEndpoint() // Hide from Swagger docs
   async handleWebhook(
     @Headers('authorization') authHeader: string,
-    @Body(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: false,
-        transform: true,
-        validateCustomDecorators: true,
-      }),
-    )
-    payload: RevenueCatWebhookDto,
+    @Body() payload: RevenueCatWebhookDto,
   ): Promise<{ status: string }> {
     if (!this.webhookSecret) {
       throw new UnauthorizedException('Webhook not configured');
