@@ -71,13 +71,17 @@ export class RevenuecatWebhookController implements OnModuleInit {
   /**
    * Timing-safe comparison to prevent timing attacks
    */
+  /**
+   * Timing-safe comparison against the secret configured in the RC dashboard.
+   * RC sends the Authorization header value verbatim — no scheme prefix.
+   * The dashboard value and REVENUECAT_WEBHOOK_SECRET must match exactly.
+   */
   private verifyAuth(authHeader: string, expectedSecret: string): boolean {
-    const expected = `Bearer ${expectedSecret}`;
-    if (!authHeader || authHeader.length !== expected.length) {
+    if (!authHeader || authHeader.length !== expectedSecret.length) {
       return false;
     }
     try {
-      return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+      return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expectedSecret));
     } catch {
       return false;
     }
