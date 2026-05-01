@@ -19,7 +19,6 @@ import { WebhookEvent } from './entities/webhook-event.entity';
 import { ScenarioCategory } from './entities/scenario-category.entity';
 import { Scenario } from './entities/scenario.entity';
 import { UserScenarioAccess } from './entities/user-scenario-access.entity';
-import { UserAiScenario } from './entities/user-ai-scenario.entity';
 import { KolBundle } from './entities/kol-bundle.entity';
 import { KolBundleScenario } from './entities/kol-bundle-scenario.entity';
 import { VocabularyInjectionEvent } from './entities/vocabulary-injection-event.entity';
@@ -45,7 +44,6 @@ const entities = [
   ScenarioCategory,
   Scenario,
   UserScenarioAccess,
-  UserAiScenario,
   KolBundle,
   KolBundleScenario,
   VocabularyInjectionEvent,

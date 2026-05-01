@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { Scenario } from '@/database/entities/scenario.entity';
 import { KolBundle } from '@/database/entities/kol-bundle.entity';
 import { KolBundleScenario } from '@/database/entities/kol-bundle-scenario.entity';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
 import { ContentStatus } from '@/database/entities/content-status.enum';
+import { ScenarioType } from '@/database/entities/scenario-type.enum';
 import { RedeemedScenarioItemDto } from '../dto/redeem-scenario.dto';
 
 @Injectable()
@@ -44,7 +45,12 @@ export class ScenariosRedeemService {
       .execute();
 
     const scenarios = await this.scenarioRepo.find({
-      where: { id: In(scenarioIds), status: ContentStatus.PUBLISHED },
+      where: {
+        id: In(scenarioIds),
+        status: ContentStatus.PUBLISHED,
+        type: ScenarioType.KOL,
+        ownerId: IsNull(),
+      },
     });
 
     return {

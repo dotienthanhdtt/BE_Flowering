@@ -4,7 +4,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AiConversation } from '@/database/entities/ai-conversation.entity';
 import { AiConversationMessage } from '@/database/entities/ai-conversation-message.entity';
 import { Scenario } from '@/database/entities/scenario.entity';
-import { UserAiScenario } from '@/database/entities/user-ai-scenario.entity';
 import { User } from '@/database/entities/user.entity';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
 import { Vocabulary } from '@/database/entities/vocabulary.entity';
@@ -24,7 +23,6 @@ import { VocabularyInjectionService } from './services/vocabulary-injection.serv
       AiConversation,
       AiConversationMessage,
       Scenario,
-      UserAiScenario,
       User,
       UserScenarioAccess,
       Vocabulary,

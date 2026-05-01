@@ -101,6 +101,7 @@ export class LessonService {
 
     for (const scenario of scenarios) {
       const cat = scenario.category;
+      if (!cat) continue;
       if (!categoryMap.has(cat.id)) {
         categoryMap.set(cat.id, {
           id: cat.id,

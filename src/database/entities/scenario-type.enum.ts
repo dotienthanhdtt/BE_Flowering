@@ -1,4 +1,5 @@
 export enum ScenarioType {
-  DEFAULT = 'default',
+  SYSTEM = 'system',
   KOL = 'kol',
+  PERSONAL = 'personal',
 }

@@ -12,7 +12,7 @@ export class CategoryRefDto {
 
 export type LockReason = 'premium_required';
 
-export type ScenarioSource = 'default' | 'kol' | 'personalized';
+export type ScenarioSource = 'system' | 'kol' | 'personalized';
 
 export class ScenarioDetailDto {
   @ApiProperty()
@@ -51,6 +51,6 @@ export class ScenarioDetailDto {
   @ApiProperty({ enum: ['available', 'learned', 'locked'] })
   userStatus!: 'available' | 'learned' | 'locked';
 
-  @ApiPropertyOptional({ enum: ['default', 'kol', 'personalized'] })
+  @ApiPropertyOptional({ enum: ['system', 'kol', 'personalized'] })
   source?: ScenarioSource;
 }

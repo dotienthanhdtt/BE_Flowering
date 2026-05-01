@@ -1,9 +1,10 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Scenario } from '@/database/entities/scenario.entity';
 import { ContentStatus } from '@/database/entities/content-status.enum';
 import { AccessTier } from '@/database/entities/access-tier.enum';
+import { ScenarioType } from '@/database/entities/scenario-type.enum';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
 import { SubscriptionService } from '@/modules/subscription/subscription.service';
 
@@ -13,8 +14,9 @@ export type ScenarioAccessResult =
 
 /**
  * Handles scenario access control:
- * - Verifies scenario exists and is active
- * - Enforces premium gating via subscription or explicit access grant
+ * - Verifies scenario exists, is active, and visible to the requesting user
+ *   (public rows always visible; personal rows only to their owner)
+ * - Enforces premium gating uniformly via subscription or explicit access grant
  */
 @Injectable()
 export class ScenarioAccessService {
@@ -26,17 +28,12 @@ export class ScenarioAccessService {
     private readonly subscriptionService: SubscriptionService,
   ) {}
 
-  /**
-   * Finds a scenario and verifies the user is allowed to access it.
-   * If languageId is provided, also verifies scenario belongs to that language.
-   * Throws NotFoundException or ForbiddenException on failure.
-   */
   async findAccessibleScenario(
     userId: string,
     scenarioId: string,
     languageId?: string,
   ): Promise<Scenario> {
-    const scenario = await this.fetchPublishedScenario(scenarioId, languageId);
+    const scenario = await this.findVisibleToUser(userId, scenarioId, languageId);
 
     if (scenario.accessTier === AccessTier.PREMIUM) {
       await this.assertPremiumAccess(userId, scenarioId);
@@ -45,16 +42,12 @@ export class ScenarioAccessService {
     return scenario;
   }
 
-  /**
-   * Returns scenario with soft-lock state instead of throwing for premium blocks.
-   * Throws NotFoundException only for hard errors (missing, unpublished, language mismatch).
-   */
   async checkAccess(
     userId: string,
     scenarioId: string,
     languageId?: string,
   ): Promise<ScenarioAccessResult> {
-    const scenario = await this.fetchPublishedScenario(scenarioId, languageId);
+    const scenario = await this.findVisibleToUser(userId, scenarioId, languageId);
 
     if (scenario.accessTier !== AccessTier.PREMIUM) {
       return { scenario, isLocked: false };
@@ -66,9 +59,21 @@ export class ScenarioAccessService {
       : { scenario, isLocked: true, lockReason: 'premium_required' };
   }
 
-  private async fetchPublishedScenario(scenarioId: string, languageId?: string): Promise<Scenario> {
+  /**
+   * Owner-aware single fetch. Returns the scenario only if it is public
+   * (owner_id IS NULL) or owned by the requesting user.
+   */
+  async findVisibleToUser(
+    userId: string,
+    scenarioId: string,
+    languageId?: string,
+  ): Promise<Scenario> {
+    const baseWhere = { id: scenarioId, status: ContentStatus.PUBLISHED };
     const scenario = await this.scenarioRepo.findOne({
-      where: { id: scenarioId, status: ContentStatus.PUBLISHED },
+      where: [
+        { ...baseWhere, ownerId: IsNull() },
+        { ...baseWhere, ownerId: userId },
+      ],
       relations: ['category'],
     });
 
@@ -81,6 +86,39 @@ export class ScenarioAccessService {
     }
 
     return scenario;
+  }
+
+  /** Public catalog listing (system or kol). Excludes personal rows. */
+  async listPublicByType(
+    type: ScenarioType.SYSTEM | ScenarioType.KOL,
+    languageId: string,
+    page: number,
+    limit: number,
+  ): Promise<{ items: Scenario[]; total: number }> {
+    const [items, total] = await this.scenarioRepo.findAndCount({
+      where: { type, status: ContentStatus.PUBLISHED, languageId, ownerId: IsNull() },
+      order: { orderIndex: 'ASC', createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+      relations: ['category'],
+    });
+    return { items, total };
+  }
+
+  /** Personal scenarios owned by the requesting user. */
+  async listPersonalForUser(
+    userId: string,
+    languageId: string,
+  ): Promise<Scenario[]> {
+    return this.scenarioRepo.find({
+      where: {
+        type: ScenarioType.PERSONAL,
+        ownerId: userId,
+        languageId,
+        status: ContentStatus.PUBLISHED,
+      },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   private async assertPremiumAccess(userId: string, scenarioId: string): Promise<void> {

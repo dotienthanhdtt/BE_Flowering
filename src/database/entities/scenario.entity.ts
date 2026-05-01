@@ -10,6 +10,7 @@ import {
 import { ScenarioCategory } from './scenario-category.entity';
 import { Language } from './language.entity';
 import { User } from './user.entity';
+import { AiConversation } from './ai-conversation.entity';
 import { ContentStatus } from './content-status.enum';
 import { AccessTier } from './access-tier.enum';
 import { ScenarioType } from './scenario-type.enum';
@@ -25,12 +26,12 @@ export class Scenario {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => ScenarioCategory, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ScenarioCategory, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'category_id' })
-  category!: ScenarioCategory;
+  category?: ScenarioCategory;
 
-  @Column({ type: 'uuid', name: 'category_id' })
-  categoryId!: string;
+  @Column({ type: 'uuid', name: 'category_id', nullable: true })
+  categoryId?: string;
 
   @ManyToOne(() => Language)
   @JoinColumn({ name: 'language_id' })
@@ -47,7 +48,23 @@ export class Scenario {
   @Column({ type: 'uuid', name: 'creator_id', nullable: true })
   creatorId?: string;
 
-  @Column({ type: 'enum', enum: ScenarioType, default: ScenarioType.DEFAULT })
+  /** Personal scenario owner. NULL for system/kol rows. */
+  @ManyToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'owner_id' })
+  owner?: User;
+
+  @Column({ type: 'uuid', name: 'owner_id', nullable: true })
+  ownerId?: string;
+
+  /** AI conversation that produced this scenario (personal only). */
+  @ManyToOne(() => AiConversation, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'source_conversation_id' })
+  sourceConversation?: AiConversation;
+
+  @Column({ type: 'uuid', name: 'source_conversation_id', nullable: true })
+  sourceConversationId?: string;
+
+  @Column({ type: 'enum', enum: ScenarioType, default: ScenarioType.SYSTEM })
   type!: ScenarioType;
 
   @Column({ type: 'varchar', length: 255 })

@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { Scenario } from '@/database/entities/scenario.entity';
-import { UserAiScenario } from '@/database/entities/user-ai-scenario.entity';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
 import { UserLanguage } from '@/database/entities/user-language.entity';
 import { KolBundle } from '@/database/entities/kol-bundle.entity';
@@ -18,7 +17,6 @@ import { ScenariosDetailService } from './services/scenarios-detail.service';
   imports: [
     TypeOrmModule.forFeature([
       Scenario,
-      UserAiScenario,
       UserScenarioAccess,
       UserLanguage,
       KolBundle,

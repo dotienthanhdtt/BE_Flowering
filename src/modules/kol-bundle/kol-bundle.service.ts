@@ -9,6 +9,7 @@ import { DataSource, In, QueryFailedError, Repository } from 'typeorm';
 import { KolBundle } from '@/database/entities/kol-bundle.entity';
 import { KolBundleScenario } from '@/database/entities/kol-bundle-scenario.entity';
 import { Scenario } from '@/database/entities/scenario.entity';
+import { ScenarioType } from '@/database/entities/scenario-type.enum';
 import { User } from '@/database/entities/user.entity';
 import { CreateKolBundleDto } from './dto/create-kol-bundle.dto';
 import { AttachScenariosDto } from './dto/attach-scenarios.dto';
@@ -38,9 +39,18 @@ export class KolBundleService {
   }
 
   private async validateScenarios(scenarioIds: string[]): Promise<void> {
-    const count = await this.scenarioRepo.count({ where: { id: In(scenarioIds) } });
-    if (count !== scenarioIds.length) {
+    const rows = await this.scenarioRepo.find({
+      where: { id: In(scenarioIds) },
+      select: { id: true, type: true, ownerId: true },
+    });
+    if (rows.length !== scenarioIds.length) {
       throw new BadRequestException('One or more scenarios not found');
+    }
+    const invalid = rows.filter(
+      (s) => s.type !== ScenarioType.KOL || s.ownerId != null,
+    );
+    if (invalid.length > 0) {
+      throw new BadRequestException('Only KOL scenarios can be attached to a bundle');
     }
   }
 
