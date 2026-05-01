@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Scenario } from '@/database/entities/scenario.entity';
@@ -119,10 +119,14 @@ export class ScenarioAccessService {
   }
 
   private async assertPremiumAccess(userId: string, scenarioId: string): Promise<void> {
-    const hasAccess = await this.evaluatePremiumAccess(userId, scenarioId);
-    if (!hasAccess) {
-      throw new ForbiddenException('Premium subscription required to access this scenario');
-    }
+    // TODO: temporarily disabled premium gating — re-enable when access logic is finalized
+    void userId;
+    void scenarioId;
+    return;
+    // const hasAccess = await this.evaluatePremiumAccess(userId, scenarioId);
+    // if (!hasAccess) {
+    //   throw new ForbiddenException('Premium subscription required to access this scenario');
+    // }
   }
 
   private async evaluatePremiumAccess(userId: string, scenarioId: string): Promise<boolean> {
