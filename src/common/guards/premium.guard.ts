@@ -1,5 +1,12 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { OnEvent } from '@nestjs/event-emitter';
 import { SubscriptionService } from '@/modules/subscription/subscription.service';
 import { RevenueCatRestClient } from '@/modules/subscription/clients/revenuecat-rest-client';
 import { CircuitBreaker } from '@common/utils/circuit-breaker';
@@ -10,27 +17,32 @@ import { REQUIRE_PREMIUM_KEY } from '@common/decorators/require-premium.decorato
  * Guard that checks if the authenticated user has an active premium subscription.
  * Must be used after JwtAuthGuard (global guard runs first).
  *
- * Fallback path (DB miss or expired):
- *   Calls RevenueCat REST API (wrapped in circuit breaker).
- *   If RC says active → grant access this request and async-enqueue sync.
- *   Circuit breaker fail-open: when OPEN, skip RC call and return DB answer.
+ * Hot path (60s positive cache): cache hit → return true (no DB/RC).
+ * Warm path (DB hit): DB says active → cache + return true.
+ * Cold path (RC fallback): DB miss → RC fetch → await sync → cache if confirmed → grant.
+ * Circuit breaker fail-open: when OPEN, skip RC and use DB answer.
  */
 @Injectable()
 export class PremiumGuard implements CanActivate {
-  /**
-   * Shared circuit breaker for all PremiumGuard RC fallback calls.
-   * Static so state persists across request instances in the same process.
-   */
   private static readonly rcBreaker = new CircuitBreaker({
     failureThreshold: 5,
     openDurationMs: 5 * 60 * 1000,
   });
+  private static readonly CACHE_TTL_MS = 60_000;
+
+  private readonly logger = new Logger(PremiumGuard.name);
+  private readonly cache = new Map<string, { expiresAt: number }>();
 
   constructor(
     private readonly reflector: Reflector,
     private readonly subscriptionService: SubscriptionService,
     private readonly rcClient: RevenueCatRestClient,
   ) {}
+
+  @OnEvent('subscription.changed')
+  handleSubscriptionChanged(payload: { userId: string }): void {
+    this.cache.delete(payload.userId);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requirePremium = this.reflector.getAllAndOverride<boolean>(REQUIRE_PREMIUM_KEY, [
@@ -47,21 +59,40 @@ export class PremiumGuard implements CanActivate {
       throw new ForbiddenException('Authentication required for premium features');
     }
 
-    // Primary path: DB lookup
-    const subscription = await this.subscriptionService.getUserSubscription(user.id);
-    if (subscription?.isActive) return true;
+    // Hot path: positive cache (no negative cache — avoids stale-grant lag after purchase)
+    const cached = this.cache.get(user.id);
+    if (cached && cached.expiresAt > Date.now()) {
+      return true;
+    }
 
-    // Fallback path: RC REST (only when breaker is not OPEN)
+    // Warm path: DB read
+    const subscription = await this.subscriptionService.getUserSubscription(user.id);
+    if (subscription?.isActive) {
+      this.cache.set(user.id, { expiresAt: Date.now() + PremiumGuard.CACHE_TTL_MS });
+      return true;
+    }
+
+    // Cold path: RC REST fallback (only when breaker is not OPEN)
     if (PremiumGuard.rcBreaker.state !== 'OPEN') {
       const rcPayload = await PremiumGuard.rcBreaker.execute(() =>
         this.rcClient.getSubscriber(user.id),
       );
 
       if (rcPayload?.hasActiveEntitlement) {
-        // Async sync — do not await to keep guard latency low
-        this.subscriptionService.applyRcGroundTruth(user.id, rcPayload, 'fallback').catch(() => {
-          // Non-critical background sync; error already logged inside service
-        });
+        try {
+          await this.subscriptionService.applyRcGroundTruth(user.id, rcPayload, 'fallback');
+          // Re-read DB to prime the cache with the freshly-synced state
+          const updated = await this.subscriptionService.getUserSubscription(user.id);
+          if (updated?.isActive) {
+            this.cache.set(user.id, { expiresAt: Date.now() + PremiumGuard.CACHE_TTL_MS });
+          }
+        } catch (err) {
+          this.logger.error(
+            `RC ground truth sync failed for user ${user.id}: ${(err as Error).message}`,
+            (err as Error).stack,
+          );
+          // Sync failure is non-blocking: RC already confirmed active entitlement
+        }
         return true;
       }
     }

@@ -5,7 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 // Entities
 import { AiConversation, AiConversationMessage, Vocabulary } from '../../database/entities';
 
-// Subscription module (for PremiumGuard)
+// Subscription module (for RevenueCatRestClient and SubscriptionService exports)
 import { SubscriptionModule } from '../subscription/subscription.module';
 
 // Providers

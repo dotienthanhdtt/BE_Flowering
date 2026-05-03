@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import appConfiguration from './config/app-configuration';
@@ -23,6 +24,7 @@ import { ProgressModule } from './modules/progress/progress.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { LanguageContextGuard } from './common/guards/language-context.guard';
+import { PremiumGuard } from './common/guards/premium.guard';
 import { LanguageContextModule } from './common/language-context.module';
 import { FrameworkLevelsModule } from './common/framework-levels.module';
 import { HttpLoggerMiddleware } from '@common/middleware/http-logger.middleware';
@@ -38,6 +40,7 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
         abortEarly: false,
       },
     }),
+    EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     DatabaseModule,
     FrameworkLevelsModule,
@@ -67,6 +70,10 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
     {
       provide: APP_GUARD,
       useClass: LanguageContextGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PremiumGuard,
     },
   ],
   exports: [SupabaseStorageService],

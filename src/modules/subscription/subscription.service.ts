@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
   Subscription,
@@ -44,7 +45,12 @@ export class SubscriptionService {
     private readonly webhookEventRepo: Repository<WebhookEvent>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  private emitChanged(userId: string): void {
+    this.eventEmitter.emit('subscription.changed', { userId });
+  }
 
   /**
    * Get user's current subscription.
@@ -81,20 +87,24 @@ export class SubscriptionService {
       return;
     }
 
-    await this.dataSource.transaction(async (manager) => {
+    const touchedIds = await this.dataSource.transaction(async (manager) => {
       // Idempotency lock — insert first; on duplicate-key, we've seen this event before.
       try {
         await manager.insert(WebhookEvent, { eventId: event.id, eventType: event.type });
       } catch (error: unknown) {
         if ((error as { code?: string }).code === PG_UNIQUE_VIOLATION) {
           this.logger.debug(`Event ${event.id} already processed, skipping`);
-          return;
+          return [];
         }
         throw error;
       }
 
-      await this.dispatch(event, manager);
+      return this.dispatch(event, manager);
     });
+    // Emit after transaction commits so guard re-reads committed state
+    for (const id of touchedIds ?? []) {
+      this.emitChanged(id);
+    }
   }
 
   /** Insert idempotency row, swallow duplicate-key errors. Used outside transactions. */
@@ -107,15 +117,14 @@ export class SubscriptionService {
     }
   }
 
-  /** Resolve event to user, apply out-of-order guard, route to handler. */
-  private async dispatch(event: RevenueCatEventDto, manager: EntityManager): Promise<void> {
+  /** Resolve event to user, apply out-of-order guard, route to handler. Returns mutated userIds. */
+  private async dispatch(event: RevenueCatEventDto, manager: EntityManager): Promise<string[]> {
     const subscriptionRepo = manager.getRepository(Subscription);
     const userRepo = manager.getRepository(User);
 
     // TRANSFER has its own user-resolution path; delegate before standard user lookup.
     if (event.type === 'TRANSFER') {
-      await this.handleTransfer(event, subscriptionRepo, userRepo);
-      return;
+      return this.handleTransfer(event, subscriptionRepo, userRepo);
     }
 
     const user = await this.resolveUser(event, userRepo);
@@ -123,7 +132,7 @@ export class SubscriptionService {
       this.logger.warn(
         `User not found for RC event ${event.id} (app_user_id=${event.app_user_id ?? 'null'})`,
       );
-      return;
+      return [];
     }
 
     // Single locked read — result reused by stale guard and handlers to avoid double round-trip.
@@ -136,7 +145,7 @@ export class SubscriptionService {
       this.logger.warn(
         `Stale event ${event.id} ts=${event.event_timestamp_ms} — skipping`,
       );
-      return;
+      return [];
     }
 
     switch (event.type) {
@@ -165,13 +174,15 @@ export class SubscriptionService {
         break;
       case 'BILLING_ISSUE':
         await this.handleBillingIssue(user.id, event, subscriptionRepo);
-        break;
+        return []; // no premium-access state changed — skip cache eviction
       case 'SUBSCRIPTION_PAUSED':
         await this.handlePaused(user.id, event, subscriptionRepo);
         break;
       default:
         this.logger.warn(`Unhandled RC event type: ${event.type}`);
+        return [];
     }
+    return [user.id];
   }
 
   /**
@@ -433,7 +444,7 @@ export class SubscriptionService {
     event: RevenueCatEventDto,
     subscriptionRepo: Repository<Subscription>,
     userRepo: Repository<User>,
-  ): Promise<void> {
+  ): Promise<string[]> {
     const fromId = event.transferred_from?.[0];
     const toId = event.transferred_to?.[0];
 
@@ -441,7 +452,7 @@ export class SubscriptionService {
       this.logger.error(
         `TRANSFER event ${event.id} missing transferred_from/transferred_to — skipping`,
       );
-      return;
+      return [];
     }
     if ((event.transferred_from?.length ?? 0) > 1 || (event.transferred_to?.length ?? 0) > 1) {
       this.logger.warn(
@@ -457,11 +468,11 @@ export class SubscriptionService {
 
     if (!fromUser) {
       this.logger.warn(`TRANSFER: source user ${fromId} not found — skipping`);
-      return;
+      return [];
     }
     if (!toUser) {
       this.logger.warn(`TRANSFER: destination user ${toId} not found — skipping`);
-      return;
+      return [];
     }
 
     // Lock rows in consistent userId order to prevent AB/BA deadlock on concurrent swapped TRANSFERs.
@@ -475,7 +486,7 @@ export class SubscriptionService {
 
     if (!subscription) {
       this.logger.warn(`TRANSFER: no subscription found for source user ${fromId} — skipping`);
-      return;
+      return [];
     }
 
     if (existingDestination) {
@@ -492,6 +503,7 @@ export class SubscriptionService {
       eventTimestampMs: event.event_timestamp_ms ?? null,
     });
     this.logger.log(`Subscription transferred from user ${fromId} to ${toId}`);
+    return [fromId, toId];
   }
 
   // ---------------------------------------------------------------------------
@@ -550,6 +562,7 @@ export class SubscriptionService {
     source: 'fallback' | 'cron' = 'cron',
   ): Promise<void> {
     const incomingTs = rcPayload.fetchedAtMs;
+    let changed = false;
 
     await this.dataSource.transaction(async (mgr) => {
       const existing = await mgr.findOne(Subscription, {
@@ -596,6 +609,7 @@ export class SubscriptionService {
         this.logger.log(
           `applyRcGroundTruth: ACTIVE applied for user ${userId} plan=${plan} (${beforeStatus}→ACTIVE source=${source})`,
         );
+        changed = true;
       } else if (existing && existing.status === SubscriptionStatus.ACTIVE) {
         // RC says no active entitlement but DB says ACTIVE — expire the row
         await mgr.update(Subscription, existing.id, {
@@ -606,11 +620,14 @@ export class SubscriptionService {
         this.logger.log(
           `applyRcGroundTruth: EXPIRED applied for user ${userId} (ACTIVE→EXPIRED source=${source})`,
         );
+        changed = true;
       } else {
         this.logger.debug(
           `applyRcGroundTruth: no change needed for user ${userId} (source=${source})`,
         );
       }
     });
+    // Emit after transaction commits so guard re-reads committed state
+    if (changed) this.emitChanged(userId);
   }
 }
