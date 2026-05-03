@@ -1,14 +1,17 @@
 ---
 name: IAP / Subscription Backend Hardening
 created: 2026-05-03
-status: in_progress
+status: complete
 branch: dev
 blockedBy: []
 blocks: []
 context: ../reports/code-review-260503-1854-iap-backend.md
+completed: 2026-05-03
 ---
 
 # IAP / Subscription Backend Hardening
+
+> **Status: All 7 phases complete (2026-05-03).** Phase 5/6/7 review feedback (idempotent migration guards, real supertest webhook E2E, env-gated race integration test) addressed. See `plans/reports/code-review-260503-2130-iap-hardening-phases-5-7.md`.
 
 ## Overview
 
@@ -22,9 +25,9 @@ Remediate findings from `code-review-260503-1854-iap-backend.md` covering Revenu
 | 2 | [Refund Handling + Cron Expansion](phase-02-refund-and-cron.md) | Complete | C1, I6 | service, dto, cron |
 | 3 | [Race Conditions (Transactional Locks)](phase-03-race-condition-locks.md) | Complete | C2, I7, I9, M6 | service |
 | 4 | [Premium Guard Sync + Cache](phase-04-premium-guard-sync.md) | Complete (2026-05-03) | C3 | premium.guard |
-| 5 | [Important Correctness Fixes](phase-05-important-fixes.md) | Pending | I2, I4, I5, I8, I11 | service, cron |
-| 6 | [Minor Fixes & Observability](phase-06-minor-and-observability.md) | Pending | M1, M3, M4, M9, M10 | service, client |
-| 7 | [Tests](phase-07-tests.md) | Pending | All above | test/* |
+| 5 | [Important Correctness Fixes](phase-05-important-fixes.md) | Complete (2026-05-03) | I2, I4, I5, I8, I11 | service, cron |
+| 6 | [Minor Fixes & Observability](phase-06-minor-and-observability.md) | Complete (2026-05-03) | M1, M3, M4, M9, M10 | service, client |
+| 7 | [Tests](phase-07-tests.md) | Complete (2026-05-03) | All above | test/* |
 
 ## Dependencies
 
