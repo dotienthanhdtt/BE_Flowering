@@ -29,6 +29,11 @@ const SILENT_ACK_EVENTS = new Set<string>([
   'EXPERIMENT_ENROLLMENT',
 ]);
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isResolvableCandidate = (id: unknown): id is string =>
+  typeof id === 'string' && id.length > 0 && !id.startsWith('$RCAnonymousID:');
+
 
 /**
  * Service handling subscription operations and RevenueCat webhook processing.
@@ -159,6 +164,8 @@ export class SubscriptionService {
       lock: { mode: 'pessimistic_write' },
     });
 
+    this.logUserDrift(event, existing, user.id);
+
     if (this.isStaleEvent(event, existing)) {
       this.logger.warn(
         `Stale event ${event.id} ts=${event.event_timestamp_ms} — skipping`,
@@ -204,29 +211,69 @@ export class SubscriptionService {
   }
 
   /**
-   * Resolve a User row from any of the IDs RC may send:
-   *   app_user_id → original_app_user_id → aliases[]
-   * RC keeps the anonymous ID as `original_app_user_id` even after logIn(),
-   * so falling back through these is required to catch logged-in subscribers
-   * whose first transaction was anonymous.
+   * Resolve a User row from any of the IDs RC may send.
+   *
+   * Precedence:
+   *   1. `app_user_id` (current logged-in identity).
+   *   2. `original_app_user_id` (first ID ever used; often the anonymous ID).
+   *   3. `aliases[]` fallback — emits a warning so we can audit RC linking drift.
+   *
+   * UUID-shaped, non-anonymous candidates are checked against `users.id`. This
+   * prevents an older anonymous-linked alias from winning over the current
+   * logged-in UUID when both resolve to different rows.
    */
   private async resolveUser(
     event: RevenueCatEventDto,
     userRepo: Repository<User>,
   ): Promise<User | null> {
-    const candidates = [
-      event.app_user_id,
-      event.original_app_user_id,
-      ...(event.aliases ?? []),
-    ].filter(
-      (id): id is string => typeof id === 'string' && id.length > 0 && !id.startsWith('$RCAnonymousID:'),
-    );
+    const tryLookup = async (id: string | undefined): Promise<User | null> => {
+      if (!isResolvableCandidate(id) || !UUID_RE.test(id)) return null;
+      return userRepo.findOne({ where: { id } });
+    };
 
-    for (const id of candidates) {
-      const user = await userRepo.findOne({ where: { id } });
-      if (user) return user;
+    const primary = await tryLookup(event.app_user_id);
+    if (primary) return primary;
+
+    const original = await tryLookup(event.original_app_user_id);
+    if (original) return original;
+
+    for (const alias of event.aliases ?? []) {
+      const aliasUser = await tryLookup(alias);
+      if (aliasUser) {
+        this.logger.warn(
+          `resolveUser_via_aliases userId=${aliasUser.id} alias=${alias} event_id=${event.id} event_type=${event.type}`,
+        );
+        return aliasUser;
+      }
     }
     return null;
+  }
+
+  /**
+   * Warn when an event's `app_user_id` differs from the row already on file.
+   * Signals RC alias-linking drift or a missed `RC.logIn(uuid)` on the client.
+   * Skipped on first-time row creation and when either side is anonymous.
+   */
+  private logUserDrift(
+    event: RevenueCatEventDto,
+    existing: Subscription | null,
+    resolvedUserId: string,
+  ): void {
+    if (!existing) return;
+    const eventAppUserId = event.app_user_id;
+    const storedAppUserId = existing.appUserId;
+    if (!eventAppUserId || !storedAppUserId) return;
+    if (
+      eventAppUserId.startsWith('$RCAnonymousID:') ||
+      storedAppUserId.startsWith('$RCAnonymousID:')
+    ) {
+      return;
+    }
+    if (eventAppUserId === storedAppUserId) return;
+
+    this.logger.warn(
+      `subscription_user_drift userId=${resolvedUserId} event_app_user_id=${eventAppUserId} stored_app_user_id=${storedAppUserId} event_type=${event.type} event_id=${event.id}`,
+    );
   }
 
   private isStaleEvent(event: RevenueCatEventDto, existing: Subscription | null): boolean {

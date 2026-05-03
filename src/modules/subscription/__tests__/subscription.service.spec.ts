@@ -12,7 +12,7 @@ describe('SubscriptionService', () => {
   let service: SubscriptionService;
   let dataSource: jest.Mocked<DataSource>;
 
-  const USER_ID = 'user-123';
+  const USER_ID = '00000000-0000-4000-8000-000000000123';
   const EVENT_ID = 'evt-123';
 
   const mockSubscription = (): Subscription => ({
@@ -518,6 +518,343 @@ describe('SubscriptionService', () => {
       expect(yearlyCall).toBeDefined();
     });
 
+    it('resolves user via app_user_id when aliases also contain a different valid UUID', async () => {
+      const primaryId = '11111111-1111-4111-8111-111111111111';
+      const aliasId = '22222222-2222-4222-8222-222222222222';
+      const findOneCalls: string[] = [];
+
+      const mockManager = {
+        getRepository: jest.fn((entity) => {
+          if (entity === Subscription) {
+            return {
+              findOne: jest.fn().mockResolvedValue(null),
+              create: jest.fn().mockReturnValue({}),
+              save: jest.fn().mockResolvedValue({}),
+            };
+          }
+          if (entity === User) {
+            return {
+              findOne: jest.fn().mockImplementation(async ({ where }: any) => {
+                findOneCalls.push(where.id);
+                if (where.id === primaryId) return { id: primaryId };
+                return null;
+              }),
+            };
+          }
+          return {};
+        }),
+        insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+      };
+
+      (dataSource.transaction as jest.Mock).mockImplementation(async (cb) =>
+        cb(mockManager as unknown as EntityManager),
+      );
+
+      await service.processWebhook({
+        api_version: '1.0',
+        event: {
+          id: 'evt-precedence',
+          type: 'RENEWAL',
+          app_user_id: primaryId,
+          original_app_user_id: '$RCAnonymousID:abc',
+          aliases: [aliasId],
+          product_id: 'com.app.monthly',
+          event_timestamp_ms: Date.now(),
+        },
+      } as any);
+
+      expect(findOneCalls[0]).toBe(primaryId);
+      expect(findOneCalls).not.toContain(aliasId);
+    });
+
+    it('falls back to original_app_user_id when app_user_id is anonymous', async () => {
+      const originalId = '33333333-3333-4333-8333-333333333333';
+      const findOneCalls: string[] = [];
+
+      const mockManager = {
+        getRepository: jest.fn((entity) => {
+          if (entity === Subscription) {
+            return {
+              findOne: jest.fn().mockResolvedValue(null),
+              create: jest.fn().mockReturnValue({}),
+              save: jest.fn().mockResolvedValue({}),
+            };
+          }
+          if (entity === User) {
+            return {
+              findOne: jest.fn().mockImplementation(async ({ where }: any) => {
+                findOneCalls.push(where.id);
+                if (where.id === originalId) return { id: originalId };
+                return null;
+              }),
+            };
+          }
+          return {};
+        }),
+        insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+      };
+
+      (dataSource.transaction as jest.Mock).mockImplementation(async (cb) =>
+        cb(mockManager as unknown as EntityManager),
+      );
+
+      await service.processWebhook({
+        api_version: '1.0',
+        event: {
+          id: 'evt-original',
+          type: 'RENEWAL',
+          app_user_id: '$RCAnonymousID:abc',
+          original_app_user_id: originalId,
+          product_id: 'com.app.monthly',
+          event_timestamp_ms: Date.now(),
+        },
+      } as any);
+
+      expect(findOneCalls).toEqual([originalId]);
+    });
+
+    it('emits warning when aliases[] fallback resolves the user', async () => {
+      const aliasId = '44444444-4444-4444-8444-444444444444';
+      const warnSpy = jest
+        .spyOn((service as any).logger, 'warn')
+        .mockImplementation(() => undefined);
+
+      const mockManager = {
+        getRepository: jest.fn((entity) => {
+          if (entity === Subscription) {
+            return {
+              findOne: jest.fn().mockResolvedValue(null),
+              create: jest.fn().mockReturnValue({}),
+              save: jest.fn().mockResolvedValue({}),
+            };
+          }
+          if (entity === User) {
+            return {
+              findOne: jest.fn().mockImplementation(async ({ where }: any) =>
+                where.id === aliasId ? { id: aliasId } : null,
+              ),
+            };
+          }
+          return {};
+        }),
+        insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+      };
+
+      (dataSource.transaction as jest.Mock).mockImplementation(async (cb) =>
+        cb(mockManager as unknown as EntityManager),
+      );
+
+      await service.processWebhook({
+        api_version: '1.0',
+        event: {
+          id: 'evt-alias',
+          type: 'RENEWAL',
+          app_user_id: '55555555-5555-4555-8555-555555555555', // unknown UUID
+          original_app_user_id: '$RCAnonymousID:abc',
+          aliases: [aliasId],
+          product_id: 'com.app.monthly',
+          event_timestamp_ms: Date.now(),
+        },
+      } as any);
+
+      expect(
+        warnSpy.mock.calls.some(([msg]) =>
+          typeof msg === 'string' && msg.includes('resolveUser_via_aliases'),
+        ),
+      ).toBe(true);
+
+      warnSpy.mockRestore();
+    });
+
+    it('returns null user when all candidates are anonymous', async () => {
+      const userFindOne = jest.fn().mockResolvedValue(null);
+
+      const mockManager = {
+        getRepository: jest.fn((entity) => {
+          if (entity === Subscription) {
+            return {
+              findOne: jest.fn().mockResolvedValue(null),
+              create: jest.fn().mockReturnValue({}),
+              save: jest.fn().mockResolvedValue({}),
+            };
+          }
+          if (entity === User) return { findOne: userFindOne };
+          return {};
+        }),
+        insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+      };
+
+      (dataSource.transaction as jest.Mock).mockImplementation(async (cb) =>
+        cb(mockManager as unknown as EntityManager),
+      );
+
+      await service.processWebhook({
+        api_version: '1.0',
+        event: {
+          id: 'evt-all-anon',
+          type: 'RENEWAL',
+          app_user_id: '$RCAnonymousID:a',
+          original_app_user_id: '$RCAnonymousID:b',
+          aliases: ['$RCAnonymousID:c'],
+          product_id: 'com.app.monthly',
+          event_timestamp_ms: Date.now(),
+        },
+      } as any);
+
+      expect(userFindOne).not.toHaveBeenCalled();
+    });
+
+    it('skips non-UUID app_user_id and falls through to next branch', async () => {
+      const originalId = '66666666-6666-4666-8666-666666666666';
+      const findOneCalls: string[] = [];
+
+      const mockManager = {
+        getRepository: jest.fn((entity) => {
+          if (entity === Subscription) {
+            return {
+              findOne: jest.fn().mockResolvedValue(null),
+              create: jest.fn().mockReturnValue({}),
+              save: jest.fn().mockResolvedValue({}),
+            };
+          }
+          if (entity === User) {
+            return {
+              findOne: jest.fn().mockImplementation(async ({ where }: any) => {
+                findOneCalls.push(where.id);
+                return where.id === originalId ? { id: originalId } : null;
+              }),
+            };
+          }
+          return {};
+        }),
+        insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+      };
+
+      (dataSource.transaction as jest.Mock).mockImplementation(async (cb) =>
+        cb(mockManager as unknown as EntityManager),
+      );
+
+      await service.processWebhook({
+        api_version: '1.0',
+        event: {
+          id: 'evt-nonuuid',
+          type: 'RENEWAL',
+          app_user_id: 'not-a-uuid',
+          original_app_user_id: originalId,
+          product_id: 'com.app.monthly',
+          event_timestamp_ms: Date.now(),
+        },
+      } as any);
+
+      expect(findOneCalls).toEqual([originalId]);
+    });
+  });
+
+  // ─── Drift logging ───────────────────────────────────────────────────────
+
+  describe('subscription_user_drift logging', () => {
+    const buildManager = (existing: Subscription | null) => ({
+      getRepository: jest.fn((entity) => {
+        if (entity === Subscription) {
+          return {
+            findOne: jest.fn().mockResolvedValue(existing),
+            update: jest.fn().mockResolvedValue({ affected: 1 }),
+            create: jest.fn().mockReturnValue({}),
+            save: jest.fn().mockResolvedValue({}),
+          };
+        }
+        if (entity === User) {
+          return { findOne: jest.fn().mockResolvedValue({ id: USER_ID }) };
+        }
+        return {};
+      }),
+      insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+    });
+
+    const runWebhook = async (eventAppUserId: string) => {
+      await service.processWebhook({
+        api_version: '1.0',
+        event: {
+          id: 'evt-drift',
+          type: 'RENEWAL',
+          app_user_id: eventAppUserId,
+          original_app_user_id: USER_ID,
+          product_id: 'com.app.monthly',
+          event_timestamp_ms: Date.now(),
+        },
+      } as any);
+    };
+
+    it('emits warning when event app_user_id differs from stored row', async () => {
+      const existing = mockSubscription();
+      existing.appUserId = 'stored-rc-id-xyz';
+      const mockManager = buildManager(existing);
+      (dataSource.transaction as jest.Mock).mockImplementation(async (cb) =>
+        cb(mockManager as unknown as EntityManager),
+      );
+
+      const warnSpy = jest
+        .spyOn((service as any).logger, 'warn')
+        .mockImplementation(() => undefined);
+
+      await runWebhook(USER_ID);
+
+      expect(
+        warnSpy.mock.calls.some(([msg]) =>
+          typeof msg === 'string' && msg.includes('subscription_user_drift'),
+        ),
+      ).toBe(true);
+
+      warnSpy.mockRestore();
+    });
+
+    it('does not emit drift warning when ids match', async () => {
+      const existing = mockSubscription();
+      existing.appUserId = USER_ID;
+      const mockManager = buildManager(existing);
+      (dataSource.transaction as jest.Mock).mockImplementation(async (cb) =>
+        cb(mockManager as unknown as EntityManager),
+      );
+
+      const warnSpy = jest
+        .spyOn((service as any).logger, 'warn')
+        .mockImplementation(() => undefined);
+
+      await runWebhook(USER_ID);
+
+      expect(
+        warnSpy.mock.calls.some(([msg]) =>
+          typeof msg === 'string' && msg.includes('subscription_user_drift'),
+        ),
+      ).toBe(false);
+
+      warnSpy.mockRestore();
+    });
+
+    it('does not emit drift warning on first-time row creation (existing null)', async () => {
+      const mockManager = buildManager(null);
+      (dataSource.transaction as jest.Mock).mockImplementation(async (cb) =>
+        cb(mockManager as unknown as EntityManager),
+      );
+
+      const warnSpy = jest
+        .spyOn((service as any).logger, 'warn')
+        .mockImplementation(() => undefined);
+
+      await runWebhook(USER_ID);
+
+      expect(
+        warnSpy.mock.calls.some(([msg]) =>
+          typeof msg === 'string' && msg.includes('subscription_user_drift'),
+        ),
+      ).toBe(false);
+
+      warnSpy.mockRestore();
+    });
+  });
+
+  // ─── applyRcGroundTruth (cron) — kept original case below ─────────────
+  describe('applyRcGroundTruth (negative case)', () => {
     it('should expire subscription when RC has no active entitlement', async () => {
       const rcPayload: RcSubscriberPayload = {
         appUserId: USER_ID,
