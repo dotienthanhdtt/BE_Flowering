@@ -83,6 +83,10 @@ export class Scenario {
   @Column({ type: 'int', name: 'order_index', default: 0 })
   orderIndex!: number;
 
+  /** When true, completing this scenario triggers a personalization offer to the user. */
+  @Column({ type: 'boolean', name: 'triggers_personalization', default: false })
+  triggersPersonalization!: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

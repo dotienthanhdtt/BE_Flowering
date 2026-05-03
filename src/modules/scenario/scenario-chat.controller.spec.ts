@@ -4,6 +4,7 @@ import { ScenarioChatService } from './services/scenario-chat.service';
 import { ScenarioChatRequestDto, ScenarioChatResponseDto } from './dto/scenario-chat.dto';
 import { ScenarioChatStatus } from '../../database/entities/ai-conversation.entity';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
 
 const mockScenarioChatService = () => ({
   chat: jest.fn(),
@@ -27,6 +28,8 @@ describe('ScenarioChatController', () => {
       ],
     })
       .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideGuard(ResourceAccessGuard)
       .useValue({ canActivate: jest.fn(() => true) })
       .compile();
 

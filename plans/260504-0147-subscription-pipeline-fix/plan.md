@@ -1,7 +1,7 @@
 ---
 name: Subscription Pipeline Fix
 created: 2026-05-04
-status: in-progress
+status: complete
 branch: dev
 blockedBy: []
 blocks: []
@@ -29,7 +29,7 @@ Builds on completed `260503-1950-iap-backend-hardening`.
 | 3 | [Re-enable ResourceAccessGuard](phase-03-reenable-resource-access-guard.md) | Complete | resource-access.guard.ts |
 | 4 | [Drift observability](phase-04-drift-observability.md) | Complete | subscription.service.ts |
 | 5 | [Tests](phase-05-tests.md) | Complete | __tests__/* |
-| 6 | [Recovery runbook for user 89c0be08](phase-06-recovery-runbook.md) | Pending (post-deploy) | (manual + SQL) |
+| 6 | [Recovery runbook for user 89c0be08](phase-06-recovery-runbook.md) | Complete (Case B — no SQL) | (manual) |
 
 ## Dependencies
 

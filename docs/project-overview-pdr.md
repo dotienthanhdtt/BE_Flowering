@@ -1,7 +1,7 @@
 # Project Overview & PDR
 
-**Last Updated:** 2026-04-20
-**Version:** 1.8.0
+**Last Updated:** 2026-05-04
+**Version:** 1.9.0
 **Status:** Active Development
 
 ## Executive Summary
@@ -64,7 +64,7 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - **Langfuse** - AI observability
 - **Sentry** - Error tracking (5xx exceptions)
 
-## API Modules (13 Total)
+## API Modules (14 Total)
 
 | Module | Endpoints | Key Features |
 |--------|-----------|--------------|
@@ -76,20 +76,28 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 | **language/** (10 files) | GET /languages, POST/PATCH/DELETE /languages/user | Language CRUD, native/learning flags, per-language proficiency (CEFR/JLPT/HSK/TOPIK), auto-enroll |
 | **lesson/** (6 files) | GET /lessons (paginated, language-partitioned) | Scenario grouping, status computation, premium gating, auto-enroll support |
 | **onboarding/** (13 files) | POST /onboarding/chat (create+continue), /complete (idempotent), GET /conversations/:id/messages | Anonymous chat, first-turn via message count, resume support, rate-limited (5 create/hr, 30 chat/hr) |
+| **personalization/** (8 files) | POST /personalization/generate | Tier-gated intake → scenario generation, quota (Free blocked, Premium 1/mo trial, Plus unlimited), de-dup (24h + snapshot diff), soft-cap prune (30/user), advisory lock race safety |
 | **progress/** (2 files) | Internal service | Lesson/exercise progress tracking, upsertProgress, recordAttempt |
 | **scenario/** (23 files) | GET /scenarios (listing), GET /scenarios/:id (detail), POST /scenario/chat, GET /scenario/conversations | Listing + chat (2 controllers), roleplay, 12-turn cap, signed access control, throttled redeem 5/min |
 | **subscription/** (6 files) | GET /subscriptions/me, POST /webhook | RevenueCat webhook with signature verify, sandbox rejection in prod |
 | **user/** (5 files) | GET /users/me, PATCH /users/me | Profile management |
 | **vocabulary/** (16 files) | CRUD + Leitner SRS review endpoints | Spaced repetition (5-box), in-memory sessions, review rate tracking |
 
-## Database Schema (21 Entities + 4 Enums)
+## Database Schema (21 Entities + 5 Enums)
 
 **Core:** User, Language, UserLanguage
 **Content:** Lesson, Exercise, Scenario, ScenarioCategory, UserScenarioAccess, UserAiScenario, KolBundle, KolBundleScenario
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation, AiConversationMessage, Vocabulary
 **Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent, DeviceToken
-**Enums:** AccessTier (free|premium), ContentStatus (draft|published|archived), ScenarioType, UserRole
+**Enums:** AccessTier (free|premium|premium_plus), ContentStatus (draft|published|archived), ScenarioType, UserRole, AiConversationType (learn_chat|personalize_intake|onboard)
+
+**Recent Updates (May 2026):**
+- **Personalization module:** Tier-gated scenario generation with quota enforcement, de-dup gate, advisory lock, soft-cap pruning
+- **User schema:** Added personalizedTrialUsedAt, lastPersonalizationAt, personalizationProfileSnapshot columns
+- **Scenario schema:** Added triggersPersonalization flag for intake-triggered generation
+- **AccessTier enum:** Added premium_plus value
+- **AiConversationType enum:** Added personalize_intake value
 
 **Recent Updates (Apr 2026):**
 - **AccessTier refactor:** `access_tier` enum replaces `is_premium`; default: free

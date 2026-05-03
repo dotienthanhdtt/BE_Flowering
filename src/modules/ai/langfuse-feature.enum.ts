@@ -14,4 +14,7 @@ export enum LangfuseFeature {
   TRANSLATE_CHUNK = 'translate-chunk',
   SCENARIO_CHAT = 'scenario-chat',
   ADMIN_CONTENT_GENERATE = 'admin-content-generate',
+  PERSONALIZATION_CHAT = 'personalization-chat',
+  PERSONALIZATION_EXTRACTION = 'personalization-extraction',
+  PERSONALIZATION_SCENARIOS = 'personalization-scenarios',
 }

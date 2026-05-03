@@ -22,6 +22,7 @@ import { KolBundleModule } from './modules/kol-bundle/kol-bundle.module';
 import { VocabularyModule } from './modules/vocabulary/vocabulary.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { AdminContentModule } from './modules/admin-content/admin-content.module';
+import { PersonalizationModule } from './modules/personalization/personalization.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { LanguageContextGuard } from './common/guards/language-context.guard';
 import { PremiumGuard } from './common/guards/premium.guard';
@@ -58,6 +59,7 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
     VocabularyModule,
     ProgressModule,
     AdminContentModule,
+    PersonalizationModule,
   ],
   controllers: [AppController],
   providers: [

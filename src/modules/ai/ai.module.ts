@@ -23,6 +23,7 @@ import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
 import { TranscriptionService } from './services/transcription.service';
 import { SupabaseStorageService } from '../../database/supabase-storage.service';
+import { IntakeChatEngine } from './services/intake-chat-engine.service';
 
 // Controller
 import { AiController } from './ai.controller';
@@ -67,7 +68,8 @@ import { AiController } from './ai.controller';
     LearningAgentService,
     TranslationService,
     TranscriptionService,
+    IntakeChatEngine,
   ],
-  exports: [UnifiedLLMService, LearningAgentService, PromptLoaderService],
+  exports: [UnifiedLLMService, LearningAgentService, PromptLoaderService, IntakeChatEngine, LangfuseService],
 })
 export class AiModule {}

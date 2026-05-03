@@ -3,7 +3,7 @@ title: Centralize Scenarios
 status: pending
 created: 2026-05-01
 blockedBy: []
-blocks: []
+blocks: [260504-0218-auto-generate-personalized-scenarios]
 ---
 
 # Centralize Scenarios — Implementation Plan

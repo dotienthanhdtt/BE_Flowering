@@ -1,9 +1,92 @@
 # Project Changelog
 
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-05-04
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-05-04 — Auto-Generate Personalized Scenarios (Tier-Gated)
+
+### Added
+
+- **Personalization Module** (`src/modules/personalization/`) — Tier-gated AI intake chat → scenario generation
+  - **PersonalizationController** — `POST /personalization/generate` accepts chat turn, manages paywall mid-flow
+  - **PersonalizationService** — Orchestrates quota check, de-dup gate, LLM generation, pruning
+  - **PersonalizationQuotaService** — Tier enforcement: Free blocked, Premium 1/month free trial (then paywall), Premium Plus unlimited, 3/day hard ceiling
+  - **PersonalizationDedupService** — 24h rolling window + profile snapshot JSON diff prevents duplicate intakes & LLM cost
+  - **PersonalizationTriggerService** — Detects scenario-chat completion via `triggersPersonalization` flag, uses Postgres advisory lock for race safety
+  - **PersonalizationPruneService** — Lazy soft-cap enforcement: auto-deletes oldest unused PERSONAL scenarios over 30 per user on insert
+  - **LangfuseService.recordEvent()** — Exports observability for outcome telemetry (`personalization.generated`, `personalization.dedup_skip`, `personalization.paywall`, `personalization.daily_ceiling`)
+
+- **Schema Migrations** (`src/database/migrations/1780100000000-add-personalization-fields.ts`)
+  - `premium_plus` added to `AccessTier` enum
+  - `personalize_intake` added to `AiConversationType` enum
+  - Three new nullable User columns: `personalizedTrialUsedAt`, `lastPersonalizationAt`, `personalizationProfileSnapshot`
+  - Scenario entity: `triggersPersonalization` boolean flag
+
+- **IntakeChatEngine Refactor** (`src/modules/ai/services/intake-chat-engine.service.ts`)
+  - Extracted reusable intake chat engine from OnboardingService (~160 lines)
+  - Shared by onboarding + personalization, reduces duplication
+  - Type-safe request/response contract via `IntakeChatEngineTypes`
+
+- **Personalization DTOs** — Request/response shapes for chat turn and scenario generation result
+  - `CompleteResult` discriminated union: `{status: "completed", scenarios}` | `{status: "paywall", message}` | `{status: "dedup_skip", message}`
+  - Persistent conversation resume: paywall mid-flow stores state, user can resume from same turn
+
+- **Prompts** (4 new files)
+  - `personalize-chat-prompt.json` — AI intake instruction (language, goals, context)
+  - `personalize-extraction-prompt.md` — Profile extraction from user responses
+  - `personalize-scenarios-prompt.json` — LLM generation of 5 scenarios from profile
+  - Both extraction + generation integrated into PersonalizationService workflow
+
+- **Test Infrastructure** — Fixed all 526 pre-existing tests broken by centralize-scenarios refactor
+  - ScenarioType.SYSTEM → ScenarioType.SYSTEM enum rename
+  - UserAiScenario removal (replaced by Scenario.ownerUserId)
+  - findOne() OR-array queries → findOne() with explicit OR conditions
+  - All test suites re-verified passing
+
+### Changed
+
+- **scenario-chat.service.ts** — Integrated personalization trigger gate
+  - After chat completion: checks `scenario.triggersPersonalization`, calls PersonalizationTriggerService if applicable
+  - No breaking changes; personalization is opt-in per scenario
+
+- **onboarding.service.ts** — Simplified via IntakeChatEngine extraction (~360 LOC → ~200 LOC)
+
+- **LangfuseService** — Now exports recordEvent() for custom outcome tracking (beyond LLM traces)
+
+### Database
+
+- Migration adds 4 new columns + 2 enum values
+- Zero data loss; existing scenarios unaffected (triggersPersonalization defaults false, personalization columns NULL for existing users)
+
+### Testing
+
+- All 526 unit/integration tests passing (includes Phase 9 test coverage)
+- E2E tests passing with mocked LLM calls
+
+### Documentation Impact
+
+- System architecture: personalization module diagram + trigger flow
+- API documentation: new POST /personalization/generate endpoint
+- Codebase summary: module count 12 → 13, service count updated
+- Code standards: tier-gated feature pattern, advisory lock usage, discriminated union response patterns
+
+### Scope Exclusions (v1)
+
+- Mobile UX wiring (separate `app_flowering` plan)
+- TZ-aware quota windows (UTC calendar months in v1)
+- Cron-based pruning (lazy on-insert in v1)
+- Profile history (snapshot only, latest retained)
+- Admin UI for triggersPersonalization flag
+
+### Next Steps
+
+- Mobile implementation plan for personalization UX (app_flowering)
+- Langfuse telemetry monitoring (quota/paywall conversion rates)
+- Premium Plus tier rollout coordination
+
+---
 
 ## 2026-04-21 — Language-Specific Proficiency Levels
 

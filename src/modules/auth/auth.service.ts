@@ -152,7 +152,7 @@ export class AuthService {
         profileUpdate.phoneNumber = providerUser.phoneNumber;
 
       if (Object.keys(profileUpdate).length > 0) {
-        await this.userRepository.update({ id: user.id }, profileUpdate);
+        await this.userRepository.update({ id: user.id }, profileUpdate as never);
         user = { ...user, ...profileUpdate };
       }
     } else {
@@ -173,7 +173,7 @@ export class AuthService {
           ...(providerUser.avatarUrl ? { avatarUrl: providerUser.avatarUrl } : {}),
           ...(providerUser.phoneNumber ? { phoneNumber: providerUser.phoneNumber } : {}),
         };
-        await this.userRepository.update({ id: existingEmailUser.id }, update);
+        await this.userRepository.update({ id: existingEmailUser.id }, update as never);
         user = { ...existingEmailUser, ...update };
       } else {
         // New user

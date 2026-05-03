@@ -1,33 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { ScenariosDetailService } from './scenarios-detail.service';
 import { ScenarioAccessService } from './scenario-access.service';
-import { UserAiScenario } from '../../../database/entities/user-ai-scenario.entity';
 import { AccessTier } from '../../../database/entities/access-tier.enum';
-import { ScenarioDifficulty } from '../../../database/entities/scenario.entity';
 import { ContentStatus } from '../../../database/entities/content-status.enum';
+import { ScenarioDifficulty } from '../../../database/entities/scenario.entity';
 
 const mockAccessService = () => ({ checkAccess: jest.fn() });
-const mockUserAiScenarioRepo = () => ({ findOne: jest.fn() });
 
 describe('ScenariosDetailService', () => {
   let service: ScenariosDetailService;
   let accessService: ReturnType<typeof mockAccessService>;
-  let userAiScenarioRepo: ReturnType<typeof mockUserAiScenarioRepo>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ScenariosDetailService,
         { provide: ScenarioAccessService, useFactory: mockAccessService },
-        { provide: getRepositoryToken(UserAiScenario), useFactory: mockUserAiScenarioRepo },
       ],
     }).compile();
 
     service = module.get<ScenariosDetailService>(ScenariosDetailService);
     accessService = module.get(ScenarioAccessService);
-    userAiScenarioRepo = module.get(getRepositoryToken(UserAiScenario));
   });
 
   const mockCategory = { id: 'cat-uuid', name: 'Restaurant' };
@@ -93,37 +87,9 @@ describe('ScenariosDetailService', () => {
     expect(result.lockReason).toBeUndefined();
   });
 
-  it('should propagate NotFoundException when no personal scenario fallback exists', async () => {
+  it('should propagate NotFoundException when scenario not found', async () => {
     accessService.checkAccess.mockRejectedValue(new NotFoundException('Scenario not found'));
-    userAiScenarioRepo.findOne.mockResolvedValue(null);
 
     await expect(service.get(userId, 'non-existent-id', langId)).rejects.toThrow(NotFoundException);
-  });
-
-  it('should fall back to personal AI scenario when default lookup misses', async () => {
-    accessService.checkAccess.mockRejectedValue(new NotFoundException('Scenario not found'));
-    const personal = {
-      id: 'personal-uuid-1',
-      userId,
-      languageId: langId,
-      title: 'Ordering dim sum',
-      description: 'Practice teahouse dialog',
-      difficulty: ScenarioDifficulty.BEGINNER,
-      createdAt: new Date(),
-    };
-    userAiScenarioRepo.findOne.mockResolvedValue(personal);
-
-    const result = await service.get(userId, personal.id, langId);
-
-    expect(userAiScenarioRepo.findOne).toHaveBeenCalledWith({
-      where: { id: personal.id, userId, languageId: langId },
-    });
-    expect(result.id).toBe(personal.id);
-    expect(result.title).toBe(personal.title);
-    expect(result.accessTier).toBe(AccessTier.FREE);
-    expect(result.isLocked).toBe(false);
-    expect(result.userStatus).toBe('available');
-    expect(result.source).toBe('personalized');
-    expect(result.category).toBeUndefined();
   });
 });

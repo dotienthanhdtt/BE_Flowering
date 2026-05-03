@@ -72,6 +72,21 @@ export class LangfuseService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Record a named event on a conversation's parent span.
+   * Used for observability counters (e.g., personalization outcomes).
+   */
+  recordEvent(conversationId: string, name: string, attributes?: Record<string, string | number | boolean>): void {
+    try {
+      const entry = this.conversations.get(conversationId);
+      if (entry) {
+        entry.span.addEvent(name, attributes);
+      }
+    } catch {
+      // OTel SDK error — ignore, tracing is best-effort
+    }
+  }
+
   /** End all active conversation spans on shutdown. */
   onModuleDestroy(): void {
     clearInterval(this.evictionTimer);

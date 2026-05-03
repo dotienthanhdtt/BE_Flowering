@@ -14,6 +14,7 @@ import { SubscriptionModule } from '@/modules/subscription/subscription.module';
 import { VocabularyModule } from '@/modules/vocabulary/vocabulary.module';
 import { AccessTierCacheService } from '@common/services/access-tier-cache.service';
 import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
+import { PersonalizationModule } from '@/modules/personalization/personalization.module';
 import { ScenarioChatController } from './scenario-chat.controller';
 import { ScenarioChatService } from './services/scenario-chat.service';
 import { ScenarioAccessService } from './services/scenario-access.service';
@@ -38,6 +39,7 @@ import { VocabularyInjectionService } from './services/vocabulary-injection.serv
     LanguageModule,
     SubscriptionModule,
     VocabularyModule,
+    PersonalizationModule,
   ],
   controllers: [ScenarioChatController],
   providers: [

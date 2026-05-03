@@ -51,6 +51,18 @@ export class User {
   @Column({ type: 'varchar', length: 10, name: 'native_language', nullable: true })
   nativeLanguage?: string;
 
+  /** UTC timestamp of when Premium user consumed their monthly personalization trial. */
+  @Column({ type: 'timestamptz', name: 'personalized_trial_used_at', nullable: true })
+  personalizedTrialUsedAt?: Date | null;
+
+  /** UTC timestamp of last successful personalization generation. Used for 24h de-dup gate. */
+  @Column({ type: 'timestamptz', name: 'last_personalization_at', nullable: true })
+  lastPersonalizationAt?: Date | null;
+
+  /** JSONB snapshot of the profile extracted during last generation (top-level key diff). */
+  @Column({ type: 'jsonb', name: 'personalization_profile_snapshot', nullable: true })
+  personalizationProfileSnapshot?: Record<string, unknown> | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

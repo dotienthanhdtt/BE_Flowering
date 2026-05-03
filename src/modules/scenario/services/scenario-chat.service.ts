@@ -32,6 +32,7 @@ import {
   ScenarioChatResponseDto,
   ScenarioConversationListResponseDto,
 } from '../dto/scenario-chat.dto';
+import { PersonalizationTriggerService } from '@/modules/personalization/services/personalization-trigger.service';
 
 const MAX_TURNS = 12;
 // Cover full turn range: MAX_TURNS user + MAX_TURNS assistant + 2 buffer
@@ -63,6 +64,7 @@ export class ScenarioChatService {
     private readonly scenarioAccessService: ScenarioAccessService,
     private readonly vocabInjection: VocabularyInjectionService,
     private readonly vocabReview: VocabularyReviewService,
+    private readonly personalizationTrigger: PersonalizationTriggerService,
   ) {}
 
   async chat(
@@ -74,20 +76,21 @@ export class ScenarioChatService {
     //    against unified `scenarios` table covers system, kol, and personal.
     const scenario = await this.resolveChatScenario(userId, dto.scenarioId, languageId);
 
-    // 2. Resolve conversation by (userId, scenarioId). Resume regardless of
-    //    status (CHATTING or DONE); only create when none exists.
+    // 2. Resolve or create conversation.
+    //    - Provided conversationId: load it; if DONE, start a fresh one instead.
+    //    - No conversationId: find active or create.
     let conversation: AiConversation;
     if (dto.conversationId) {
-      conversation = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
+      const existing = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
+      if (existing.status === ScenarioChatStatus.DONE) {
+        const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
+        conversation = result.conversation;
+      } else {
+        conversation = existing;
+      }
     } else {
       const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
       conversation = result.conversation;
-    }
-
-    // 3. If conversation is already DONE, return the full transcript without
-    //    calling the LLM or mutating status.
-    if (conversation.status === ScenarioChatStatus.DONE) {
-      return this.getConversation(userId, conversation.id);
     }
 
     // 4. Load language context for the request's active learning language
@@ -190,6 +193,17 @@ export class ScenarioChatService {
       (err) =>
         this.logger.warn(`Usage-track failed conv=${conversation.id}: ${(err as Error).message}`),
     );
+
+    // 12b. Fire-and-forget personalization trigger on scenario completion
+    if (conversation.status === ScenarioChatStatus.DONE && conversation.scenarioId) {
+      void this.personalizationTrigger
+        .maybeTrigger(userId, conversation.scenarioId)
+        .catch((err) =>
+          this.logger.warn(
+            `Personalization trigger failed conv=${conversation.id}: ${(err as Error).message}`,
+          ),
+        );
+    }
 
     // 13. Re-query transcript for response
     const messageRows = await this.msgRepo.find({

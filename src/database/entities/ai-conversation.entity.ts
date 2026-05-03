@@ -14,6 +14,7 @@ import { Scenario } from './scenario.entity';
 export enum AiConversationType {
   ANONYMOUS = 'anonymous',
   AUTHENTICATED = 'authenticated',
+  PERSONALIZE_INTAKE = 'personalize_intake',
 }
 
 export enum ScenarioChatStatus {
