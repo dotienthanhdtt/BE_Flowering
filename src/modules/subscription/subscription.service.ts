@@ -16,6 +16,7 @@ import {
 } from './dto/revenuecat-webhook.dto';
 import { SubscriptionDto } from './dto/subscription.dto';
 import { RcSubscriberPayload } from './clients/revenuecat-rest-client';
+import { isUniqueViolation } from './utils/db-errors.util';
 
 /** Cancel reasons that trigger immediate revocation (not period-end). */
 const IMMEDIATE_REVOKE_REASONS: RevenueCatCancelReason[] = ['CUSTOMER_SUPPORT', 'BILLING_ERROR'];
@@ -28,8 +29,6 @@ const SILENT_ACK_EVENTS = new Set<string>([
   'EXPERIMENT_ENROLLMENT',
 ]);
 
-/** Postgres unique-violation error code. */
-const PG_UNIQUE_VIOLATION = '23505';
 
 /**
  * Service handling subscription operations and RevenueCat webhook processing.
@@ -69,31 +68,41 @@ export class SubscriptionService {
    *
    * If the handler throws, the transaction rolls back including the
    * idempotency row, so RevenueCat's retry will reprocess the event.
+   *
+   * Returns an outcome string for the controller to propagate in the response body.
    */
-  async processWebhook(payload: RevenueCatWebhookDto): Promise<void> {
+  async processWebhook(payload: RevenueCatWebhookDto): Promise<{ outcome: string }> {
     const { event } = payload;
+    const startMs = Date.now();
 
     if (process.env.NODE_ENV === 'production' && event.environment === 'SANDBOX') {
       this.logger.warn(
-        `Ignoring SANDBOX event ${event.id} (type: ${event.type}) received in production`,
+        `event=${event.type} outcome=sandbox_dropped id=${event.id} userId=${event.app_user_id ?? 'unknown'}`,
       );
-      return;
+      return { outcome: 'sandbox_dropped' };
     }
 
     if (SILENT_ACK_EVENTS.has(event.type)) {
-      this.logger.debug(`Silently acknowledging RC event ${event.type} id=${event.id}`);
+      this.logger.debug(
+        `event=${event.type} outcome=ack_silent id=${event.id}`,
+      );
       // Still record it for idempotency — outside a transaction is fine since handler is a no-op.
       await this.recordIdempotency(event);
-      return;
+      return { outcome: 'processed' };
     }
+
+    let outcome = 'processed';
 
     const touchedIds = await this.dataSource.transaction(async (manager) => {
       // Idempotency lock — insert first; on duplicate-key, we've seen this event before.
       try {
         await manager.insert(WebhookEvent, { eventId: event.id, eventType: event.type });
       } catch (error: unknown) {
-        if ((error as { code?: string }).code === PG_UNIQUE_VIOLATION) {
-          this.logger.debug(`Event ${event.id} already processed, skipping`);
+        if (isUniqueViolation(error)) {
+          outcome = 'duplicate';
+          this.logger.debug(
+            `event=${event.type} outcome=duplicate id=${event.id} userId=${event.app_user_id ?? 'unknown'}`,
+          );
           return [];
         }
         throw error;
@@ -101,10 +110,19 @@ export class SubscriptionService {
 
       return this.dispatch(event, manager);
     });
+
+    const latencyMs = Date.now() - startMs;
+
     // Emit after transaction commits so guard re-reads committed state
     for (const id of touchedIds ?? []) {
       this.emitChanged(id);
     }
+
+    this.logger.log(
+      `event=${event.type} outcome=${outcome} id=${event.id} userId=${event.app_user_id ?? 'unknown'} latency_ms=${latencyMs}`,
+    );
+
+    return { outcome };
   }
 
   /** Insert idempotency row, swallow duplicate-key errors. Used outside transactions. */
@@ -112,7 +130,7 @@ export class SubscriptionService {
     try {
       await this.webhookEventRepo.insert({ eventId: event.id, eventType: event.type });
     } catch (error: unknown) {
-      if ((error as { code?: string }).code === PG_UNIQUE_VIOLATION) return;
+      if (isUniqueViolation(error)) return;
       throw error;
     }
   }
@@ -244,7 +262,7 @@ export class SubscriptionService {
         currentPeriodEnd: expiresAt,
         currentPeriodStart: purchaseDate,
         cancelAtPeriodEnd: false,
-        revenuecatId: event.original_app_user_id,
+        appUserId: event.original_app_user_id,
         ...tsField,
       });
     } else {
@@ -254,7 +272,7 @@ export class SubscriptionService {
         status: SubscriptionStatus.ACTIVE,
         currentPeriodEnd: expiresAt,
         currentPeriodStart: purchaseDate,
-        revenuecatId: event.original_app_user_id,
+        appUserId: event.original_app_user_id,
         ...tsField,
       });
       await subscriptionRepo.save(sub);
@@ -390,12 +408,13 @@ export class SubscriptionService {
       { userId },
       {
         status: SubscriptionStatus.EXPIRED,
+        plan: SubscriptionPlan.FREE,
         cancelAtPeriodEnd: false,
         eventTimestampMs: event.event_timestamp_ms ?? null,
       },
     );
     this.logger.log(
-      `Subscription expired for user ${userId} (reason=${event.expiration_reason ?? 'UNKNOWN'})`,
+      `Subscription expired for user ${userId} (reason=${event.expiration_reason ?? 'UNKNOWN'}) event=${event.type} userId=${userId}`,
     );
   }
 
@@ -419,20 +438,24 @@ export class SubscriptionService {
     this.logger.warn(`Billing issue for user ${userId} (grace_until=${graceUntil})`);
   }
 
-  /** SUBSCRIPTION_PAUSED → status=PAUSED; no access during pause. */
+  /** SUBSCRIPTION_PAUSED → status=PAUSED; no access during pause. Captures auto_resume_at_ms if present. */
   private async handlePaused(
     userId: string,
     event: RevenueCatEventDto,
     subscriptionRepo: Repository<Subscription>,
   ): Promise<void> {
+    const resumeMs = event.auto_resume_at_ms ?? null;
     await subscriptionRepo.update(
       { userId },
       {
         status: SubscriptionStatus.PAUSED,
+        autoResumeAt: resumeMs ? new Date(resumeMs) : null,
         eventTimestampMs: event.event_timestamp_ms ?? null,
       },
     );
-    this.logger.log(`Subscription paused for user ${userId}`);
+    this.logger.log(
+      `Subscription paused for user ${userId} event=${event.type} autoResumeAt=${resumeMs ? new Date(resumeMs).toISOString() : 'none'}`,
+    );
   }
 
   /**
@@ -510,12 +533,21 @@ export class SubscriptionService {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Map RC product identifier to internal SubscriptionPlan.
+   * Uses substring matching to cover store-specific suffixes (e.g. _ios, _android).
+   * Throws on unrecognised product IDs — caller's transaction rolls back and RC will retry.
+   * Add new product prefixes here when launching new SKUs.
+   */
   private mapProductToPlan(productId: string): SubscriptionPlan {
     const lower = productId.toLowerCase();
     if (lower.includes('lifetime')) return SubscriptionPlan.LIFETIME;
     if (lower.includes('yearly') || lower.includes('annual')) return SubscriptionPlan.YEARLY;
     if (lower.includes('monthly')) return SubscriptionPlan.MONTHLY;
-    return SubscriptionPlan.MONTHLY;
+    this.logger.error(
+      `mapProductToPlan: unknown productId="${productId}" — no plan mapped; throwing to trigger RC retry`,
+    );
+    throw new Error(`Unknown product ID: ${productId}`);
   }
 
   /**
@@ -546,6 +578,7 @@ export class SubscriptionService {
       expiresAt: subscription.currentPeriodEnd,
       isActive: this.isSubscriptionActive(subscription),
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+      autoResumeAt: subscription.autoResumeAt ?? null,
     };
   }
 

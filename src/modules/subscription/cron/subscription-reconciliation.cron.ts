@@ -56,7 +56,7 @@ export class SubscriptionReconciliationCron {
 
     if (this.rcBreaker.state === 'OPEN') {
       this.logger.warn(
-        `reconciliation: circuit breaker OPEN — skipping run (fail-open, no revokes)`,
+        `event=reconciliation outcome=breaker_open — skipping run (fail-open, no revokes)`,
       );
       return;
     }
@@ -78,6 +78,12 @@ export class SubscriptionReconciliationCron {
     });
 
     candidatesCount = candidates.length;
+
+    if (candidatesCount === BATCH_SIZE) {
+      this.logger.warn(
+        `reconciliation: batch full (${BATCH_SIZE} candidates) — possible backlog; consider reducing reconciliation interval`,
+      );
+    }
 
     if (candidatesCount === 0) {
       this.logger.log(`reconciliation: no candidates found`);
@@ -105,15 +111,16 @@ export class SubscriptionReconciliationCron {
       // Cast via string to bypass TS control-flow narrowing from the early-return guard above
       if ((this.rcBreaker.state as string) === 'OPEN') {
         this.logger.warn(
-          `reconciliation: circuit breaker OPENED mid-run — aborting remaining batches`,
+          `event=reconciliation outcome=breaker_open mid-run — aborting remaining batches`,
         );
         break;
       }
     }
 
     const elapsedMs = Date.now() - startMs;
+    const finalOutcome = errorsCount > 0 ? 'error' : reconciledCount > 0 ? 'reconciled' : 'unchanged';
     this.logger.log(
-      `reconciliation complete: candidates=${candidatesCount} reconciled=${reconciledCount} errors=${errorsCount} breaker=${this.rcBreaker.state} elapsed=${elapsedMs}ms`,
+      `event=reconciliation outcome=${finalOutcome} candidates=${candidatesCount} reconciled=${reconciledCount} errors=${errorsCount} breaker=${this.rcBreaker.state} latency_ms=${elapsedMs}`,
     );
   }
 

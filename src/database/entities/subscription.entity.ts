@@ -42,8 +42,11 @@ export class Subscription {
   @Column({ type: 'enum', enum: SubscriptionStatus, default: SubscriptionStatus.ACTIVE })
   status!: SubscriptionStatus;
 
-  @Column({ type: 'varchar', length: 255, name: 'revenuecat_id', nullable: true })
-  revenuecatId?: string;
+  @Column({ type: 'varchar', length: 255, name: 'app_user_id', nullable: true })
+  appUserId?: string;
+
+  @Column({ name: 'auto_resume_at', type: 'timestamptz', nullable: true })
+  autoResumeAt?: Date | null;
 
   @Column({ type: 'timestamptz', name: 'current_period_start', nullable: true })
   currentPeriodStart?: Date;
