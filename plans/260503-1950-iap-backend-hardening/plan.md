@@ -21,7 +21,7 @@ Remediate findings from `code-review-260503-1854-iap-backend.md` covering Revenu
 | 1 | [Webhook Validation & Auth](phase-01-webhook-validation-auth.md) | Complete | C4, C5, C6 | controller, dto, main |
 | 2 | [Refund Handling + Cron Expansion](phase-02-refund-and-cron.md) | Complete | C1, I6 | service, dto, cron |
 | 3 | [Race Conditions (Transactional Locks)](phase-03-race-condition-locks.md) | Complete | C2, I7, I9, M6 | service |
-| 4 | [Premium Guard Sync + Cache](phase-04-premium-guard-sync.md) | Pending | C3 | premium.guard |
+| 4 | [Premium Guard Sync + Cache](phase-04-premium-guard-sync.md) | Complete (2026-05-03) | C3 | premium.guard |
 | 5 | [Important Correctness Fixes](phase-05-important-fixes.md) | Pending | I2, I4, I5, I8, I11 | service, cron |
 | 6 | [Minor Fixes & Observability](phase-06-minor-and-observability.md) | Pending | M1, M3, M4, M9, M10 | service, client |
 | 7 | [Tests](phase-07-tests.md) | Pending | All above | test/* |

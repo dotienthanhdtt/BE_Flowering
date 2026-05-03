@@ -36,11 +36,11 @@
 
 ## Todo
 
-- [ ] Add 60s positive cache to guard
-- [ ] Await sync + log errors
-- [ ] Emit `subscription.changed` on mutations
-- [ ] Subscribe guard to invalidation event
-- [ ] `npm run build` passes
+- [x] Add 60s positive cache to guard
+- [x] Await sync + log errors
+- [x] Emit `subscription.changed` on mutations
+- [x] Subscribe guard to invalidation event
+- [x] `npm run build` passes
 - [ ] Unit test: cache hit, cache miss, eviction-on-event (Phase 7)
 
 ## Success Criteria
