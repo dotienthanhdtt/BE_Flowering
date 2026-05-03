@@ -44,13 +44,13 @@
 
 ## Todo
 
-- [ ] Wire `DataSource` (verify injection)
-- [ ] Refactor handlers to accept `EntityManager`
-- [ ] Pessimistic locks in `applyRcGroundTruth` and webhook path
-- [ ] `<=` timestamp guard
-- [ ] TRANSFER destination-conflict precheck
-- [ ] `handleExtension` 0-affected log
-- [ ] `npm run build` passes
+- [x] Wire `DataSource` (verify injection)
+- [x] Refactor handlers to accept `EntityManager`
+- [x] Pessimistic locks in `applyRcGroundTruth` and webhook path
+- [x] `<=` timestamp guard
+- [x] TRANSFER destination-conflict precheck
+- [x] `handleExtension` 0-affected log
+- [x] `npm run build` passes
 - [ ] Concurrent webhook unit test (Phase 7)
 
 ## Success Criteria

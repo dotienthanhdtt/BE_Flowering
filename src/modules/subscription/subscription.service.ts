@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
@@ -126,7 +126,13 @@ export class SubscriptionService {
       return;
     }
 
-    if (this.isStaleEvent(event, await subscriptionRepo.findOne({ where: { userId: user.id } }))) {
+    // Single locked read — result reused by stale guard and handlers to avoid double round-trip.
+    const existing = await subscriptionRepo.findOne({
+      where: { userId: user.id },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (this.isStaleEvent(event, existing)) {
       this.logger.warn(
         `Stale event ${event.id} ts=${event.event_timestamp_ms} — skipping`,
       );
@@ -140,16 +146,16 @@ export class SubscriptionService {
       case 'NON_RENEWING_PURCHASE':
       case 'TEMPORARY_ENTITLEMENT_GRANT':
       case 'REFUND_REVERSED':
-        await this.handlePurchaseOrRenewal(user.id, event, subscriptionRepo);
+        await this.handlePurchaseOrRenewal(user.id, event, subscriptionRepo, existing);
         break;
       case 'PRODUCT_CHANGE':
-        await this.handleProductChange(user.id, event, subscriptionRepo);
+        await this.handleProductChange(user.id, event, subscriptionRepo, existing);
         break;
       case 'SUBSCRIPTION_EXTENDED':
         await this.handleExtension(user.id, event, subscriptionRepo);
         break;
       case 'REFUND':
-        await this.handleRefund(user.id, event, subscriptionRepo);
+        await this.handleRefund(user.id, event, subscriptionRepo, existing);
         break;
       case 'CANCELLATION':
         await this.handleCancellation(user.id, event, subscriptionRepo);
@@ -197,7 +203,7 @@ export class SubscriptionService {
   private isStaleEvent(event: RevenueCatEventDto, existing: Subscription | null): boolean {
     const incomingTs = event.event_timestamp_ms ?? null;
     if (incomingTs === null || !existing || existing.eventTimestampMs === null) return false;
-    return incomingTs < existing.eventTimestampMs;
+    return incomingTs <= existing.eventTimestampMs;
   }
 
   // ---------------------------------------------------------------------------
@@ -208,6 +214,7 @@ export class SubscriptionService {
     userId: string,
     event: RevenueCatEventDto,
     subscriptionRepo: Repository<Subscription>,
+    existing: Subscription | null,
   ): Promise<void> {
     if (!event.product_id) {
       this.logger.warn(`Event ${event.id} (${event.type}) missing product_id — skipping`);
@@ -217,7 +224,6 @@ export class SubscriptionService {
     const expiresAt = event.expiration_at_ms ? new Date(event.expiration_at_ms) : undefined;
     const purchaseDate = event.purchased_at_ms ? new Date(event.purchased_at_ms) : new Date();
 
-    const existing = await subscriptionRepo.findOne({ where: { userId } });
     const tsField = { eventTimestampMs: event.event_timestamp_ms ?? null };
 
     if (existing) {
@@ -251,6 +257,7 @@ export class SubscriptionService {
     userId: string,
     event: RevenueCatEventDto,
     subscriptionRepo: Repository<Subscription>,
+    existing: Subscription | null,
   ): Promise<void> {
     const productId = event.new_product_id ?? event.product_id;
     if (!productId) {
@@ -261,6 +268,7 @@ export class SubscriptionService {
       userId,
       { ...event, product_id: productId },
       subscriptionRepo,
+      existing,
     );
   }
 
@@ -274,14 +282,20 @@ export class SubscriptionService {
       this.logger.warn(`SUBSCRIPTION_EXTENDED ${event.id} missing expiration_at_ms — skipping`);
       return;
     }
-    await subscriptionRepo.update(
+    const result = await subscriptionRepo.update(
       { userId },
       {
         currentPeriodEnd: new Date(event.expiration_at_ms),
         eventTimestampMs: event.event_timestamp_ms ?? null,
       },
     );
-    this.logger.log(`Subscription extended for user ${userId} until ${event.expiration_at_ms}`);
+    if (!result.affected || result.affected === 0) {
+      this.logger.warn(
+        `handleExtension: no subscription found for user ${userId} — 0 rows updated (event=${event.id}, expiration_at_ms=${event.expiration_at_ms})`,
+      );
+    } else {
+      this.logger.log(`Subscription extended for user ${userId} until ${event.expiration_at_ms}`);
+    }
   }
 
   /** REFUND — immediately revoke premium access. Idempotent: repeated calls leave status=EXPIRED. */
@@ -289,8 +303,8 @@ export class SubscriptionService {
     userId: string,
     event: RevenueCatEventDto,
     subscriptionRepo: Repository<Subscription>,
+    existing: Subscription | null,
   ): Promise<void> {
-    const existing = await subscriptionRepo.findOne({ where: { userId } });
     if (!existing) {
       this.logger.warn(`REFUND event ${event.id}: no subscription found for user ${userId} — skipping`);
       return;
@@ -450,10 +464,27 @@ export class SubscriptionService {
       return;
     }
 
-    const subscription = await subscriptionRepo.findOne({ where: { userId: fromId } });
+    // Lock rows in consistent userId order to prevent AB/BA deadlock on concurrent swapped TRANSFERs.
+    const [firstId, secondId] = [fromId, toId].sort();
+    const [firstRow, secondRow] = await Promise.all([
+      subscriptionRepo.findOne({ where: { userId: firstId }, lock: { mode: 'pessimistic_write' } }),
+      subscriptionRepo.findOne({ where: { userId: secondId }, lock: { mode: 'pessimistic_write' } }),
+    ]);
+    const subscription = firstId === fromId ? firstRow : secondRow;
+    const existingDestination = firstId === toId ? firstRow : secondRow;
+
     if (!subscription) {
       this.logger.warn(`TRANSFER: no subscription found for source user ${fromId} — skipping`);
       return;
+    }
+
+    if (existingDestination) {
+      this.logger.error(
+        `TRANSFER event ${event.id}: destination user ${toId} already has subscription id=${existingDestination.id} — conflict with source user ${fromId}`,
+      );
+      throw new ConflictException(
+        `Cannot transfer subscription: destination user ${toId} already has an active subscription`,
+      );
     }
 
     await subscriptionRepo.update(subscription.id, {
@@ -520,62 +551,66 @@ export class SubscriptionService {
   ): Promise<void> {
     const incomingTs = rcPayload.fetchedAtMs;
 
-    // Out-of-order guard: skip if stored timestamp is newer
-    const existing = await this.subscriptionRepo.findOne({ where: { userId } });
-    if (existing && existing.eventTimestampMs !== null && incomingTs < existing.eventTimestampMs) {
-      this.logger.warn(
-        `applyRcGroundTruth: stale payload ts=${incomingTs} < stored=${existing.eventTimestampMs} for user ${userId} (source=${source}) — skipping`,
-      );
-      return;
-    }
+    await this.dataSource.transaction(async (mgr) => {
+      const existing = await mgr.findOne(Subscription, {
+        where: { userId },
+        lock: { mode: 'pessimistic_write' },
+      });
 
-    const hasActive = rcPayload.hasActiveEntitlement;
-    const expiresAtMs = rcPayload.activeExpiresAtMs;
-    const productId = rcPayload.activeProductId;
+      // Out-of-order guard: skip if stored timestamp is same or newer
+      if (existing && existing.eventTimestampMs !== null && incomingTs <= existing.eventTimestampMs) {
+        this.logger.warn(
+          `applyRcGroundTruth: stale payload ts=${incomingTs} <= stored=${existing.eventTimestampMs} for user ${userId} (source=${source}) — skipping`,
+        );
+        return;
+      }
 
-    if (hasActive && productId) {
-      // RC says active — upsert as ACTIVE
-      const plan = this.mapProductToPlan(productId);
-      const currentPeriodEnd = expiresAtMs ? new Date(expiresAtMs) : undefined;
-      const beforeStatus = existing?.status ?? 'none';
+      const hasActive = rcPayload.hasActiveEntitlement;
+      const expiresAtMs = rcPayload.activeExpiresAtMs;
+      const productId = rcPayload.activeProductId;
 
-      if (existing) {
-        await this.subscriptionRepo.update(existing.id, {
-          plan,
-          status: SubscriptionStatus.ACTIVE,
-          currentPeriodEnd,
+      if (hasActive && productId) {
+        const plan = this.mapProductToPlan(productId);
+        const currentPeriodEnd = expiresAtMs ? new Date(expiresAtMs) : undefined;
+        const beforeStatus = existing?.status ?? 'none';
+
+        if (existing) {
+          await mgr.update(Subscription, existing.id, {
+            plan,
+            status: SubscriptionStatus.ACTIVE,
+            currentPeriodEnd,
+            cancelAtPeriodEnd: false,
+            eventTimestampMs: incomingTs,
+          });
+        } else {
+          const sub = mgr.create(Subscription, {
+            userId,
+            plan,
+            status: SubscriptionStatus.ACTIVE,
+            currentPeriodEnd,
+            eventTimestampMs: incomingTs,
+          });
+          await mgr.save(Subscription, sub);
+        }
+
+        this.logger.log(
+          `applyRcGroundTruth: ACTIVE applied for user ${userId} plan=${plan} (${beforeStatus}→ACTIVE source=${source})`,
+        );
+      } else if (existing && existing.status === SubscriptionStatus.ACTIVE) {
+        // RC says no active entitlement but DB says ACTIVE — expire the row
+        await mgr.update(Subscription, existing.id, {
+          status: SubscriptionStatus.EXPIRED,
           cancelAtPeriodEnd: false,
           eventTimestampMs: incomingTs,
         });
+        this.logger.log(
+          `applyRcGroundTruth: EXPIRED applied for user ${userId} (ACTIVE→EXPIRED source=${source})`,
+        );
       } else {
-        const sub = this.subscriptionRepo.create({
-          userId,
-          plan,
-          status: SubscriptionStatus.ACTIVE,
-          currentPeriodEnd,
-          eventTimestampMs: incomingTs,
-        });
-        await this.subscriptionRepo.save(sub);
+        this.logger.debug(
+          `applyRcGroundTruth: no change needed for user ${userId} (source=${source})`,
+        );
       }
-
-      this.logger.log(
-        `applyRcGroundTruth: ACTIVE applied for user ${userId} plan=${plan} (${beforeStatus}→ACTIVE source=${source})`,
-      );
-    } else if (existing && existing.status === SubscriptionStatus.ACTIVE) {
-      // RC says no active entitlement but DB says ACTIVE — expire the row
-      await this.subscriptionRepo.update(existing.id, {
-        status: SubscriptionStatus.EXPIRED,
-        cancelAtPeriodEnd: false,
-        eventTimestampMs: incomingTs,
-      });
-      this.logger.log(
-        `applyRcGroundTruth: EXPIRED applied for user ${userId} (ACTIVE→EXPIRED source=${source})`,
-      );
-    } else {
-      // RC says inactive and DB already non-ACTIVE — no change needed
-      this.logger.debug(
-        `applyRcGroundTruth: no change needed for user ${userId} (source=${source})`,
-      );
-    }
+    });
   }
 }
