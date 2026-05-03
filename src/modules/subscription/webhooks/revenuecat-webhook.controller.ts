@@ -58,30 +58,35 @@ export class RevenuecatWebhookController implements OnModuleInit {
   async handleWebhook(
     @Headers('authorization') authHeader: string,
     @Body() payload: RevenueCatWebhookDto,
-  ): Promise<{ status: string }> {
+  ): Promise<{ status: string; outcome?: string }> {
     if (!this.webhookSecret) {
+      this.logger.warn(
+        `event=${payload.event?.type ?? 'UNKNOWN'} outcome=auth_failed reason=webhook_not_configured`,
+      );
       throw new UnauthorizedException('Webhook not configured');
     }
     if (!this.verifyAuth(authHeader, this.webhookSecret)) {
-      this.logger.warn('Invalid webhook authorization attempt');
+      this.logger.warn(
+        `event=${payload.event?.type ?? 'UNKNOWN'} outcome=auth_failed userId=${payload.event?.app_user_id ?? 'unknown'}`,
+      );
       throw new UnauthorizedException('Invalid webhook authorization');
     }
 
     const eventTimestamp = payload.event.event_timestamp_ms;
     if (eventTimestamp !== undefined && Math.abs(Date.now() - eventTimestamp) > REPLAY_WINDOW_MS) {
       this.logger.warn(
-        `Stale event dropped: ${payload.event.id} timestamp=${eventTimestamp} type=${payload.event.type}`,
+        `event=${payload.event.type} outcome=stale_dropped id=${payload.event.id} timestamp=${eventTimestamp} userId=${payload.event.app_user_id ?? 'unknown'}`,
       );
-      return { status: 'stale_dropped' };
+      return { status: 'stale_dropped', outcome: 'stale_dropped' };
     }
 
     this.logger.log(
-      `Received RevenueCat webhook: ${payload.event.type} for user ${payload.event.app_user_id}`,
+      `event=${payload.event.type} outcome=processing id=${payload.event.id} userId=${payload.event.app_user_id ?? 'unknown'}`,
     );
 
-    await this.subscriptionService.processWebhook(payload);
+    const result = await this.subscriptionService.processWebhook(payload);
 
-    return { status: 'received' };
+    return { status: 'received', ...result };
   }
 
   /**

@@ -99,7 +99,8 @@ export class RevenueCatRestClient implements OnModuleInit {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'X-Platform': 'stripe', // required by RC v1 subscribers endpoint
+          // X-Platform is NOT required by the RC v1 GET /subscribers endpoint per public docs.
+          // Removed to avoid sending an incorrect/undocumented header.
         },
         timeout: this.timeoutMs,
       };
@@ -153,14 +154,27 @@ export class RevenueCatRestClient implements OnModuleInit {
     }
 
     const activeEntries = Object.values(entitlements).filter((e) => e.isActive);
-    const firstActive = activeEntries[0] ?? null;
+
+    /**
+     * Pick the "primary" active entitlement deterministically:
+     *   1. Sort by `purchasedAtMs` descending — most-recent purchase wins (e.g. after an upgrade).
+     *   2. Tie-break by `productId` ascending (lexical) — deterministic across RC API calls
+     *      when two entitlements share the same purchase timestamp (edge case, e.g. promo grants).
+     * This avoids non-deterministic selection when multiple entitlements are active simultaneously.
+     */
+    const sortedActive = [...activeEntries].sort((a, b) => {
+      const tsDiff = (b.purchasedAtMs ?? 0) - (a.purchasedAtMs ?? 0);
+      if (tsDiff !== 0) return tsDiff;
+      return (a.productId ?? '').localeCompare(b.productId ?? '');
+    });
+    const primaryActive = sortedActive[0] ?? null;
 
     return {
       appUserId,
       entitlements,
       hasActiveEntitlement: activeEntries.length > 0,
-      activeExpiresAtMs: firstActive?.expiresAtMs ?? null,
-      activeProductId: firstActive?.productId ?? null,
+      activeExpiresAtMs: primaryActive?.expiresAtMs ?? null,
+      activeProductId: primaryActive?.productId ?? null,
       fetchedAtMs: now,
     };
   }
