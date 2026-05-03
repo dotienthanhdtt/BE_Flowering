@@ -7,6 +7,7 @@ import {
   IsObject,
   IsArray,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -48,9 +49,8 @@ export type RevenueCatExpirationReason = RevenueCatCancelReason | 'SUBSCRIPTION_
 
 /**
  * DTO for RevenueCat event payload.
- * Only fields the backend reads are declared. The webhook controller does NOT
- * use @ValidateNested() on this object so unknown RC fields are accepted
- * untouched (RC adds new fields over time and the docs warn against rejecting them).
+ * Only fields the backend reads are declared; unknown RC fields are stripped by
+ * whitelist:true in the global ValidationPipe (RC adds new fields periodically).
  */
 export class RevenueCatEventDto {
   @ApiProperty({ description: 'Unique event ID for idempotency' })
@@ -162,6 +162,7 @@ export class RevenueCatWebhookDto {
 
   @ApiProperty({ description: 'Event data', type: RevenueCatEventDto })
   @IsObject()
+  @ValidateNested()
   @Type(() => RevenueCatEventDto)
   event!: RevenueCatEventDto;
 }

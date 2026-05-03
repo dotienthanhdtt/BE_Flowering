@@ -7,14 +7,18 @@ import {
   UnauthorizedException,
   Logger,
   OnModuleInit,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'crypto';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Public } from '../../../common/decorators/public-route.decorator';
 import { SubscriptionService } from '../subscription.service';
 import { RevenueCatWebhookDto } from '../dto/revenuecat-webhook.dto';
 import { AppConfiguration } from '../../../config/app-configuration';
+
+const REPLAY_WINDOW_MS = 24 * 3600 * 1000;
 
 /**
  * Controller for RevenueCat webhook endpoint
@@ -33,6 +37,9 @@ export class RevenuecatWebhookController implements OnModuleInit {
   onModuleInit(): void {
     const secret = this.configService.get('revenuecat.webhookSecret', { infer: true });
     if (!secret) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('REVENUECAT_WEBHOOK_SECRET must be set in production. Aborting startup.');
+      }
       this.logger.warn(
         'REVENUECAT_WEBHOOK_SECRET not configured — POST /webhooks/revenuecat will reject all requests',
       );
@@ -44,8 +51,10 @@ export class RevenuecatWebhookController implements OnModuleInit {
   @Public()
   @Post('revenuecat')
   @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'RevenueCat webhook endpoint' })
-  @ApiExcludeEndpoint() // Hide from Swagger docs
+  @ApiExcludeEndpoint()
   async handleWebhook(
     @Headers('authorization') authHeader: string,
     @Body() payload: RevenueCatWebhookDto,
@@ -53,10 +62,17 @@ export class RevenuecatWebhookController implements OnModuleInit {
     if (!this.webhookSecret) {
       throw new UnauthorizedException('Webhook not configured');
     }
-    // Always verify webhook authorization using timing-safe comparison
     if (!this.verifyAuth(authHeader, this.webhookSecret)) {
       this.logger.warn('Invalid webhook authorization attempt');
       throw new UnauthorizedException('Invalid webhook authorization');
+    }
+
+    const eventTimestamp = payload.event.event_timestamp_ms;
+    if (eventTimestamp !== undefined && Math.abs(Date.now() - eventTimestamp) > REPLAY_WINDOW_MS) {
+      this.logger.warn(
+        `Stale event dropped: ${payload.event.id} timestamp=${eventTimestamp} type=${payload.event.type}`,
+      );
+      return { status: 'stale_dropped' };
     }
 
     this.logger.log(
@@ -69,19 +85,18 @@ export class RevenuecatWebhookController implements OnModuleInit {
   }
 
   /**
-   * Timing-safe comparison to prevent timing attacks
-   */
-  /**
-   * Timing-safe comparison against the secret configured in the RC dashboard.
-   * RC sends the Authorization header value verbatim — no scheme prefix.
-   * The dashboard value and REVENUECAT_WEBHOOK_SECRET must match exactly.
+   * Accepts both "Bearer <secret>" and bare "<secret>" formats.
+   * Strips the "Bearer " prefix (case-insensitive) before comparison so either
+   * dashboard config format works without reconfiguring the secret.
+   * Length-mismatch short-circuit is acceptable — timing leak on length is
+   * negligible for a fixed-length secret.
    */
   private verifyAuth(authHeader: string, expectedSecret: string): boolean {
-    if (!authHeader || authHeader.length !== expectedSecret.length) {
-      return false;
-    }
+    if (!authHeader) return false;
+    const token = authHeader.replace(/^bearer\s+/i, '');
+    if (token.length !== expectedSecret.length) return false;
     try {
-      return timingSafeEqual(Buffer.from(authHeader), Buffer.from(expectedSecret));
+      return timingSafeEqual(Buffer.from(token), Buffer.from(expectedSecret));
     } catch {
       return false;
     }

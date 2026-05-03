@@ -3,12 +3,18 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { useContainer } from 'class-validator';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { setupSwaggerDocumentation } from './swagger/swagger-documentation-setup';
 import { ResponseTransformInterceptor, AllExceptionsFilter } from './common';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  // Disable NestJS built-in body parser (defaults to 100 KB) so we can enforce our own limit
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  // Cap request bodies at 256 KB — must be registered before NestJS route handlers
+  app.use(json({ limit: '256kb' }));
+  app.use(urlencoded({ limit: '256kb', extended: true }));
 
   // Enables async class-validator constraints (e.g. IsValidLevelForLanguage) to use NestJS DI
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
