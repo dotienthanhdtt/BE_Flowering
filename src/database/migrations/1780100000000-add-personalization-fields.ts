@@ -4,7 +4,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Adds personalization fields needed for auto-generate personalized scenarios.
  * All changes are additive — zero downtime.
  *
- * - Extends access_tier_enum with 'premium_plus'
+ * - Extends access_tier with 'premium_plus'
  * - Extends ai_conversation_type_enum with 'personalize_intake'
  * - Adds 3 columns to users (trial tracking, snapshot)
  * - Adds triggers_personalization bool to scenarios (partial index for lookup)
@@ -15,7 +15,7 @@ export class AddPersonalizationFields1780100000000 implements MigrationInterface
     // is its own statement; TypeORM wraps migrations in transactions but Postgres
     // allows reading new enum values after the statement commits within the txn.
     await queryRunner.query(
-      `ALTER TYPE access_tier_enum ADD VALUE IF NOT EXISTS 'premium_plus'`,
+      `ALTER TYPE access_tier ADD VALUE IF NOT EXISTS 'premium_plus'`,
     );
     await queryRunner.query(
       `ALTER TYPE ai_conversation_type_enum ADD VALUE IF NOT EXISTS 'personalize_intake'`,
