@@ -14,7 +14,7 @@
 
 1. Add `REFUND` to `RevenueCatEventType` union.
 2. Implement `handleRefund(event)`:
-   - Sets `status=EXPIRED`, `currentPeriodEnd=now`, `cancelledAt=now`, `cancelReason='REFUND'`.
+   - Sets `status --=EXPIRED`, `currentPeriodEnd=now`, `cancelledAt=now`, `cancelReason='REFUND'`.
    - Idempotent (reuses webhook_events idempotency wrapper already in `processWebhook`).
    - Out-of-order timestamp guard applies (use existing `<=` after Phase 3 fix).
 3. Wire `case 'REFUND'` in dispatch to `handleRefund`.
@@ -52,12 +52,19 @@
 
 ## Todo
 
-- [ ] Extend event type union (string-literal + `@IsIn`)
-- [ ] Implement `handleRefund`
-- [ ] Dispatch wiring
-- [ ] Broaden cron candidate query + ordering
-- [ ] `npm run build` passes
+- [x] Extend event type union (string-literal — no `@IsIn` on `type` field; pre-existing gap, backlog I2)
+- [x] Implement `handleRefund` (with `eventTimestampMs` guard-preserve fix per C1)
+- [x] Dispatch wiring
+- [x] Broaden cron candidate query + ordering (uses `In([ACTIVE, PAUSED])` not `Not(EXPIRED)` per H1)
+- [x] `npm run build` passes
 - [ ] Manual: post a synthetic REFUND payload via curl — verify DB row flips to EXPIRED
+
+## Implementation Notes
+
+- `cancelledAt` / `cancelReason` from plan spec were omitted — those columns do not exist on the Subscription entity. The simpler EXPIRED + currentPeriodEnd=now form is the final approach.
+- Cron uses `In([ACTIVE, PAUSED])` instead of `Not(EXPIRED)` to avoid pulling legacy CANCELLED rows nightly.
+- `handleRefund` preserves existing `eventTimestampMs` when incoming event has no timestamp to prevent nulling out the out-of-order guard (C1 fix).
+- Backlog: add `@IsIn([...])` runtime validator on the `type` field (I2). Pass pre-loaded subscription through dispatch to eliminate double-query (H2).
 
 ## Success Criteria
 

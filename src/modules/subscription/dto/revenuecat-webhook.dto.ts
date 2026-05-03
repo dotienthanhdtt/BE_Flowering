@@ -17,6 +17,7 @@ export type RevenueCatEventType =
   | 'INITIAL_PURCHASE'
   | 'RENEWAL'
   | 'CANCELLATION'
+  | 'REFUND'
   | 'UNCANCELLATION'
   | 'NON_RENEWING_PURCHASE'
   | 'SUBSCRIPTION_PAUSED'

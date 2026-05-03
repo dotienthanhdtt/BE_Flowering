@@ -148,6 +148,9 @@ export class SubscriptionService {
       case 'SUBSCRIPTION_EXTENDED':
         await this.handleExtension(user.id, event, subscriptionRepo);
         break;
+      case 'REFUND':
+        await this.handleRefund(user.id, event, subscriptionRepo);
+        break;
       case 'CANCELLATION':
         await this.handleCancellation(user.id, event, subscriptionRepo);
         break;
@@ -279,6 +282,37 @@ export class SubscriptionService {
       },
     );
     this.logger.log(`Subscription extended for user ${userId} until ${event.expiration_at_ms}`);
+  }
+
+  /** REFUND — immediately revoke premium access. Idempotent: repeated calls leave status=EXPIRED. */
+  private async handleRefund(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+  ): Promise<void> {
+    const existing = await subscriptionRepo.findOne({ where: { userId } });
+    if (!existing) {
+      this.logger.warn(`REFUND event ${event.id}: no subscription found for user ${userId} — skipping`);
+      return;
+    }
+    const incomingTs = event.event_timestamp_ms ?? null;
+    // Preserve the existing guard when the event has no timestamp — avoids nulling out
+    // the out-of-order guard, which would let a subsequent stale RENEWAL slip through.
+    const effectiveTs =
+      existing.eventTimestampMs !== null && incomingTs === null
+        ? existing.eventTimestampMs
+        : incomingTs;
+
+    await subscriptionRepo.update(existing.id, {
+      status: SubscriptionStatus.EXPIRED,
+      currentPeriodEnd: new Date(),
+      cancelAtPeriodEnd: false,
+      eventTimestampMs: effectiveTs,
+    });
+    this.logger.log(`Subscription refunded (immediately revoked) for user ${userId}`);
+
+    // Warn when CANCELLATION with support/billing reason is the actual refund channel
+    // so we can audit whether RC emits REFUND directly or routes through CANCELLATION.
   }
 
   /**

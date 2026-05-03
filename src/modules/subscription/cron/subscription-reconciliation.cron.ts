@@ -13,7 +13,7 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, In } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { Subscription, SubscriptionStatus } from '../../../database/entities/subscription.entity';
 import { SubscriptionService } from '../subscription.service';
@@ -62,13 +62,18 @@ export class SubscriptionReconciliationCron {
     }
 
     const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
 
-    // Fetch candidates (both failure modes in one query)
+    // Fetch candidates:
+    //   a) currentPeriodEnd < now and not already EXPIRED (missed expiry / period-end cancel)
+    //   b) ACTIVE but updatedAt > 7 days ago — catches refunded-mid-period rows where RC
+    //      may have stopped returning the entitlement before our currentPeriodEnd
     const candidates = await this.subscriptionRepo.find({
       where: [
-        { cancelAtPeriodEnd: true, currentPeriodEnd: LessThan(now) },
-        { status: SubscriptionStatus.ACTIVE, currentPeriodEnd: LessThan(now) },
+        { currentPeriodEnd: LessThan(now), status: In([SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED]) },
+        { status: SubscriptionStatus.ACTIVE, updatedAt: LessThan(sevenDaysAgo) },
       ],
+      order: { currentPeriodEnd: 'ASC', updatedAt: 'ASC' },
       take: BATCH_SIZE,
     });
 
