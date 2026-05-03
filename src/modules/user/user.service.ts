@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
+import { UserLanguage } from '../../database/entities/user-language.entity';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -13,6 +14,8 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(UserLanguage)
+    private readonly userLanguageRepo: Repository<UserLanguage>,
   ) {}
 
   /**
@@ -39,7 +42,8 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    return this.mapToProfileDto(user);
+    const activeLanguage = await this.getActiveLanguageCode(userId);
+    return this.mapToProfileDto(user, activeLanguage);
   }
 
   /**
@@ -57,15 +61,27 @@ export class UserService {
   }
 
   /**
+   * Resolve the active learning language code (last_learned = true)
+   */
+  private async getActiveLanguageCode(userId: string): Promise<string | undefined> {
+    const userLanguage = await this.userLanguageRepo.findOne({
+      where: { userId, lastLearned: true },
+      relations: ['language'],
+    });
+    return userLanguage?.language?.code;
+  }
+
+  /**
    * Map User entity to UserProfileDto
    */
-  private mapToProfileDto(user: User): UserProfileDto {
+  private mapToProfileDto(user: User, activeLanguage?: string): UserProfileDto {
     return {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       nativeLanguage: user.nativeLanguage,
+      activeLanguage,
       createdAt: user.createdAt,
     };
   }

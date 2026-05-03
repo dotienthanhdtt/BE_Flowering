@@ -19,6 +19,9 @@ export class UserProfileDto {
   @ApiPropertyOptional({ description: 'Native language code (e.g., "vi", "en")' })
   nativeLanguage?: string;
 
+  @ApiPropertyOptional({ description: 'Active learning language code (from user_languages where last_learned = true)' })
+  activeLanguage?: string;
+
   @ApiProperty({ description: 'Account creation date' })
   createdAt!: Date;
 }
