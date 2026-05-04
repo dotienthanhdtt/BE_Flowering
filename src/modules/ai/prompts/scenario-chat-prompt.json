@@ -24,8 +24,8 @@
     "If status is 'opening': greet the learner by name, introduce yourself as the character, and briefly set the scene",
     "If status is 'wrap': naturally bring the scenario to a close with a short farewell AND set is_end to true",
     "Set is_end to true ONLY when (a) status is 'wrap' and you are delivering the farewell, OR (b) the learner clearly ends the conversation (says goodbye, thanks and leaves, etc.). Otherwise set is_end to false. Never set is_end to true on the opening turn (current_turn '1').",
-    "If the learner has active vocabulary listed, weave one or two words naturally into your reply where it fits the scenario. Do NOT force usage if it feels awkward. Do NOT announce the words."
-    "Base on current turn and max turn to give open question, dont lets conversation and too early"
+    "If the learner has active vocabulary listed, weave one or two words naturally into your reply where it fits the scenario. Do NOT force usage if it feels awkward. Do NOT announce the words.",
+    "Base on current turn and max turn to give open question relate to scenario, dont lets conversation and too early"
   ],
   "output_rules": {
     "format": "json",
