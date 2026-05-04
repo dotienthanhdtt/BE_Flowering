@@ -208,10 +208,15 @@ Get current user profile.
     "native_language_id": "uuid",
     "native_language_code": "en",
     "native_language_name": "English",
-    "created_at": "2026-03-01T10:00:00.000Z"
+    "active_language": "es",
+    "created_at": "2026-03-01T10:00:00.000Z",
+    "onboarding_required": false,
+    "missing_fields": []
   }
 }
 ```
+
+`onboarding_required` is `true` when any of `native_language`, `user_languages` row, or onboarding chat profile extraction is missing. Mobile MUST gate the post-login route on this flag — do not reimplement the rule client-side. `missing_fields` lists which artifacts are absent: `nativeLanguage`, `userLanguage`, `onboardingProfile`.
 
 ---
 

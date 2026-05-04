@@ -4,12 +4,14 @@ import { UserController } from './user.controller';
 import { UserService } from './user.service';
 import { User } from '../../database/entities/user.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
+import { AiConversation } from '../../database/entities/ai-conversation.entity';
+import { Language } from '../../database/entities/language.entity';
 
 /**
  * User module for profile management (get, update)
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([User, UserLanguage])],
+  imports: [TypeOrmModule.forFeature([User, UserLanguage, AiConversation, Language])],
   controllers: [UserController],
   providers: [UserService],
   exports: [UserService],
