@@ -184,8 +184,13 @@ export class ScenarioChatService {
     conversation.messageCount += (userContent ? 1 : 0) + (trimmedReply ? 1 : 0);
     const turnAfter = Math.floor(conversation.messageCount / 2);
     const hardEnd = turnAfter >= maxTurns;
-    conversation.status = isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
-    conversation.metadata = { ...(conversation.metadata ?? {}), maxTurns };
+    const becomingDone = isEnd || hardEnd;
+    conversation.status = becomingDone ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
+    conversation.metadata = {
+      ...(conversation.metadata ?? {}),
+      maxTurns,
+      ...(becomingDone ? { completed: true } : {}),
+    };
     await this.convoRepo.save(conversation);
 
     // 12. Fire-and-forget vocab usage tracking
@@ -262,7 +267,11 @@ export class ScenarioChatService {
   ): Promise<{ conversation: AiConversation; created: boolean }> {
     const existing = await this.convoRepo
       .createQueryBuilder('c')
-      .where('c.userId = :userId AND c.scenarioId = :scenarioId', { userId, scenarioId })
+      .where('c.userId = :userId AND c.scenarioId = :scenarioId AND c.status != :done', {
+        userId,
+        scenarioId,
+        done: ScenarioChatStatus.DONE,
+      })
       .orderBy('c.createdAt', 'DESC')
       .getOne();
 
@@ -286,7 +295,11 @@ export class ScenarioChatService {
       if ((err as { code?: string }).code === '23505') {
         const race = await this.convoRepo
           .createQueryBuilder('c')
-          .where('c.userId = :userId AND c.scenarioId = :scenarioId', { userId, scenarioId })
+          .where('c.userId = :userId AND c.scenarioId = :scenarioId AND c.status != :done', {
+            userId,
+            scenarioId,
+            done: ScenarioChatStatus.DONE,
+          })
           .orderBy('c.createdAt', 'DESC')
           .getOne();
         if (race) return { conversation: race, created: false };
