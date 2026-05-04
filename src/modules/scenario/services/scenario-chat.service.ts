@@ -101,7 +101,7 @@ export class ScenarioChatService {
     const history = await this.loadHistory(conversation.id);
 
     // 6. Compute turn metadata
-    const maxTurns = (conversation.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS;
+    const maxTurns = conversation.maxTurns ?? MAX_TURNS;
     const currentTurn = Math.floor(history.length / 2) + 1;
     const status = history.length === 0 ? 'opening' : currentTurn >= maxTurns ? 'wrap' : 'mid';
 
@@ -184,13 +184,8 @@ export class ScenarioChatService {
     conversation.messageCount += (userContent ? 1 : 0) + (trimmedReply ? 1 : 0);
     const turnAfter = Math.floor(conversation.messageCount / 2);
     const hardEnd = turnAfter >= maxTurns;
-    const becomingDone = isEnd || hardEnd;
-    conversation.status = becomingDone ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
-    conversation.metadata = {
-      ...(conversation.metadata ?? {}),
-      maxTurns,
-      ...(becomingDone ? { completed: true } : {}),
-    };
+    conversation.status =
+      isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
     await this.convoRepo.save(conversation);
 
     // 12. Fire-and-forget vocab usage tracking
@@ -285,7 +280,7 @@ export class ScenarioChatService {
           languageId,
           type: AiConversationType.AUTHENTICATED,
           topic: 'scenario_roleplay',
-          metadata: { maxTurns: MAX_TURNS },
+          maxTurns: MAX_TURNS,
         }),
       );
       return { conversation: inserted, created: true };
@@ -341,7 +336,7 @@ export class ScenarioChatService {
         lastTurnAt: r.updatedAt.toISOString(),
         turnCount: Math.floor(r.messageCount / 2),
         status: r.status,
-        maxTurns: (r.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS,
+        maxTurns: r.maxTurns ?? MAX_TURNS,
       })),
     };
   }
@@ -361,7 +356,7 @@ export class ScenarioChatService {
       order: { createdAt: 'ASC' },
     });
 
-    const maxTurns = (c.metadata?.['maxTurns'] as number | undefined) ?? MAX_TURNS;
+    const maxTurns = c.maxTurns ?? MAX_TURNS;
 
     return {
       scenario: {

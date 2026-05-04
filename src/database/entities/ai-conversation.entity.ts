@@ -75,8 +75,11 @@ export class AiConversation {
   })
   status!: ScenarioChatStatus;
 
-  @Column({ type: 'jsonb', nullable: true })
-  metadata?: Record<string, unknown>;
+  @Column({ type: 'int', name: 'max_turns', default: 12 })
+  maxTurns!: number;
+
+  @Column({ type: 'varchar', length: 10, name: 'native_language', nullable: true })
+  nativeLanguage?: string | null;
 
   // Cached learner profile extracted by `POST /onboarding/complete` for idempotency.
   @Column({ type: 'jsonb', name: 'extracted_profile', nullable: true })

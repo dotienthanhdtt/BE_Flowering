@@ -385,10 +385,9 @@ export class AuthService {
       });
     }
 
-    // Bootstrap user.nativeLanguage from onboarding metadata (language code).
+    // Bootstrap user.nativeLanguage from onboarding column (language code).
     try {
-      const meta = conversation.metadata as Record<string, string> | null;
-      const nativeLanguageCode = meta?.nativeLanguage;
+      const nativeLanguageCode = conversation.nativeLanguage;
       if (nativeLanguageCode) {
         await this.userRepository.update(userId, { nativeLanguage: nativeLanguageCode });
       }

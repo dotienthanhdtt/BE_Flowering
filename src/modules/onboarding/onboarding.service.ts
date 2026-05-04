@@ -41,17 +41,24 @@ export class OnboardingService {
         })
       ).conversationId;
 
-    // Load conversation to get prompt vars from stored metadata
-    const conversation = await this.conversationRepo.findOne({ where: { id: conversationId } });
+    // Load conversation with language relation to derive prompt vars
+    const conversation = await this.conversationRepo.findOne({
+      where: { id: conversationId },
+      relations: ['language'],
+    });
     if (!conversation) {
       throw new BadRequestException('Session not found');
     }
-    const meta = conversation.metadata as Record<string, string>;
+    const targetLanguageCode = conversation.language?.code;
+    const nativeLanguage = conversation.nativeLanguage;
+    if (!targetLanguageCode || !nativeLanguage) {
+      throw new BadRequestException('Onboarding session is missing language data');
+    }
 
     const result = await this.engine.runTurn(
       conversationId,
       dto.message,
-      { nativeLanguage: meta.nativeLanguage, targetLanguage: meta.targetLanguage },
+      { nativeLanguage, targetLanguage: targetLanguageCode },
       onboardingEngineConfig,
     );
 
@@ -64,8 +71,9 @@ export class OnboardingService {
       AiConversationType.ANONYMOUS,
     );
 
-    const { targetLanguage } = conversation.metadata as Record<string, string>;
-    const language = await this.languageRepo.findOne({ where: { code: targetLanguage } });
+    const language = conversation.languageId
+      ? await this.languageRepo.findOne({ where: { id: conversation.languageId } })
+      : null;
 
     // Cache hit: return previously extracted profile + scenarios to keep UUIDs stable
     if (
@@ -132,10 +140,7 @@ export class OnboardingService {
       type: AiConversationType.ANONYMOUS,
       title: 'Onboarding Chat',
       languageId: language.id,
-      metadata: {
-        nativeLanguage: args.nativeLanguage,
-        targetLanguage: args.targetLanguage,
-      },
+      nativeLanguage: args.nativeLanguage,
     });
     const saved = await this.conversationRepo.save(conversation);
     return { conversationId: saved.id };

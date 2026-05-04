@@ -148,7 +148,7 @@ describe('ScenarioChatService', () => {
     topic: 'scenario_roleplay',
     messageCount: 0,
     status: ScenarioChatStatus.CHATTING,
-    metadata: { maxTurns: 12 },
+    maxTurns: 12,
     injectedVocabIds: null,
   };
 
@@ -311,7 +311,7 @@ describe('ScenarioChatService', () => {
         createdAt: now,
       }));
 
-      const newConvo = { ...mockConversationEntity, messageCount: 22, status: ScenarioChatStatus.CHATTING, metadata: { maxTurns: 12 } };
+      const newConvo = { ...mockConversationEntity, messageCount: 22, status: ScenarioChatStatus.CHATTING, maxTurns: 12 };
       convoRepo.save.mockResolvedValue(newConvo);
       // First call: loadHistory; second call: transcript re-query after save
       msgRepo.find
@@ -343,7 +343,7 @@ describe('ScenarioChatService', () => {
         { id: 'msg-1', role: MessageRole.ASSISTANT, content: 'Message 1', createdAt: now },
       ];
 
-      const newConvo = { ...mockConversationEntity, messageCount: 2, status: ScenarioChatStatus.CHATTING, metadata: { maxTurns: 12 } };
+      const newConvo = { ...mockConversationEntity, messageCount: 2, status: ScenarioChatStatus.CHATTING, maxTurns: 12 };
       convoRepo.save.mockResolvedValue(newConvo);
       // First call: loadHistory; second call: transcript re-query after save
       msgRepo.find
@@ -366,7 +366,7 @@ describe('ScenarioChatService', () => {
       scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
       convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
 
-      const newConvo = { ...mockConversationEntity, messageCount: 4, status: ScenarioChatStatus.CHATTING, metadata: { maxTurns: 12 } };
+      const newConvo = { ...mockConversationEntity, messageCount: 4, status: ScenarioChatStatus.CHATTING, maxTurns: 12 };
       convoRepo.save.mockResolvedValue(newConvo);
       msgRepo.find
         .mockResolvedValueOnce([
@@ -572,7 +572,7 @@ describe('ScenarioChatService', () => {
           updatedAt: now,
           messageCount: 24,
           status: ScenarioChatStatus.DONE,
-          metadata: { maxTurns: 12 },
+          maxTurns: 12,
         },
         {
           id: 'convo-b',
@@ -580,7 +580,7 @@ describe('ScenarioChatService', () => {
           updatedAt: earlier,
           messageCount: 6,
           status: ScenarioChatStatus.CHATTING,
-          metadata: { maxTurns: 12 },
+          maxTurns: 12,
         },
       ]);
 
@@ -609,7 +609,7 @@ describe('ScenarioChatService', () => {
       expect(result).toEqual({ items: [] });
     });
 
-    it('should default maxTurns when metadata missing', async () => {
+    it('should default maxTurns when column is missing', async () => {
       convoRepo.find.mockResolvedValue([
         {
           id: 'convo-a',
@@ -617,7 +617,7 @@ describe('ScenarioChatService', () => {
           updatedAt: new Date(),
           messageCount: 0,
           status: ScenarioChatStatus.CHATTING,
-          metadata: null,
+          maxTurns: null,
         },
       ]);
       const result = await service.listConversations(mockUserId, mockScenarioId);
@@ -635,7 +635,7 @@ describe('ScenarioChatService', () => {
         scenarioId: mockScenarioId,
         messageCount: 2,
         status: ScenarioChatStatus.CHATTING,
-        metadata: { maxTurns: 12 },
+        maxTurns: 12,
       });
       msgRepo.find.mockResolvedValue([
         { id: 'msg-1', role: MessageRole.USER, content: 'hello', createdAt: created },
@@ -665,7 +665,7 @@ describe('ScenarioChatService', () => {
         scenarioId: mockScenarioId,
         messageCount: 2,
         status: ScenarioChatStatus.CHATTING,
-        metadata: {},
+        maxTurns: 12,
       });
       msgRepo.find.mockResolvedValue([
         { id: 'sys-1', role: MessageRole.SYSTEM, content: 'sys', createdAt: new Date() },
@@ -690,7 +690,7 @@ describe('ScenarioChatService', () => {
         scenarioId: mockScenarioId,
         messageCount: 0,
         status: ScenarioChatStatus.CHATTING,
-        metadata: {},
+        maxTurns: 12,
       });
       await expect(service.getConversation(mockUserId, mockConversationId)).rejects.toThrow(
         ForbiddenException,

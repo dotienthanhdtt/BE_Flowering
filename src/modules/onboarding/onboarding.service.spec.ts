@@ -53,7 +53,9 @@ const makeConversation = (overrides: Partial<AiConversation> = {}): AiConversati
     id: 'conv-1',
     type: AiConversationType.ANONYMOUS,
     messageCount: 0,
-    metadata: { nativeLanguage: 'English', targetLanguage: 'Spanish' },
+    nativeLanguage: 'English',
+    languageId: 'lang-en',
+    language: { id: 'lang-en', code: 'en', name: 'English' },
     ...overrides,
   } as AiConversation);
 
@@ -109,7 +111,8 @@ describe('OnboardingService', () => {
           expect.objectContaining({
             type: AiConversationType.ANONYMOUS,
             title: 'Onboarding Chat',
-            metadata: { nativeLanguage: 'English', targetLanguage: 'Spanish' },
+            nativeLanguage: 'English',
+            languageId: 'lang-en',
           }),
         );
         expect(conversationRepo.save).toHaveBeenCalledTimes(1);
