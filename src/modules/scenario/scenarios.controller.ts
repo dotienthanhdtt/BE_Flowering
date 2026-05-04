@@ -18,8 +18,6 @@ import {
   AutoEnrollLanguage,
   SkipLanguageContext,
 } from '@common/decorators/active-language.decorator';
-import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
-import { RequireResourceAccess } from '@common/decorators/require-resource-access.decorator';
 import { ListScenariosQueryDto } from './dto/list-scenarios-query.dto';
 import { ScenarioDefaultDto } from './dto/scenario-default.dto';
 import { ScenarioPersonalDto } from './dto/scenario-personal.dto';
@@ -76,14 +74,11 @@ export class ScenariosController {
 
   @Get(':id')
   @AutoEnrollLanguage()
-  @UseGuards(ResourceAccessGuard)
-  @RequireResourceAccess({ resource: 'scenario', paramKey: 'id' })
   @ApiHeader(LANGUAGE_HEADER)
   @ApiOperation({ summary: 'Get scenario detail' })
   @ApiResponse({ status: 200, type: ScenarioDetailDto })
   @ApiResponse({ status: 400, description: 'Missing or invalid X-Learning-Language header' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Premium subscription required' })
   @ApiResponse({ status: 404, description: 'Scenario not found or language mismatch' })
   getById(
     @CurrentUser() user: { id: string },
