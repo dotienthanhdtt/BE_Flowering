@@ -70,6 +70,12 @@ import { AiController } from './ai.controller';
     TranscriptionService,
     IntakeChatEngine,
   ],
-  exports: [UnifiedLLMService, LearningAgentService, PromptLoaderService, IntakeChatEngine, LangfuseService],
+  exports: [
+    UnifiedLLMService,
+    LearningAgentService,
+    PromptLoaderService,
+    IntakeChatEngine,
+    LangfuseService,
+  ],
 })
 export class AiModule {}

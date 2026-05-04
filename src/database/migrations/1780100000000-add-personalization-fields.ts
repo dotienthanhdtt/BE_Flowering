@@ -14,9 +14,7 @@ export class AddPersonalizationFields1780100000000 implements MigrationInterface
     // Enum extensions must commit before they can be used. Each ALTER TYPE ADD VALUE
     // is its own statement; TypeORM wraps migrations in transactions but Postgres
     // allows reading new enum values after the statement commits within the txn.
-    await queryRunner.query(
-      `ALTER TYPE access_tier ADD VALUE IF NOT EXISTS 'premium_plus'`,
-    );
+    await queryRunner.query(`ALTER TYPE access_tier ADD VALUE IF NOT EXISTS 'premium_plus'`);
     await queryRunner.query(
       `ALTER TYPE ai_conversation_type_enum ADD VALUE IF NOT EXISTS 'personalize_intake'`,
     );
@@ -45,9 +43,7 @@ export class AddPersonalizationFields1780100000000 implements MigrationInterface
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS idx_scenarios_triggers_personalization`);
-    await queryRunner.query(
-      `ALTER TABLE scenarios DROP COLUMN IF EXISTS triggers_personalization`,
-    );
+    await queryRunner.query(`ALTER TABLE scenarios DROP COLUMN IF EXISTS triggers_personalization`);
     await queryRunner.query(`
       ALTER TABLE users
         DROP COLUMN IF EXISTS personalization_profile_snapshot,

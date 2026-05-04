@@ -34,7 +34,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const isResolvableCandidate = (id: unknown): id is string =>
   typeof id === 'string' && id.length > 0 && !id.startsWith('$RCAnonymousID:');
 
-
 /**
  * Service handling subscription operations and RevenueCat webhook processing.
  */
@@ -88,9 +87,7 @@ export class SubscriptionService {
     }
 
     if (SILENT_ACK_EVENTS.has(event.type)) {
-      this.logger.debug(
-        `event=${event.type} outcome=ack_silent id=${event.id}`,
-      );
+      this.logger.debug(`event=${event.type} outcome=ack_silent id=${event.id}`);
       // Still record it for idempotency — outside a transaction is fine since handler is a no-op.
       await this.recordIdempotency(event);
       return { outcome: 'processed' };
@@ -167,9 +164,7 @@ export class SubscriptionService {
     this.logUserDrift(event, existing, user.id);
 
     if (this.isStaleEvent(event, existing)) {
-      this.logger.warn(
-        `Stale event ${event.id} ts=${event.event_timestamp_ms} — skipping`,
-      );
+      this.logger.warn(`Stale event ${event.id} ts=${event.event_timestamp_ms} — skipping`);
       return [];
     }
 
@@ -382,7 +377,9 @@ export class SubscriptionService {
     existing: Subscription | null,
   ): Promise<void> {
     if (!existing) {
-      this.logger.warn(`REFUND event ${event.id}: no subscription found for user ${userId} — skipping`);
+      this.logger.warn(
+        `REFUND event ${event.id}: no subscription found for user ${userId} — skipping`,
+      );
       return;
     }
     const incomingTs = event.event_timestamp_ms ?? null;
@@ -549,7 +546,10 @@ export class SubscriptionService {
     const [firstId, secondId] = [fromId, toId].sort();
     const [firstRow, secondRow] = await Promise.all([
       subscriptionRepo.findOne({ where: { userId: firstId }, lock: { mode: 'pessimistic_write' } }),
-      subscriptionRepo.findOne({ where: { userId: secondId }, lock: { mode: 'pessimistic_write' } }),
+      subscriptionRepo.findOne({
+        where: { userId: secondId },
+        lock: { mode: 'pessimistic_write' },
+      }),
     ]);
     const subscription = firstId === fromId ? firstRow : secondRow;
     const existingDestination = firstId === toId ? firstRow : secondRow;
@@ -651,7 +651,11 @@ export class SubscriptionService {
       });
 
       // Out-of-order guard: skip if stored timestamp is same or newer
-      if (existing && existing.eventTimestampMs !== null && incomingTs <= existing.eventTimestampMs) {
+      if (
+        existing &&
+        existing.eventTimestampMs !== null &&
+        incomingTs <= existing.eventTimestampMs
+      ) {
         this.logger.warn(
           `applyRcGroundTruth: stale payload ts=${incomingTs} <= stored=${existing.eventTimestampMs} for user ${userId} (source=${source}) — skipping`,
         );

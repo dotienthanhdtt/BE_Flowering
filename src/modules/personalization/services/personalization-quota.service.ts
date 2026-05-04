@@ -72,8 +72,7 @@ export class PersonalizationQuotaService {
   private isCurrentUtcMonth(date: Date): boolean {
     const now = new Date();
     return (
-      date.getUTCFullYear() === now.getUTCFullYear() &&
-      date.getUTCMonth() === now.getUTCMonth()
+      date.getUTCFullYear() === now.getUTCFullYear() && date.getUTCMonth() === now.getUTCMonth()
     );
   }
 }

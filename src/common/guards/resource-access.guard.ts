@@ -43,9 +43,7 @@ export class ResourceAccessGuard implements CanActivate {
       (meta.bodyKey ? request.body?.[meta.bodyKey] : undefined);
 
     if (!resourceId || typeof resourceId !== 'string') {
-      throw new BadRequestException(
-        `Resource ID missing on request (resource=${meta.resource})`,
-      );
+      throw new BadRequestException(`Resource ID missing on request (resource=${meta.resource})`);
     }
 
     const tier = await this.tierCache.get(meta.resource, resourceId);

@@ -18,9 +18,7 @@ export class RenameRevenuecatIdAndAddAutoResume1780000000000 implements Migratio
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE subscriptions DROP COLUMN IF EXISTS auto_resume_at`,
-    );
+    await queryRunner.query(`ALTER TABLE subscriptions DROP COLUMN IF EXISTS auto_resume_at`);
     await queryRunner.query(`
       DO $$ BEGIN
         IF EXISTS (

@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  Query,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import {
@@ -50,9 +42,7 @@ export class PersonalizationController {
         return {
           scenarios: result.scenarios,
           generatedNew: result.generatedNew,
-          ...(result.quotaRemaining !== undefined
-            ? { quotaRemaining: result.quotaRemaining }
-            : {}),
+          ...(result.quotaRemaining !== undefined ? { quotaRemaining: result.quotaRemaining } : {}),
         };
       case 'paywall':
         return {

@@ -176,7 +176,10 @@ export class IntakeChatEngine {
     };
   }
 
-  async findConversation(conversationId: string, conversationType: string): Promise<AiConversation> {
+  async findConversation(
+    conversationId: string,
+    conversationType: string,
+  ): Promise<AiConversation> {
     const conversation = await this.conversationRepo.findOne({
       where: { id: conversationId, type: conversationType as never },
     });

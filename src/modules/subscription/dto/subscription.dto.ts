@@ -24,6 +24,8 @@ export class SubscriptionDto {
   @ApiProperty({ description: 'Whether subscription will cancel at period end' })
   cancelAtPeriodEnd!: boolean;
 
-  @ApiPropertyOptional({ description: 'ISO timestamp when a paused subscription will auto-resume, or null' })
+  @ApiPropertyOptional({
+    description: 'ISO timestamp when a paused subscription will auto-resume, or null',
+  })
   autoResumeAt?: Date | null;
 }

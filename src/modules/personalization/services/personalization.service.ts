@@ -118,7 +118,10 @@ export class PersonalizationService {
     if (!user) throw new NotFoundException('User not found');
 
     // Extract profile from conversation
-    const profile = await this.engine.extractProfile(dto.conversationId, personalizationEngineConfig);
+    const profile = await this.engine.extractProfile(
+      dto.conversationId,
+      personalizationEngineConfig,
+    );
 
     // De-dup check — if profile unchanged within 24h, return prior batch
     if (this.dedup.shouldSkipGeneration(user, profile)) {
@@ -199,10 +202,7 @@ export class PersonalizationService {
     return saved.id;
   }
 
-  private async assertConversationOwnership(
-    userId: string,
-    conversationId: string,
-  ): Promise<void> {
+  private async assertConversationOwnership(userId: string, conversationId: string): Promise<void> {
     const conversation = await this.conversationRepo.findOne({
       where: { id: conversationId, type: AiConversationType.PERSONALIZE_INTAKE },
     });
@@ -229,11 +229,7 @@ export class PersonalizationService {
     };
   }
 
-  private parseScenarios(
-    raw: string,
-    ownerId: string,
-    languageId: string,
-  ): Partial<Scenario>[] {
+  private parseScenarios(raw: string, ownerId: string, languageId: string): Partial<Scenario>[] {
     try {
       const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
       const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();

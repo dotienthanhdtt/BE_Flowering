@@ -70,7 +70,10 @@ export class SubscriptionReconciliationCron {
     //      may have stopped returning the entitlement before our currentPeriodEnd
     const candidates = await this.subscriptionRepo.find({
       where: [
-        { currentPeriodEnd: LessThan(now), status: In([SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED]) },
+        {
+          currentPeriodEnd: LessThan(now),
+          status: In([SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED]),
+        },
         { status: SubscriptionStatus.ACTIVE, updatedAt: LessThan(sevenDaysAgo) },
       ],
       order: { currentPeriodEnd: 'ASC', updatedAt: 'ASC' },
@@ -118,7 +121,8 @@ export class SubscriptionReconciliationCron {
     }
 
     const elapsedMs = Date.now() - startMs;
-    const finalOutcome = errorsCount > 0 ? 'error' : reconciledCount > 0 ? 'reconciled' : 'unchanged';
+    const finalOutcome =
+      errorsCount > 0 ? 'error' : reconciledCount > 0 ? 'reconciled' : 'unchanged';
     this.logger.log(
       `event=reconciliation outcome=${finalOutcome} candidates=${candidatesCount} reconciled=${reconciledCount} errors=${errorsCount} breaker=${this.rcBreaker.state} latency_ms=${elapsedMs}`,
     );

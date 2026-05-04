@@ -32,10 +32,7 @@ export class PersonalizationTriggerService {
   private async tryTrigger(userId: string, scenarioId: string): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       // Advisory lock prevents double-fire on concurrent completion events
-      await manager.query(
-        `SELECT pg_advisory_xact_lock(hashtext($1))`,
-        [`personalize:${userId}`],
-      );
+      await manager.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`personalize:${userId}`]);
 
       const scenario = await manager.findOne(Scenario, { where: { id: scenarioId } });
       if (!scenario?.triggersPersonalization) return;
