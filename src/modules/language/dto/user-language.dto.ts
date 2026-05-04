@@ -10,7 +10,7 @@ export class UserLanguageDto {
 
   @ApiProperty({
     description:
-      "Current proficiency level (framework-native). Valid values come from the language's framework levels.",
+      "Current proficiency level (framework-native). Defaults to the framework's lowest level when not provided on add.",
     examples: {
       CEFR: { value: 'A1', summary: 'CEFR beginner' },
       JLPT: { value: 'N5', summary: 'JLPT beginner' },

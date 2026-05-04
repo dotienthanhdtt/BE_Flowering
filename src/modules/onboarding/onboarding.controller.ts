@@ -11,6 +11,9 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public-route.decorator';
+import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '../../database/entities';
 import { OnboardingService } from './onboarding.service';
 import { OnboardingChatDto, OnboardingCompleteDto, OnboardingMessagesResponseDto } from './dto';
 import { OnboardingThrottlerGuard } from './onboarding-throttler.guard';
@@ -61,17 +64,17 @@ export class OnboardingController {
     return this.onboardingService.handleChat(dto);
   }
 
-  @Public()
+  @OptionalAuth()
   @Post('complete')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Extract structured onboarding profile from conversation (idempotent — cached after first success)',
+      'Extract structured onboarding profile from conversation (idempotent — cached after first success). If a Bearer token is provided, the anonymous conversation is linked to the authenticated user.',
   })
   @ApiResponse({ status: 200, description: 'Extracted user profile data' })
   @ApiResponse({ status: 404, description: 'Session not found' })
-  async complete(@Body() dto: OnboardingCompleteDto) {
-    return this.onboardingService.complete(dto);
+  async complete(@Body() dto: OnboardingCompleteDto, @CurrentUser() user: User | null) {
+    return this.onboardingService.complete(dto, user?.id ?? null);
   }
 
   @Public()

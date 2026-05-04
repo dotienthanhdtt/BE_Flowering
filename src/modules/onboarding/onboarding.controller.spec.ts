@@ -76,10 +76,21 @@ describe('OnboardingController', () => {
       const expected = { nativeLanguage: 'English', level: 'beginner' };
       service.complete.mockResolvedValue(expected);
 
-      const result = await controller.complete(dto as any);
+      const result = await controller.complete(dto as any, null);
 
-      expect(service.complete).toHaveBeenCalledWith(dto);
+      expect(service.complete).toHaveBeenCalledWith(dto, null);
       expect(result).toBe(expected);
+    });
+
+    it('passes authenticated userId to service', async () => {
+      const dto = { conversationId: VALID_UUID };
+      const expected = { nativeLanguage: 'English', level: 'beginner' };
+      service.complete.mockResolvedValue(expected);
+
+      const user = { id: 'user-123' } as any;
+      await controller.complete(dto as any, user);
+
+      expect(service.complete).toHaveBeenCalledWith(dto, 'user-123');
     });
   });
 

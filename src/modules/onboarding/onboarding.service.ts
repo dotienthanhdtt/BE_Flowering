@@ -65,11 +65,17 @@ export class OnboardingService {
     return { conversationId, ...result };
   }
 
-  async complete(dto: OnboardingCompleteDto) {
+  async complete(dto: OnboardingCompleteDto, userId: string | null = null) {
     const conversation = await this.engine.findConversation(
       dto.conversationId,
       AiConversationType.ANONYMOUS,
     );
+
+    if (userId && !conversation.userId) {
+      await this.conversationRepo.update(dto.conversationId, { userId });
+      conversation.userId = userId;
+      this.logger.log(`Linked onboarding conversation ${dto.conversationId} to user ${userId}`);
+    }
 
     const language = conversation.languageId
       ? await this.languageRepo.findOne({ where: { id: conversation.languageId } })
