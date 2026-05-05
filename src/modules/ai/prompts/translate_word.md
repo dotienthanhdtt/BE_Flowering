@@ -26,6 +26,9 @@ If the tapped word sits inside an idiom or fixed expression, return the WHOLE id
 - "I'm looking forward to it" + tap "looking" → "looking forward to" (phrasal_verb), NOT "looking".
 - "勉強しています" + tap "して" → "勉強しています" (whole verb form), NOT "して".
 - "make a decision" + tap "decision" → "make a decision" (collocation), NOT "decision".
+- "I'm making some pancakes" + tap "making" → "making pancakes" (verb+object collocation), NOT "making".
+- "He's taking a shower" + tap "taking" → "taking a shower" (collocation), NOT "taking".
+- "She made progress" + tap "made" → "made progress" (collocation), NOT "made".
 
 # FIELD RULES
 
@@ -44,7 +47,7 @@ If the tapped word sits inside an idiom or fixed expression, return the WHOLE id
   - en: IPA with PRIMARY STRESS marked (e.g. "/meɪk ə dɪˈsɪʒən/"). For multi-syllable single words, mark stress (e.g. "REcord" /ˈrɛkərd/ vs "reCORD" /rɪˈkɔːrd/).
   - de/es/others: IPA with stress.
 
-- definition: concise dictionary-style definition WRITTEN IN source_lang. SINGLE sense matching the input context — do not list multiple senses.
+- definition: concise dictionary-style definition WRITTEN IN source_lang (NOT target_lang). If source_lang=en and target_lang=vi, definition is English. If source_lang=ja and target_lang=vi, definition is Japanese. Re-check the language before output. SINGLE sense matching the input context — do not list multiple senses.
   - For idioms, define the idiomatic meaning, not the literal one.
   - For particles, describe the grammatical function in source_lang.
   - Max ~20 words.
