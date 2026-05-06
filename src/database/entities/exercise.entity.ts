@@ -8,6 +8,8 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Lesson } from './lesson.entity';
+import { Language } from './language.entity';
+import { ContentStatus } from './content-status.enum';
 
 export enum ExerciseType {
   MULTIPLE_CHOICE = 'multiple_choice',
@@ -30,6 +32,13 @@ export class Exercise {
   @Column({ type: 'uuid', name: 'lesson_id' })
   lessonId!: string;
 
+  @ManyToOne(() => Language)
+  @JoinColumn({ name: 'language_id' })
+  language!: Language;
+
+  @Column({ type: 'uuid', name: 'language_id' })
+  languageId!: string;
+
   @Column({ type: 'enum', enum: ExerciseType })
   type!: ExerciseType;
 
@@ -50,6 +59,9 @@ export class Exercise {
 
   @Column({ type: 'int', default: 10 })
   points!: number;
+
+  @Column({ type: 'enum', enum: ContentStatus, default: ContentStatus.PUBLISHED })
+  status!: ContentStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

@@ -46,6 +46,21 @@ export class Vocabulary {
   @Column({ type: 'jsonb', nullable: true })
   examples?: string[];
 
+  @Column({ type: 'smallint', default: 1 })
+  box!: number;
+
+  @Column({ name: 'due_at', type: 'timestamptz', default: () => 'NOW()' })
+  dueAt!: Date;
+
+  @Column({ name: 'last_reviewed_at', type: 'timestamptz', nullable: true })
+  lastReviewedAt?: Date | null;
+
+  @Column({ name: 'review_count', type: 'int', default: 0 })
+  reviewCount!: number;
+
+  @Column({ name: 'correct_count', type: 'int', default: 0 })
+  correctCount!: number;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }

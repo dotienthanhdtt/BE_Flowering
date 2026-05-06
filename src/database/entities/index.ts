@@ -1,5 +1,7 @@
+export * from './access-tier.enum';
 export * from './language.entity';
 export * from './user.entity';
+export * from './user-role.enum';
 export * from './user-language.entity';
 export * from './lesson.entity';
 export * from './exercise.entity';
@@ -12,3 +14,9 @@ export * from './device-token.entity';
 export * from './password-reset.entity';
 export * from './vocabulary.entity';
 export * from './webhook-event.entity';
+export * from './scenario-type.enum';
+export * from './scenario.entity';
+export * from './user-scenario-access.entity';
+export * from './kol-bundle.entity';
+export * from './kol-bundle-scenario.entity';
+export * from './vocabulary-injection-event.entity';

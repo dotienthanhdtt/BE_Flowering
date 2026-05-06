@@ -4,6 +4,7 @@ export interface LanguageSeedData {
   nativeName: string;
 }
 
+// Note: framework metadata now lives in `framework_levels` rows, not on the language.
 export const languageSeedData: LanguageSeedData[] = [
   { code: 'en', name: 'English', nativeName: 'English' },
   { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
@@ -20,15 +21,15 @@ export const languageSeedData: LanguageSeedData[] = [
 export const seedLanguagesQuery = `
   INSERT INTO "languages" ("code", "name", "native_name", "is_active")
   VALUES
-    ('en', 'English', 'English', true),
+    ('en', 'English',    'English',    true),
     ('vi', 'Vietnamese', 'Tiếng Việt', true),
-    ('ja', 'Japanese', '日本語', true),
-    ('ko', 'Korean', '한국어', true),
-    ('zh', 'Chinese', '中文', true),
-    ('es', 'Spanish', 'Español', true),
-    ('fr', 'French', 'Français', true),
-    ('de', 'German', 'Deutsch', true),
+    ('ja', 'Japanese',   '日本語',      true),
+    ('ko', 'Korean',     '한국어',      true),
+    ('zh', 'Chinese',    '中文',       true),
+    ('es', 'Spanish',    'Español',   true),
+    ('fr', 'French',     'Français',  true),
+    ('de', 'German',     'Deutsch',   true),
     ('pt', 'Portuguese', 'Português', true),
-    ('th', 'Thai', 'ไทย', true)
+    ('th', 'Thai',       'ไทย',        true)
   ON CONFLICT ("code") DO NOTHING;
 `;

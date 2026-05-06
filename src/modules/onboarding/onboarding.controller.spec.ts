@@ -4,11 +4,14 @@ jest.mock('./onboarding.service', () => ({ OnboardingService: class {} }));
 import { Test, TestingModule } from '@nestjs/testing';
 import { OnboardingController } from './onboarding.controller';
 import { OnboardingService } from './onboarding.service';
+import { OnboardingThrottlerGuard } from './onboarding-throttler.guard';
+
+const VALID_UUID = '7e982513-fff0-4d07-b008-36dd8047c326';
 
 const mockOnboardingService = () => ({
-  startSession: jest.fn(),
-  chat: jest.fn(),
+  handleChat: jest.fn(),
   complete: jest.fn(),
+  getMessages: jest.fn(),
 });
 
 describe('OnboardingController', () => {
@@ -19,7 +22,10 @@ describe('OnboardingController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OnboardingController],
       providers: [{ provide: OnboardingService, useFactory: mockOnboardingService }],
-    }).compile();
+    })
+      .overrideGuard(OnboardingThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get(OnboardingController);
     service = module.get(OnboardingService);
@@ -27,42 +33,82 @@ describe('OnboardingController', () => {
 
   afterEach(() => jest.clearAllMocks());
 
-  describe('start', () => {
-    it('delegates to service.startSession with DTO', async () => {
-      const dto = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
-      const expected = { sessionToken: 'tok', conversationId: 'c1' };
-      service.startSession.mockResolvedValue(expected);
-
-      const result = await controller.start(dto as any);
-
-      expect(service.startSession).toHaveBeenCalledWith(dto);
-      expect(result).toBe(expected);
-    });
-  });
-
   describe('chat', () => {
-    it('delegates to service.chat with DTO', async () => {
-      const dto = { sessionToken: 'tok', message: 'Hello' };
-      const expected = { reply: 'Hi!', turnNumber: 1, isLastTurn: false };
-      service.chat.mockResolvedValue(expected);
+    it('delegates to service.handleChat when creating a new session (no conversationId)', async () => {
+      const dto = { nativeLanguage: 'vi', targetLanguage: 'en' };
+      const expected = {
+        conversationId: VALID_UUID,
+        reply: 'Hello! Welcome.',
+        messageId: 'msg-1',
+        turnNumber: 1,
+        isLastTurn: false,
+      };
+      service.handleChat.mockResolvedValue(expected);
 
       const result = await controller.chat(dto as any);
 
-      expect(service.chat).toHaveBeenCalledWith(dto);
+      expect(service.handleChat).toHaveBeenCalledWith(dto);
+      expect(service.handleChat).toHaveBeenCalledTimes(1);
+      expect(result).toBe(expected);
+    });
+
+    it('delegates to service.handleChat when continuing a session (with conversationId)', async () => {
+      const dto = { conversationId: VALID_UUID, message: 'Hello' };
+      const expected = {
+        conversationId: VALID_UUID,
+        reply: 'Hi!',
+        messageId: 'msg-2',
+        turnNumber: 2,
+        isLastTurn: false,
+      };
+      service.handleChat.mockResolvedValue(expected);
+
+      const result = await controller.chat(dto as any);
+
+      expect(service.handleChat).toHaveBeenCalledWith(dto);
       expect(result).toBe(expected);
     });
   });
 
   describe('complete', () => {
     it('delegates to service.complete with DTO', async () => {
-      const dto = { sessionToken: 'tok' };
+      const dto = { conversationId: VALID_UUID };
       const expected = { nativeLanguage: 'English', level: 'beginner' };
       service.complete.mockResolvedValue(expected);
 
-      const result = await controller.complete(dto as any);
+      const result = await controller.complete(dto as any, null);
 
-      expect(service.complete).toHaveBeenCalledWith(dto);
+      expect(service.complete).toHaveBeenCalledWith(dto, null);
       expect(result).toBe(expected);
+    });
+
+    it('passes authenticated userId to service', async () => {
+      const dto = { conversationId: VALID_UUID };
+      const expected = { nativeLanguage: 'English', level: 'beginner' };
+      service.complete.mockResolvedValue(expected);
+
+      const user = { id: 'user-123' } as any;
+      await controller.complete(dto as any, user);
+
+      expect(service.complete).toHaveBeenCalledWith(dto, 'user-123');
+    });
+  });
+
+  describe('getMessages', () => {
+    it('delegates to service.getMessages with path param', async () => {
+      const expected = {
+        conversationId: VALID_UUID,
+        turnNumber: 1,
+        maxTurns: 5,
+        isLastTurn: false,
+        messages: [],
+      };
+      service.getMessages.mockResolvedValue(expected);
+
+      const result = await controller.getMessages(VALID_UUID);
+
+      expect(service.getMessages).toHaveBeenCalledWith(VALID_UUID);
+      expect(result).toEqual(expected);
     });
   });
 });

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, MaxLength } from 'class-validator';
+import { IsOptional, IsString, IsNotEmpty, IsUUID, MaxLength } from 'class-validator';
 
 /**
  * Request DTO for chat correction check endpoint.
@@ -22,6 +22,11 @@ export class CorrectionCheckRequestDto {
   @IsNotEmpty()
   @MaxLength(10)
   targetLanguage!: string;
+
+  @ApiPropertyOptional({ description: 'Conversation ID to group trace with chat session' })
+  @IsOptional()
+  @IsUUID()
+  conversationId?: string;
 }
 
 /**

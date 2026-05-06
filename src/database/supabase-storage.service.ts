@@ -22,7 +22,7 @@ export class SupabaseStorageService {
     file: Buffer,
     userId: string,
     fileName: string,
-  ): Promise<{ path: string; publicUrl: string }> {
+  ): Promise<{ path: string; signedUrl: string }> {
     const filePath = `${userId}/audio/${Date.now()}-${fileName}`;
 
     const { data, error } = await this.supabase.storage
@@ -36,11 +36,11 @@ export class SupabaseStorageService {
       throw new Error(`Failed to upload audio: ${error.message}`);
     }
 
-    const {
-      data: { publicUrl },
-    } = this.supabase.storage.from(this.bucketName).getPublicUrl(data.path);
+    // NOTE: Supabase bucket `audio-files` must be set to PRIVATE in dashboard
+    // (RLS deny public reads). Code now generates signed URLs with 1h expiry.
+    const signedUrl = await this.getSignedUrl(data.path, 3600);
 
-    return { path: data.path, publicUrl };
+    return { path: data.path, signedUrl };
   }
 
   async getSignedUrl(filePath: string, expiresIn = 3600): Promise<string> {

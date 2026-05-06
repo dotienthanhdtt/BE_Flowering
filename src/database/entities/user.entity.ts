@@ -4,10 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { Language } from './language.entity';
 
 @Entity('users')
 export class User {
@@ -33,18 +30,38 @@ export class User {
   @Column({ type: 'varchar', length: 255, name: 'apple_provider_id', nullable: true })
   appleProviderId?: string;
 
+  @Column({ type: 'varchar', length: 128, name: 'firebase_uid', nullable: true, unique: true })
+  firebaseUid?: string;
+
+  @Column({ type: 'boolean', name: 'email_verified', default: false })
+  emailVerified!: boolean;
+
+  @Column('text', { array: true, default: () => "ARRAY['user']::text[]" })
+  roles!: string[];
+
   @Column({ type: 'varchar', length: 100, name: 'display_name', nullable: true })
   displayName?: string;
 
   @Column({ type: 'text', name: 'avatar_url', nullable: true })
   avatarUrl?: string;
 
-  @ManyToOne(() => Language, { nullable: true })
-  @JoinColumn({ name: 'native_language_id' })
-  nativeLanguage?: Language;
+  @Column({ type: 'varchar', length: 20, name: 'phone_number', nullable: true })
+  phoneNumber?: string;
 
-  @Column({ type: 'uuid', name: 'native_language_id', nullable: true })
-  nativeLanguageId?: string;
+  @Column({ type: 'varchar', length: 10, name: 'native_language', nullable: true })
+  nativeLanguage?: string;
+
+  /** UTC timestamp of when Premium user consumed their monthly personalization trial. */
+  @Column({ type: 'timestamptz', name: 'personalized_trial_used_at', nullable: true })
+  personalizedTrialUsedAt?: Date | null;
+
+  /** UTC timestamp of last successful personalization generation. Used for 24h de-dup gate. */
+  @Column({ type: 'timestamptz', name: 'last_personalization_at', nullable: true })
+  lastPersonalizationAt?: Date | null;
+
+  /** JSONB snapshot of the profile extracted during last generation (top-level key diff). */
+  @Column({ type: 'jsonb', name: 'personalization_profile_snapshot', nullable: true })
+  personalizationProfileSnapshot?: Record<string, unknown> | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

@@ -1,21 +1,26 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
-import { ProficiencyLevel } from '../../../database/entities/user-language.entity';
+import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
 
-/**
- * DTO for updating user's language proficiency or active status
- */
 export class UpdateUserLanguageDto {
   @ApiPropertyOptional({
-    description: 'Updated proficiency level',
-    enum: ProficiencyLevel,
+    description:
+      "Updated proficiency level. Valid values come from the language's framework_levels rows.",
+    examples: {
+      CEFR: { value: 'B1', summary: 'CEFR intermediate' },
+      JLPT: { value: 'N3', summary: 'JLPT intermediate' },
+      HSK: { value: 'HSK3', summary: 'HSK intermediate' },
+      TOPIK: { value: 'TOPIK3', summary: 'TOPIK intermediate' },
+    },
   })
   @IsOptional()
-  @IsEnum(ProficiencyLevel)
-  proficiencyLevel?: ProficiencyLevel;
+  @IsString()
+  @Length(1, 16)
+  proficiencyLevel?: string;
 
-  @ApiPropertyOptional({ description: 'Whether actively learning' })
+  @ApiPropertyOptional({
+    description: "Mark this as the user's most recently learned language",
+  })
   @IsOptional()
   @IsBoolean()
-  isActive?: boolean;
+  lastLearned?: boolean;
 }

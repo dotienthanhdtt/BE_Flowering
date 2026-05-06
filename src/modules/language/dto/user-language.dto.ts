@@ -1,10 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { ProficiencyLevel } from '../../../database/entities/user-language.entity';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LanguageDto } from './language.dto';
 
-/**
- * DTO for user's learning language with proficiency info
- */
 export class UserLanguageDto {
   @ApiProperty({ description: 'User language record ID' })
   id!: string;
@@ -12,15 +8,35 @@ export class UserLanguageDto {
   @ApiProperty({ description: 'Language ID' })
   languageId!: string;
 
-  @ApiProperty({ description: 'Proficiency level', enum: ProficiencyLevel })
-  proficiencyLevel!: ProficiencyLevel;
+  @ApiProperty({
+    description:
+      "Current proficiency level (framework-native). Defaults to the framework's lowest level when not provided on add.",
+    examples: {
+      CEFR: { value: 'A1', summary: 'CEFR beginner' },
+      JLPT: { value: 'N5', summary: 'JLPT beginner' },
+      HSK: { value: 'HSK1', summary: 'HSK beginner' },
+      TOPIK: { value: 'TOPIK1', summary: 'TOPIK beginner' },
+    },
+  })
+  proficiencyLevel!: string;
 
-  @ApiProperty({ description: 'Whether actively learning', default: true })
-  isActive!: boolean;
+  @ApiPropertyOptional({
+    description: "Human-readable description of the user's current proficiency level",
+  })
+  description?: string;
+
+  @ApiProperty({
+    description: 'True if this is the most recently learned language for the user',
+    default: true,
+  })
+  lastLearned!: boolean;
 
   @ApiProperty({ description: 'Date added to learning list' })
   createdAt!: Date;
 
-  @ApiProperty({ description: 'Language details', type: LanguageDto })
+  @ApiProperty({
+    description: 'Language details including code, names, flag and available levels',
+    type: LanguageDto,
+  })
   language!: LanguageDto;
 }

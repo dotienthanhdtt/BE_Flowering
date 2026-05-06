@@ -1,12 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
 import { UnifiedLLMService } from './unified-llm.service';
 import { PromptLoaderService } from './prompt-loader.service';
-import { LLMModel } from '../providers/llm-models.enum';
+import { LLMModel, ThinkingLevel } from '../providers/llm-models.enum';
 import { AiConversation, AiConversationMessage, MessageRole } from '../../../database/entities';
 import { ConversationContext } from '../dto';
+import { LangfuseFeature } from '../langfuse-feature.enum';
 
 /**
  * Main AI learning agent service providing tutoring features:
@@ -15,7 +21,7 @@ import { ConversationContext } from '../dto';
  */
 @Injectable()
 export class LearningAgentService {
-  private readonly defaultModel = LLMModel.GEMINI_2_0_FLASH;
+  private readonly defaultModel = LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW;
 
   constructor(
     private llmService: UnifiedLLMService,
@@ -35,7 +41,12 @@ export class LearningAgentService {
     context: ConversationContext,
     model?: LLMModel,
   ): Promise<{ message: string; conversationId: string }> {
-    const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt', {
+    if (!context.conversationId) {
+      throw new BadRequestException('conversationId required');
+    }
+    await this.validateConversationOwnership(context.conversationId, userId);
+
+    const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt.md', {
       targetLanguage: context.targetLanguage,
       nativeLanguage: context.nativeLanguage,
       proficiencyLevel: context.proficiencyLevel,
@@ -53,7 +64,7 @@ export class LearningAgentService {
       model: model || this.defaultModel,
       metadata: {
         userId,
-        feature: 'chat',
+        feature: LangfuseFeature.CHAT,
         conversationId: context.conversationId,
       },
     });
@@ -77,7 +88,12 @@ export class LearningAgentService {
     context: ConversationContext,
     model?: LLMModel,
   ): AsyncIterable<string> {
-    const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt', {
+    if (!context.conversationId) {
+      throw new BadRequestException('conversationId required');
+    }
+    await this.validateConversationOwnership(context.conversationId, userId);
+
+    const systemPrompt = this.promptLoader.loadPrompt('tutor-system-prompt.md', {
       targetLanguage: context.targetLanguage,
       nativeLanguage: context.nativeLanguage,
       proficiencyLevel: context.proficiencyLevel,
@@ -96,7 +112,7 @@ export class LearningAgentService {
       model: model || this.defaultModel,
       metadata: {
         userId,
-        feature: 'chat-stream',
+        feature: LangfuseFeature.CHAT_STREAM,
         conversationId: context.conversationId,
       },
     })) {
@@ -118,18 +134,20 @@ export class LearningAgentService {
     previousAiMessage: string,
     userMessage: string,
     targetLanguage: string,
+    conversationId?: string,
   ): Promise<{ correctedText: string | null }> {
-    const prompt = this.promptLoader.loadPrompt('correction-check-prompt', {
+    const prompt = this.promptLoader.loadPrompt('correction-check-prompt.json', {
       previousAiMessage,
       userMessage,
       targetLanguage,
     });
 
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: LLMModel.OPENAI_GPT4O,
+      model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
       temperature: 0.0,
-      maxTokens:200,
-      metadata: { feature: 'correction-check' },
+      maxTokens: 10000,
+      thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+      metadata: { feature: LangfuseFeature.CORRECTION_CHECK, conversationId },
     });
 
     const trimmed = response.trim().replace(/^["']|["']$/g, '');
@@ -152,6 +170,25 @@ export class LearningAgentService {
     );
   }
 
+  /**
+   * Verify the conversation belongs to the requesting user.
+   * Allows access to unowned conversations (anonymous onboarding).
+   */
+  private async validateConversationOwnership(
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
+    const conversation = await this.conversationRepo.findOne({
+      where: { id: conversationId },
+    });
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+    if (conversation.userId && conversation.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+  }
+
   private async saveMessage(
     conversationId: string,
     role: MessageRole,
@@ -163,5 +200,4 @@ export class LearningAgentService {
       content,
     });
   }
-
 }

@@ -2,17 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ConflictException, UnauthorizedException, BadRequestException, NotFoundException, HttpException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException, BadRequestException, HttpException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
-import { RegisterDto, LoginDto } from './dto';
-import { AppleStrategy, AppleUser } from './strategies/apple.strategy';
-import { GoogleIdTokenStrategy, GoogleUser } from './strategies/google-id-token-validator.strategy';
+import { UserLanguage } from '../../database/entities/user-language.entity';
+import { RegisterDto, LoginDto, FirebaseAuthDto } from './dto';
+import { FirebaseTokenStrategy, FirebaseAuthUser } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
+import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
 
 jest.mock('bcrypt');
 
@@ -20,24 +21,28 @@ describe('AuthService', () => {
   let service: AuthService;
   let userRepository: jest.Mocked<Repository<User>>;
   let refreshTokenRepository: jest.Mocked<Repository<RefreshToken>>;
-  let conversationRepository: jest.Mocked<{ update: jest.Mock }>;
+  let conversationRepository: jest.Mocked<{ update: jest.Mock; findOne: jest.Mock }>;
+  let userLanguageRepository: jest.Mocked<{ findOne: jest.Mock; update: jest.Mock; create: jest.Mock; save: jest.Mock; find: jest.Mock }>;
   let jwtService: jest.Mocked<JwtService>;
-  let appleStrategy: jest.Mocked<AppleStrategy>;
-  let googleIdTokenStrategy: jest.Mocked<GoogleIdTokenStrategy>;
+  let firebaseTokenStrategy: jest.Mocked<FirebaseTokenStrategy>;
   let passwordResetRepository: jest.Mocked<{ count: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock }>;
   let emailService: jest.Mocked<{ sendOtp: jest.Mock }>;
 
   const mockUser: User = {
     id: 'user-123',
     email: 'test@example.com',
+    emailVerified: false,
     passwordHash: 'hashed-password',
     displayName: 'Test User',
     avatarUrl: undefined,
+    phoneNumber: undefined,
     authProvider: 'email',
     providerId: undefined,
     googleProviderId: undefined,
     appleProviderId: undefined,
-    nativeLanguageId: undefined,
+    firebaseUid: undefined,
+    nativeLanguage: undefined,
+    roles: ['user'],
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -53,13 +58,7 @@ describe('AuthService', () => {
           },
         },
         {
-          provide: AppleStrategy,
-          useValue: {
-            validate: jest.fn(),
-          },
-        },
-        {
-          provide: GoogleIdTokenStrategy,
+          provide: FirebaseTokenStrategy,
           useValue: {
             validate: jest.fn(),
           },
@@ -86,7 +85,27 @@ describe('AuthService', () => {
           provide: getRepositoryToken(AiConversation),
           useValue: {
             update: jest.fn(),
+            findOne: jest.fn(),
           },
+        },
+        {
+          provide: getRepositoryToken(UserLanguage),
+          useValue: (() => {
+            const repo: any = {
+              findOne: jest.fn(),
+              update: jest.fn(),
+              create: jest.fn().mockImplementation((dto) => dto),
+              save: jest.fn(),
+              find: jest.fn().mockResolvedValue([]),
+            };
+            repo.manager = {
+              // Invoke callback with a mock EntityManager whose getRepository returns repo itself
+              transaction: jest.fn((cb: (mgr: { getRepository: () => typeof repo }) => Promise<unknown>) =>
+                cb({ getRepository: () => repo }),
+              ),
+            };
+            return repo;
+          })(),
         },
         {
           provide: getRepositoryToken(PasswordReset),
@@ -103,6 +122,13 @@ describe('AuthService', () => {
             sendOtp: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: FrameworkLevelsService,
+          useValue: {
+            getLevels: jest.fn().mockReturnValue([]),
+            getDescription: jest.fn().mockReturnValue(''),
+          },
+        },
       ],
     }).compile();
 
@@ -111,10 +137,10 @@ describe('AuthService', () => {
     refreshTokenRepository = module.get(getRepositoryToken(RefreshToken));
     conversationRepository = module.get(getRepositoryToken(AiConversation));
     jwtService = module.get(JwtService);
-    appleStrategy = module.get(AppleStrategy);
-    googleIdTokenStrategy = module.get(GoogleIdTokenStrategy);
+    firebaseTokenStrategy = module.get(FirebaseTokenStrategy);
     passwordResetRepository = module.get(getRepositoryToken(PasswordReset));
     emailService = module.get(EmailService);
+    userLanguageRepository = module.get(getRepositoryToken(UserLanguage));
   });
 
   afterEach(() => {
@@ -224,16 +250,27 @@ describe('AuthService', () => {
     });
   });
 
-  describe('googleLogin', () => {
-    const googleUser: GoogleUser = {
+  describe('firebaseLogin', () => {
+    const googleFirebaseUser: FirebaseAuthUser = {
+      firebaseUid: 'firebase-uid-google-123',
       providerId: 'google-sub-123',
       email: 'google@example.com',
+      emailVerified: true,
+      provider: 'google',
       displayName: 'Google User',
       avatarUrl: 'https://avatar.url',
     };
 
-    it('should create new user on first-time Google login', async () => {
-      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+    const appleFirebaseUser: FirebaseAuthUser = {
+      firebaseUid: 'firebase-uid-apple-456',
+      providerId: 'apple-123',
+      email: 'apple@example.com',
+      emailVerified: true,
+      provider: 'apple',
+    };
+
+    it('should create new user on first-time Google Firebase login', async () => {
+      firebaseTokenStrategy.validate.mockResolvedValue(googleFirebaseUser);
       userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       userRepository.create.mockReturnValue(mockUser);
       userRepository.save.mockResolvedValue(mockUser);
@@ -241,11 +278,11 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.googleLogin('google-id-token', 'Google User');
+      const result = await service.firebaseLogin({ idToken: 'firebase-id-token', displayName: 'Google User' } as FirebaseAuthDto);
 
-      expect(googleIdTokenStrategy.validate).toHaveBeenCalledWith('google-id-token');
+      expect(firebaseTokenStrategy.validate).toHaveBeenCalledWith('firebase-id-token');
       expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { googleProviderId: googleUser.providerId },
+        where: { googleProviderId: googleFirebaseUser.providerId },
       });
       expect(userRepository.create).toHaveBeenCalled();
       expect(result).toHaveProperty('accessToken');
@@ -253,13 +290,13 @@ describe('AuthService', () => {
 
     it('should login existing Google user by provider ID', async () => {
       const existingGoogleUser = { ...mockUser, googleProviderId: 'google-sub-123' };
-      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+      firebaseTokenStrategy.validate.mockResolvedValue(googleFirebaseUser);
       userRepository.findOne.mockResolvedValue(existingGoogleUser);
       jwtService.sign.mockReturnValue('access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.googleLogin('google-id-token');
+      const result = await service.firebaseLogin({ idToken: 'firebase-id-token' } as FirebaseAuthDto);
 
       expect(userRepository.create).not.toHaveBeenCalled();
       expect(result.user.email).toBe(existingGoogleUser.email);
@@ -267,8 +304,7 @@ describe('AuthService', () => {
 
     it('should auto-link Google account to existing email user', async () => {
       const existingEmailUser = { ...mockUser, authProvider: 'email' };
-      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
-      // Not found by provider ID, found by email
+      firebaseTokenStrategy.validate.mockResolvedValue(googleFirebaseUser);
       userRepository.findOne
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(existingEmailUser);
@@ -277,101 +313,71 @@ describe('AuthService', () => {
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
 
-      const result = await service.googleLogin('google-id-token');
+      const result = await service.firebaseLogin({ idToken: 'firebase-id-token' } as FirebaseAuthDto);
 
       expect(userRepository.update).toHaveBeenCalledWith(
         { id: existingEmailUser.id },
-        { googleProviderId: googleUser.providerId },
+        expect.objectContaining({ googleProviderId: googleFirebaseUser.providerId, firebaseUid: googleFirebaseUser.firebaseUid }),
       );
       expect(userRepository.create).not.toHaveBeenCalled();
       expect(result).toHaveProperty('accessToken');
     });
 
-    it('should pass sessionToken to onboarding linking', async () => {
-      googleIdTokenStrategy.validate.mockResolvedValue(googleUser);
+    it('should create new user for first-time Apple Firebase login', async () => {
+      firebaseTokenStrategy.validate.mockResolvedValue(appleFirebaseUser);
       userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       userRepository.create.mockReturnValue(mockUser);
       userRepository.save.mockResolvedValue(mockUser);
       jwtService.sign.mockReturnValue('access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+
+      const result = await service.firebaseLogin({ idToken: 'apple-firebase-token', displayName: 'Apple User' } as FirebaseAuthDto);
+
+      expect(firebaseTokenStrategy.validate).toHaveBeenCalledWith('apple-firebase-token');
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { appleProviderId: appleFirebaseUser.providerId },
+      });
+      expect(result).toHaveProperty('accessToken');
+    });
+
+    it('should auto-link Apple account to existing email user', async () => {
+      const existingEmailUser = { ...mockUser, authProvider: 'email' };
+      firebaseTokenStrategy.validate.mockResolvedValue(appleFirebaseUser);
+      userRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingEmailUser);
+      userRepository.update.mockResolvedValue({ affected: 1 } as any);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+
+      const result = await service.firebaseLogin({ idToken: 'apple-firebase-token' } as FirebaseAuthDto);
+
+      expect(userRepository.update).toHaveBeenCalledWith(
+        { id: existingEmailUser.id },
+        expect.objectContaining({ appleProviderId: appleFirebaseUser.providerId, firebaseUid: appleFirebaseUser.firebaseUid }),
+      );
+      expect(result).toHaveProperty('accessToken');
+    });
+
+    it('should pass conversationId to onboarding linking', async () => {
+      firebaseTokenStrategy.validate.mockResolvedValue(googleFirebaseUser);
+      userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.findOne.mockResolvedValue({ id: 'conv-tok', languageId: 'lang-en' } as any);
       conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
 
-      await service.googleLogin('google-id-token', undefined, 'session-tok');
+      await service.firebaseLogin({ idToken: 'firebase-id-token', conversationId: 'conv-tok' } as FirebaseAuthDto);
 
       expect(conversationRepository.update).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionToken: 'session-tok' }),
+        expect.objectContaining({ id: 'conv-tok' }),
         expect.objectContaining({ userId: mockUser.id }),
       );
-    });
-  });
-
-  describe('appleLogin', () => {
-    it('should create new user for first-time Apple login', async () => {
-      const appleUser: AppleUser = {
-        providerId: 'apple-123',
-        email: 'apple@example.com',
-      };
-
-      appleStrategy.validate.mockResolvedValue(appleUser);
-      userRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-      userRepository.create.mockReturnValue(mockUser);
-      userRepository.save.mockResolvedValue(mockUser);
-      jwtService.sign.mockReturnValue('access-token');
-      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
-      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
-
-      const result = await service.appleLogin('apple-id-token', 'Apple User');
-
-      expect(appleStrategy.validate).toHaveBeenCalledWith('apple-id-token');
-      expect(userRepository.create).toHaveBeenCalled();
-      expect(result).toHaveProperty('accessToken');
-    });
-
-    it('should login existing Apple user by provider ID', async () => {
-      const appleUser: AppleUser = {
-        providerId: 'apple-123',
-        email: 'apple@example.com',
-      };
-
-      const existingAppleUser = { ...mockUser, authProvider: 'apple', appleProviderId: 'apple-123' };
-      appleStrategy.validate.mockResolvedValue(appleUser);
-      userRepository.findOne.mockResolvedValue(existingAppleUser);
-      jwtService.sign.mockReturnValue('access-token');
-      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
-      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
-
-      const result = await service.appleLogin('apple-id-token');
-
-      expect(userRepository.create).not.toHaveBeenCalled();
-      expect(result.user.email).toBe(existingAppleUser.email);
-    });
-
-    it('should auto-link Apple account to existing email user (no ConflictException)', async () => {
-      const appleUser: AppleUser = {
-        providerId: 'apple-123',
-        email: 'test@example.com',
-      };
-
-      const existingEmailUser = { ...mockUser, authProvider: 'email' };
-      appleStrategy.validate.mockResolvedValue(appleUser);
-      // Not found by provider ID, found by email
-      userRepository.findOne
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(existingEmailUser);
-      userRepository.update.mockResolvedValue({ affected: 1 } as any);
-      jwtService.sign.mockReturnValue('access-token');
-      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
-      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
-
-      const result = await service.appleLogin('apple-id-token');
-
-      // Should NOT throw, should auto-link via update()
-      expect(userRepository.update).toHaveBeenCalledWith(
-        { id: existingEmailUser.id },
-        { appleProviderId: appleUser.providerId },
-      );
-      expect(result).toHaveProperty('accessToken');
     });
   });
 
@@ -501,13 +507,13 @@ describe('AuthService', () => {
     });
   });
 
-  describe('register with sessionToken (onboarding linking)', () => {
-    it('calls linkOnboardingSession after user creation when sessionToken provided', async () => {
+  describe('register with conversationId (onboarding linking)', () => {
+    it('calls linkOnboardingSession after user creation when conversationId provided', async () => {
       const registerDto: RegisterDto = {
         email: 'new@example.com',
         password: 'SecurePass123!',
         displayName: 'New User',
-        sessionToken: 'session-tok-123',
+        conversationId: 'conv-tok-123',
       };
 
       userRepository.findOne.mockResolvedValue(null);
@@ -516,17 +522,18 @@ describe('AuthService', () => {
       jwtService.sign.mockReturnValue('access-token');
       refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.findOne.mockResolvedValue({ id: 'conv-tok-123', languageId: 'lang-en' } as any);
       conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
 
       await service.register(registerDto);
 
       expect(conversationRepository.update).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionToken: 'session-tok-123' }),
-        expect.objectContaining({ userId: mockUser.id, sessionToken: null }),
+        expect.objectContaining({ id: 'conv-tok-123' }),
+        expect.objectContaining({ userId: mockUser.id }),
       );
     });
 
-    it('does not call linkOnboardingSession when no sessionToken provided', async () => {
+    it('does not call linkOnboardingSession when no conversationId provided', async () => {
       const registerDto: RegisterDto = {
         email: 'new@example.com',
         password: 'SecurePass123!',
@@ -560,7 +567,7 @@ describe('AuthService', () => {
       ...overrides,
     } as PasswordReset);
 
-    it('returns masked email when user found and OTP sent', async () => {
+    it('returns generic message when user found and OTP sent', async () => {
       userRepository.findOne.mockResolvedValue(mockUser);
       passwordResetRepository.count.mockResolvedValue(0);
       passwordResetRepository.create.mockImplementation((dto) => ({ ...dto }));
@@ -569,19 +576,24 @@ describe('AuthService', () => {
 
       const result = await service.forgotPassword('test@example.com');
 
-      expect(result.email).toMatch(/^t\*\*\*@/);
+      expect(result.message).toBe('If that email is registered, you will receive an OTP');
       expect(emailService.sendOtp).toHaveBeenCalled();
     });
 
-    it('throws NotFoundException when email not registered', async () => {
+    it('returns same generic message when email not registered (no enumeration)', async () => {
+      passwordResetRepository.count.mockResolvedValue(0);
       userRepository.findOne.mockResolvedValue(null);
+      passwordResetRepository.create.mockImplementation((dto) => ({ ...dto }));
+      passwordResetRepository.save.mockResolvedValue(makePasswordReset());
 
-      await expect(service.forgotPassword('unknown@example.com')).rejects.toThrow(NotFoundException);
-      expect(passwordResetRepository.save).not.toHaveBeenCalled();
+      const result = await service.forgotPassword('unknown@example.com');
+
+      expect(result.message).toBe('If that email is registered, you will receive an OTP');
+      expect(passwordResetRepository.save).toHaveBeenCalled();
+      expect(emailService.sendOtp).not.toHaveBeenCalled();
     });
 
     it('throws 429 HttpException when >= 3 requests in last hour', async () => {
-      userRepository.findOne.mockResolvedValue(mockUser);
       passwordResetRepository.count.mockResolvedValue(3);
 
       await expect(service.forgotPassword('test@example.com')).rejects.toThrow(HttpException);
@@ -596,7 +608,7 @@ describe('AuthService', () => {
 
       const result = await service.forgotPassword('test@example.com');
 
-      expect(result.email).toMatch(/^t\*\*\*@/);
+      expect(result.message).toBe('If that email is registered, you will receive an OTP');
     });
   });
 
@@ -731,36 +743,146 @@ describe('AuthService', () => {
       refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
     });
 
-    it('logs warning when no matching anonymous session found (affected=0)', async () => {
-      conversationRepository.update.mockResolvedValue({ affected: 0 } as any);
+    it('logs warning when no matching anonymous session found', async () => {
+      conversationRepository.findOne.mockResolvedValue(null);
       const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
 
       await service.register({
         email: 'a@b.com',
         password: 'Pass123!',
-        sessionToken: 'unknown-token',
+        conversationId: 'unknown-conv-id',
       });
 
       expect(loggerSpy).toHaveBeenCalledWith(
         expect.stringContaining('No anonymous onboarding session found'),
       );
+      // No bootstrap should happen when conversation not found
+      expect(userLanguageRepository.save).not.toHaveBeenCalled();
     });
 
     it('logs warning on error and does not throw', async () => {
-      conversationRepository.update.mockRejectedValue(new Error('DB error'));
+      conversationRepository.findOne.mockRejectedValue(new Error('DB error'));
       const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
 
       await expect(
         service.register({
           email: 'a@b.com',
           password: 'Pass123!',
-          sessionToken: 'tok',
+          conversationId: 'conv-id',
         }),
       ).resolves.not.toThrow();
 
       expect(loggerSpy).toHaveBeenCalledWith(
         'Failed to link onboarding session',
-        expect.objectContaining({ sessionToken: 'tok' }),
+        expect.objectContaining({ conversationId: 'conv-id' }),
+      );
+    });
+  });
+
+  describe('bootstrapUserLanguage (via linkOnboardingSession)', () => {
+    beforeEach(() => {
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.findOne.mockResolvedValue({ id: 'conv-1', languageId: 'lang-es' } as any);
+      conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
+    });
+
+    const registerWithConv = () =>
+      service.register({
+        email: 'a@b.com',
+        password: 'Pass123!',
+        conversationId: 'conv-1',
+      });
+
+    it('creates new UserLanguage row when user has none for that language', async () => {
+      userLanguageRepository.findOne.mockResolvedValue(null);
+      userLanguageRepository.update.mockResolvedValue({ affected: 0 } as any);
+      userLanguageRepository.save.mockResolvedValue({ id: 'ul-1' } as any);
+
+      await registerWithConv();
+
+      // Deactivate any existing active row (none here) then create new
+      expect(userLanguageRepository.update).toHaveBeenCalledWith(
+        { userId: mockUser.id, lastLearned: true },
+        { lastLearned: false },
+      );
+      expect(userLanguageRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: mockUser.id, languageId: 'lang-es', lastLearned: true }),
+      );
+    });
+
+    it('reactivates existing row instead of inserting duplicate', async () => {
+      const existing = { id: 'ul-existing', userId: mockUser.id, languageId: 'lang-es', lastLearned: false };
+      userLanguageRepository.findOne.mockResolvedValue(existing);
+      userLanguageRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      await registerWithConv();
+
+      // Deactivate others first
+      expect(userLanguageRepository.update).toHaveBeenCalledWith(
+        { userId: mockUser.id, lastLearned: true },
+        { lastLearned: false },
+      );
+      // Flip existing row to active
+      expect(userLanguageRepository.update).toHaveBeenCalledWith('ul-existing', { lastLearned: true });
+      expect(userLanguageRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('deactivates other active languages before activating target', async () => {
+      userLanguageRepository.findOne.mockResolvedValue(null);
+      userLanguageRepository.update.mockResolvedValue({ affected: 1 } as any);
+      userLanguageRepository.save.mockResolvedValue({ id: 'ul-new' } as any);
+
+      await registerWithConv();
+
+      // First update call deactivates all active rows for this user
+      const updateCalls = userLanguageRepository.update.mock.calls;
+      expect(updateCalls[0]).toEqual([
+        { userId: mockUser.id, lastLearned: true },
+        { lastLearned: false },
+      ]);
+    });
+
+    it('does not touch user_languages when no conversationId provided', async () => {
+      await service.register({
+        email: 'a@b.com',
+        password: 'Pass123!',
+      });
+
+      expect(userLanguageRepository.findOne).not.toHaveBeenCalled();
+      expect(userLanguageRepository.update).not.toHaveBeenCalled();
+      expect(userLanguageRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('swallows bootstrap errors — auth still succeeds', async () => {
+      userLanguageRepository.findOne.mockRejectedValue(new Error('user_languages DB error'));
+      const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
+
+      const result = await registerWithConv();
+
+      expect(result).toHaveProperty('accessToken');
+      expect(loggerSpy).toHaveBeenCalledWith(
+        'Failed to bootstrap user language from onboarding',
+        expect.objectContaining({ conversationId: 'conv-1', userId: mockUser.id, languageId: 'lang-es' }),
+      );
+    });
+
+    it('skips bootstrap when conversation was already linked mid-flight (affected=0)', async () => {
+      conversationRepository.findOne.mockResolvedValue({ id: 'conv-1', languageId: 'lang-es' } as any);
+      conversationRepository.update.mockResolvedValue({ affected: 0 } as any);
+      const loggerSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
+
+      await registerWithConv();
+
+      expect(userLanguageRepository.findOne).not.toHaveBeenCalled();
+      expect(userLanguageRepository.update).not.toHaveBeenCalled();
+      expect(userLanguageRepository.save).not.toHaveBeenCalled();
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('already linked — skipping bootstrap'),
       );
     });
   });

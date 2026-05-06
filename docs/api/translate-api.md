@@ -1,7 +1,7 @@
 # Translation API
 
 Base path: `/ai`
-Auth: Bearer JWT OR sessionToken in body for anonymous onboarding users. Rate-limited via ThrottlerGuard.
+Auth: Bearer JWT OR conversationId in body for anonymous onboarding users. Rate-limited via ThrottlerGuard.
 
 ---
 
@@ -38,7 +38,7 @@ Translate a word or sentence. Two modes via `type` field:
   "text": "hello",
   "sourceLang": "en",
   "targetLang": "vi",
-  "sessionToken": "abc123"
+  "conversationId": "abc123"
 }
 ```
 
@@ -49,7 +49,7 @@ Translate a word or sentence. Two modes via `type` field:
   "messageId": "uuid-of-ai-conversation-message",
   "sourceLang": "en",
   "targetLang": "vi",
-  "sessionToken": "abc123"
+  "conversationId": "abc123"
 }
 ```
 
@@ -60,7 +60,7 @@ Translate a word or sentence. Two modes via `type` field:
 | `messageId` | UUID | if type=sentence | AI conversation message ID to translate |
 | `sourceLang` | string | yes | Source language code (e.g., `"en"`) max 10 chars |
 | `targetLang` | string | yes | Target language code (e.g., `"vi"`) max 10 chars |
-| `sessionToken` | string | if no JWT | Session token for anonymous onboarding users (required when no Authorization header) |
+| `conversationId` | string | if no JWT | Conversation ID for anonymous onboarding users (required when no Authorization header) |
 
 ### Word Response 200
 
@@ -116,11 +116,11 @@ Translate a word or sentence. Two modes via `type` field:
 
 **Behavior (Authenticated):** Caches translation on the message entity. Subsequent requests for the same message+targetLang return the cached result without calling the LLM.
 
-**Behavior (Anonymous):** Returns translation only. Ownership verified via sessionToken matching conversation.sessionToken.
+**Behavior (Anonymous):** Returns translation only. Ownership verified via conversationId matching conversation.id.
 
 **Errors**
-- `400` — Validation error (missing `text` for word, missing `messageId` for sentence, or missing both JWT and sessionToken)
-- `403` — Message belongs to another user's conversation (authenticated mode) or sessionToken does not match conversation (anonymous mode)
+- `400` — Validation error (missing `text` for word, missing `messageId` for sentence, or missing both JWT and conversationId)
+- `403` — Message belongs to another user's conversation (authenticated mode) or conversationId does not match conversation (anonymous mode)
 - `404` — Message not found (sentence mode)
 
 **curl (word)**
@@ -143,12 +143,12 @@ curl -X POST https://api.example.com/ai/translate \
 ```bash
 curl -X POST https://api.example.com/ai/translate \
   -H "Content-Type: application/json" \
-  -d '{"type":"word","text":"hello","sourceLang":"en","targetLang":"vi","sessionToken":"abc123"}'
+  -d '{"type":"word","text":"hello","sourceLang":"en","targetLang":"vi","conversationId":"abc123"}'
 ```
 
 **curl (anonymous sentence, no JWT)**
 ```bash
 curl -X POST https://api.example.com/ai/translate \
   -H "Content-Type: application/json" \
-  -d '{"type":"sentence","messageId":"550e8400-e29b-41d4-a716-446655440000","sourceLang":"en","targetLang":"vi","sessionToken":"abc123"}'
+  -d '{"type":"sentence","messageId":"550e8400-e29b-41d4-a716-446655440000","sourceLang":"en","targetLang":"vi","conversationId":"abc123"}'
 ```

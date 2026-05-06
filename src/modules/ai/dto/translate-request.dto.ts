@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 
 export enum TranslateType {
   WORD = 'word',
@@ -8,18 +17,19 @@ export enum TranslateType {
 
 export class TranslateRequestDto {
   @ApiProperty({ enum: TranslateType })
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
   @IsEnum(TranslateType)
   type!: TranslateType;
 
   @ApiPropertyOptional({ description: 'Word to translate (required for type=word)' })
-  @ValidateIf((o) => o.type === TranslateType.WORD)
+  @ValidateIf((o) => o.type.toLowerCase() === TranslateType.WORD)
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
   text?: string;
 
   @ApiPropertyOptional({ description: 'Message ID (required for type=sentence)' })
-  @ValidateIf((o) => o.type === TranslateType.SENTENCE)
+  @ValidateIf((o) => o.type.toLowerCase() === TranslateType.SENTENCE)
   @IsUUID()
   messageId?: string;
 
@@ -33,8 +43,10 @@ export class TranslateRequestDto {
   @MaxLength(10)
   targetLang!: string;
 
-  @ApiPropertyOptional({ description: 'Session token for anonymous onboarding users (required when no JWT)' })
+  @ApiPropertyOptional({
+    description: 'Conversation ID for anonymous users or to group trace with chat session',
+  })
   @IsOptional()
-  @IsString()
-  sessionToken?: string;
+  @IsUUID()
+  conversationId?: string;
 }

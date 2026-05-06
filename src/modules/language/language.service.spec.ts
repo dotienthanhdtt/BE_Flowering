@@ -6,6 +6,7 @@ import { Language } from '../../database/entities/language.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
 import { User } from '../../database/entities/user.entity';
 import { LanguageType } from './dto/language-query.dto';
+import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
 
 const mockLanguageRepo = () => ({
   find: jest.fn(),
@@ -17,6 +18,7 @@ const mockUserLanguageRepo = () => ({
   findOne: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+  update: jest.fn(),
   delete: jest.fn(),
 });
 
@@ -24,9 +26,15 @@ const mockUserRepo = () => ({
   update: jest.fn(),
 });
 
+const mockFrameworkLevels = () => ({
+  getLevels: jest.fn().mockReturnValue([]),
+  getDescription: jest.fn().mockReturnValue(''),
+});
+
 describe('LanguageService', () => {
   let service: LanguageService;
   let languageRepo: ReturnType<typeof mockLanguageRepo>;
+  let userLanguageRepo: ReturnType<typeof mockUserLanguageRepo>;
   let userRepo: ReturnType<typeof mockUserRepo>;
 
   beforeEach(async () => {
@@ -36,11 +44,13 @@ describe('LanguageService', () => {
         { provide: getRepositoryToken(Language), useFactory: mockLanguageRepo },
         { provide: getRepositoryToken(UserLanguage), useFactory: mockUserLanguageRepo },
         { provide: getRepositoryToken(User), useFactory: mockUserRepo },
+        { provide: FrameworkLevelsService, useFactory: mockFrameworkLevels },
       ],
     }).compile();
 
     service = module.get<LanguageService>(LanguageService);
     languageRepo = module.get(getRepositoryToken(Language));
+    userLanguageRepo = module.get(getRepositoryToken(UserLanguage));
     userRepo = module.get(getRepositoryToken(User));
   });
 
@@ -89,43 +99,123 @@ describe('LanguageService', () => {
 
   describe('setNativeLanguage', () => {
     const userId = 'user-uuid';
-    const langId = 'lang-uuid';
+    const langCode = 'en';
 
     it('should set native language successfully', async () => {
-      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId });
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, code: langCode });
       userRepo.update.mockResolvedValue({ affected: 1 });
 
-      const result = await service.setNativeLanguage(userId, { languageId: langId });
+      const result = await service.setNativeLanguage(userId, { languageCode: langCode });
 
-      expect(userRepo.update).toHaveBeenCalledWith(userId, { nativeLanguageId: langId });
-      expect(result.id).toBe(langId);
+      expect(userRepo.update).toHaveBeenCalledWith(userId, { nativeLanguage: langCode });
+      expect(result.code).toBe(langCode);
     });
 
     it('should throw NotFoundException for invalid language', async () => {
       languageRepo.findOne.mockResolvedValue(null);
       await expect(
-        service.setNativeLanguage(userId, { languageId: langId }),
+        service.setNativeLanguage(userId, { languageCode: langCode }),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException for non-native-available language', async () => {
       languageRepo.findOne.mockResolvedValue({ ...mockLang, isNativeAvailable: false });
       await expect(
-        service.setNativeLanguage(userId, { languageId: langId }),
+        service.setNativeLanguage(userId, { languageCode: langCode }),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('addUserLanguage', () => {
+    const userId = 'user-uuid';
+    const langId = 'lang-uuid';
+    const mockUserLang = { id: 'ul-1', userId, languageId: langId, lastLearned: true, language: mockLang };
+
     it('should throw BadRequestException for non-learning-available language', async () => {
-      languageRepo.findOne.mockResolvedValue({
-        ...mockLang,
-        id: 'lang-uuid',
-        isLearningAvailable: false,
-      });
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId, isLearningAvailable: false });
+      await expect(service.addUserLanguage(userId, { languageId: langId })).rejects.toThrow(BadRequestException);
+    });
+
+    it('should deactivate existing active language before adding new one', async () => {
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId });
+      userLanguageRepo.findOne.mockResolvedValue(null); // not already added
+      userLanguageRepo.create.mockReturnValue(mockUserLang);
+      userLanguageRepo.save.mockResolvedValue({ id: 'ul-1' });
+      userLanguageRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue(mockUserLang);
+      userLanguageRepo.update.mockResolvedValue({ affected: 1 });
+
+      await service.addUserLanguage(userId, { languageId: langId });
+
+      expect(userLanguageRepo.update).toHaveBeenCalledWith(
+        { userId, lastLearned: true },
+        { lastLearned: false },
+      );
+    });
+
+    it('passes proficiencyLevel through verbatim — DB trigger validates', async () => {
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId });
+      userLanguageRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue(mockUserLang);
+      userLanguageRepo.create.mockReturnValue(mockUserLang);
+      userLanguageRepo.save.mockResolvedValue({ id: 'ul-1' });
+      userLanguageRepo.update.mockResolvedValue({ affected: 1 });
+
+      await service.addUserLanguage(userId, { languageId: langId, proficiencyLevel: 'N3' });
+
+      expect(userLanguageRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ proficiencyLevel: 'N3' }),
+      );
+    });
+
+    it('omits proficiencyLevel when not supplied — DB trigger fills default', async () => {
+      languageRepo.findOne.mockResolvedValue({ ...mockLang, id: langId });
+      userLanguageRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue(mockUserLang);
+      userLanguageRepo.create.mockReturnValue(mockUserLang);
+      userLanguageRepo.save.mockResolvedValue({ id: 'ul-1' });
+      userLanguageRepo.update.mockResolvedValue({ affected: 1 });
+
+      await service.addUserLanguage(userId, { languageId: langId });
+
+      expect(userLanguageRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ proficiencyLevel: undefined }),
+      );
+    });
+  });
+
+  describe('updateUserLanguage', () => {
+    const userId = 'user-uuid';
+    const languageId = 'lang-uuid';
+    const existingUL = {
+      id: 'ul-1', userId, languageId, lastLearned: false, language: mockLang,
+      proficiencyLevel: 'beginner',
+    };
+
+    it('should clear lastLearned on others when setting lastLearned to true', async () => {
+      userLanguageRepo.findOne.mockResolvedValue({ ...existingUL });
+      userLanguageRepo.update.mockResolvedValue({ affected: 1 });
+      userLanguageRepo.save.mockResolvedValue({ ...existingUL, lastLearned: true });
+
+      await service.updateUserLanguage(userId, languageId, { lastLearned: true });
+
+      expect(userLanguageRepo.update).toHaveBeenCalledWith(
+        { userId, lastLearned: true },
+        { lastLearned: false },
+      );
+    });
+
+    it('should NOT clear others when setting lastLearned to false', async () => {
+      userLanguageRepo.findOne.mockResolvedValue({ ...existingUL, lastLearned: true });
+      userLanguageRepo.save.mockResolvedValue({ ...existingUL, lastLearned: false });
+
+      await service.updateUserLanguage(userId, languageId, { lastLearned: false });
+
+      expect(userLanguageRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when user language not found', async () => {
+      userLanguageRepo.findOne.mockResolvedValue(null);
       await expect(
-        service.addUserLanguage('user-uuid', { languageId: 'lang-uuid' }),
-      ).rejects.toThrow(BadRequestException);
+        service.updateUserLanguage(userId, languageId, { lastLearned: true }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

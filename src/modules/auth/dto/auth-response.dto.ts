@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { UserLanguageDto } from '../../language/dto/user-language.dto';
 
 export class UserResponseDto {
   @ApiProperty()
@@ -7,11 +8,20 @@ export class UserResponseDto {
   @ApiProperty()
   email!: string;
 
+  @ApiProperty()
+  emailVerified!: boolean;
+
   @ApiProperty({ required: false })
   displayName?: string;
 
   @ApiProperty({ required: false })
   avatarUrl?: string;
+
+  @ApiProperty({ required: false })
+  phoneNumber?: string;
+
+  @ApiProperty({ required: false })
+  authProvider?: string;
 }
 
 export class AuthResponseDto {
@@ -23,4 +33,7 @@ export class AuthResponseDto {
 
   @ApiProperty({ type: UserResponseDto })
   user!: UserResponseDto;
+
+  @ApiProperty({ type: [UserLanguageDto], description: "User's joined learning languages" })
+  languages!: UserLanguageDto[];
 }

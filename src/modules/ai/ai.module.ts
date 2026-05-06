@@ -5,13 +5,15 @@ import { ThrottlerModule } from '@nestjs/throttler';
 // Entities
 import { AiConversation, AiConversationMessage, Vocabulary } from '../../database/entities';
 
-// Subscription module (for PremiumGuard)
+// Subscription module (for RevenueCatRestClient and SubscriptionService exports)
 import { SubscriptionModule } from '../subscription/subscription.module';
 
 // Providers
 import { OpenAILLMProvider } from './providers/openai-llm.provider';
 import { AnthropicLLMProvider } from './providers/anthropic-llm.provider';
 import { GeminiLLMProvider } from './providers/gemini-llm.provider';
+import { OpenAiSttProvider } from './providers/openai-stt.provider';
+import { GeminiSttProvider } from './providers/gemini-stt.provider';
 
 // Services
 import { LangfuseService } from './services/langfuse-tracing.service';
@@ -19,6 +21,9 @@ import { PromptLoaderService } from './services/prompt-loader.service';
 import { UnifiedLLMService } from './services/unified-llm.service';
 import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
+import { TranscriptionService } from './services/transcription.service';
+import { SupabaseStorageService } from '../../database/supabase-storage.service';
+import { IntakeChatEngine } from './services/intake-chat-engine.service';
 
 // Controller
 import { AiController } from './ai.controller';
@@ -53,12 +58,24 @@ import { AiController } from './ai.controller';
     OpenAILLMProvider,
     AnthropicLLMProvider,
     GeminiLLMProvider,
+    // STT Providers
+    OpenAiSttProvider,
+    GeminiSttProvider,
     // Services
+    SupabaseStorageService,
     PromptLoaderService,
     UnifiedLLMService,
     LearningAgentService,
     TranslationService,
+    TranscriptionService,
+    IntakeChatEngine,
   ],
-  exports: [UnifiedLLMService, LearningAgentService, PromptLoaderService],
+  exports: [
+    UnifiedLLMService,
+    LearningAgentService,
+    PromptLoaderService,
+    IntakeChatEngine,
+    LangfuseService,
+  ],
 })
 export class AiModule {}

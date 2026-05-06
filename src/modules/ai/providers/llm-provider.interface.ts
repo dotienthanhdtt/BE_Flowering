@@ -1,10 +1,13 @@
 import { BaseMessage } from '@langchain/core/messages';
-import { LLMModel } from './llm-models.enum';
+import { LLMModel, ThinkingLevel } from './llm-models.enum';
 
 export interface LLMOptions {
   model: LLMModel;
   temperature?: number;
+  topP?: number;
   maxTokens?: number;
+  /** Gemini thinking config for models that support extended thinking. */
+  thinkingConfig?: { thinkingLevel: ThinkingLevel };
   metadata?: Record<string, unknown>;
 }
 

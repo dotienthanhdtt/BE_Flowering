@@ -47,6 +47,12 @@ export const environmentValidationSchema = Joi.object({
     .allow('')
     .optional()
     .description('RevenueCat webhook secret'),
+  REVENUECAT_REST_API_KEY: Joi.string()
+    .allow('')
+    .optional()
+    .description(
+      'RevenueCat REST API secret key for subscriber lookups (fallback + reconciliation)',
+    ),
 
   // Firebase
   FIREBASE_PROJECT_ID: Joi.string().allow('').optional().description('Firebase project ID'),

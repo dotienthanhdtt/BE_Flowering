@@ -1,20 +1,21 @@
 # Codebase Summary
 
-**Last Updated:** 2026-03-28
-**Generated from:** repomix-output.xml (updated 2026-03-28)
+**Last Updated:** 2026-04-21
+**Generated from:** repomix-output.xml (auto-generated 2026-04-21)
 
 ## Overview
 
-AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 7 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, and language management.
+AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 13 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, language management, multi-language content partitioning, scenario management, KOL bundle distribution, and admin content management.
 
 ## Metrics
 
-- **Total TypeScript Files:** ~130 files in src/
-- **Code Lines:** ~8,000 LOC in src/
-- **Modules:** 7 feature modules
-- **Database Entities:** 13 TypeORM entities (registered in database.module.ts)
-- **API Endpoints:** 31 REST endpoints (reduced from 35 after removing unused endpoints)
-- **External Integrations:** 7 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry)
+- **Total TypeScript Files:** ~190 files in src/
+- **Code Lines:** ~11,500+ LOC in src/
+- **Modules:** 13 feature modules (admin-content, ai, auth, email, kol-bundle, language, lesson, onboarding, progress, scenario, subscription, user, vocabulary)
+- **Database Entities:** 21 TypeORM entities + 4 enums (AccessTier, ContentStatus, ScenarioType, UserRole)
+- **Migrations:** 35 versioned migrations (1615238400000–1778000500000)
+- **API Endpoints:** 55+ REST endpoints + 1 SSE stream across all modules
+- **External Integrations:** 8 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry, Firebase)
 
 ## Tech Stack
 
@@ -40,14 +41,15 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ### 1. Auth Module (27 files, ~3,567 LOC)
 
-**Purpose:** User authentication via email/password, Google ID token, Apple Sign-In with account auto-linking
+**Purpose:** User authentication via email/password, Firebase unified sign-in (Google/Apple) with account auto-linking
 
 **Endpoints:**
-- POST /auth/register, /login, /google, /apple, /refresh, /logout
+- POST /auth/register, /login, /firebase, /refresh, /logout
 - POST /auth/forgot-password, /verify-otp, /reset-password
 
 **Key Features:**
 - Composite refresh tokens (uuid:hex format) for O(1) validation
+- Firebase Auth unified endpoint: auto-detects Google or Apple provider from token claims
 - Auto-linking: OAuth accounts merge with existing email matches
 - Provider-specific IDs (`googleProviderId`, `appleProviderId`) prevent duplicates
 - Password reset: OTP (10min) + reset token (15min)
@@ -55,50 +57,66 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Security:**
 - bcrypt password hashing
 - JWT HS256 (7d expiry)
-- Google Auth Library for ID token verification
+- Firebase Admin SDK for ID token verification
 
-### 2. AI Module (~25 files, ~1,900 LOC)
+### 2. AI Module (~30 files, ~2,200 LOC)
 
-**Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing
+**Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing + Speech-to-Text (STT) transcription
 
 **Endpoints:**
 - POST /ai/chat (premium-only)
 - SSE /ai/chat/stream (Server-Sent Events, premium-only)
 - POST /ai/chat/correct (grammar correction with context, public + optional premium)
 - POST /ai/translate (word/sentence translation, public + optional premium)
+- POST /ai/transcribe (audio to text transcription, premium-only, multipart/form-data)
 
 **Supported Models:** GPT-4o, GPT-4o-mini, GPT-4.1-nano, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash
 
 **Rate Limiting:** 20 req/min, 100 req/hr per user
 
 **Key Features:**
-- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini)
+- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini for LLM)
+- STT providers (OpenAI Whisper primary, Gemini multimodal fallback)
 - Prompts stored as markdown in prompts/ directory (9 templates)
-- Whisper audio transcription
 - Langfuse tracing with per-invocation handlers and explicit flushAsync
 - Async processing for long-running tasks
 - Translation service (word/sentence) with vocabulary storage
 - Correction check endpoint with context awareness, ignores punctuation/capitalization
+- Transcription service with audio persistence (Supabase storage) and multi-provider fallback
+- **Signed URLs for private audio bucket:** STT outputs persisted to private bucket; presigned URLs (1h expiry) returned to mobile for secure access
+
+**STT Configuration:**
+- `STT_PROVIDER` env var: `openai` (default) or `gemini`
+- Automatic fallback to secondary provider if primary unavailable
+- Max file size: 10MB
+- Supported formats: M4A, MP4, MPEG, WAV
 
 ### 3. Onboarding Module (11 files, ~1,309 LOC)
 
 **Purpose:** Anonymous session-based chat for new users
 
 **Endpoints:**
-- POST /onboarding/start, /onboarding/chat, /onboarding/complete
+- POST /onboarding/chat (create when no conversationId; otherwise continue)
+- POST /onboarding/complete (idempotent — caches extracted profile + 5 scenarios)
+- GET /onboarding/conversations/:conversationId/messages (fetch transcript for resume UX)
 
 **Config:**
 - maxTurns: 10
-- sessionTtlDays: 7
 - model: GPT-4o-mini
 - maxTokens: 1024
 - temperature: 0.7
 
+**Rate Limiting (OnboardingThrottlerGuard):**
+- New session creation (no conversationId): 5 req/hr per IP
+- Chat continuation or message fetch (with conversationId): 30 req/hr per IP
+
 **Features:**
 - No authentication required
-- Profile extraction via AI
-- Scenario generation
+- Profile extraction via AI with idempotent caching (cached on ai_conversations)
+- Scenario generation with stable UUIDs for resume support
 - Session-based state management
+- **First-turn detection:** via authoritative message count (not presence); supports resume across server restarts
+- **Resume support:** GET /onboarding/conversations/:conversationId/messages fetches transcript for UX
 
 ### 4. Language Module (9 files, 570 LOC)
 
@@ -124,11 +142,10 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ### 6. Subscription Module (6 files, 404 LOC)
 
-**Purpose:** RevenueCat subscription management with sync endpoint and DB-based idempotency
+**Purpose:** RevenueCat subscription management with DB-based idempotency
 
 **Endpoints:**
 - GET /subscriptions/me (get user's subscription)
-- POST /subscriptions/sync (sync with RevenueCat API, called by mobile)
 - POST /webhooks/revenuecat (public, bearer auth, idempotent)
 
 **Webhook Events:** INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, PRODUCT_CHANGE
@@ -148,37 +165,318 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - OTP email sending for password reset
 - Configured via SMTP environment variables
 
-## Database Schema (13 Entities)
+### 8. Lesson Module (6 files, ~400 LOC)
+
+**Purpose:** Home screen lessons API with scenario grouping and visibility rules
+
+**Endpoints:**
+- GET /lessons (paginated, filterable scenarios grouped by category)
+
+**Features:**
+- Global scenarios (language_id = NULL) visible to all users
+- Language-specific scenarios filtered by user language preference
+- User-granted access via user_scenario_access table
+- Scenario status computation: available, locked, learned (based on access_tier and subscription)
+- Premium subscription enforcement (free users cannot access premium scenarios)
+- Search, difficulty level filtering
+- Pagination with total count
+
+**Entities:**
+- ScenarioCategory: Groups scenarios by topic/category
+- Scenario: Learning content with difficulty levels, premium flags, trial flags
+- UserScenarioAccess: Grants specific users access to scenarios
+
+### 9. Scenario Chat Module (7 files, ~600 LOC)
+
+**Purpose:** Premium scenario roleplay conversation engine with turn-based interactions
+
+**Endpoints:**
+- POST /scenario/chat (roleplay conversation with AI)
+
+**Services:**
+- ScenarioChatService: Main conversation logic, turn management, completion tracking
+- ScenarioAccessService: Permission checks for premium scenarios vs. free users
+
+**Features:**
+- Turn-based roleplay conversations with configurable max turns (default: 10)
+- AI-initiated first turn (omit message parameter)
+- Conversation resumption via conversation_id
+- Premium access control (free users blocked from premium scenarios)
+- AiConversation entity extended with `scenario_id` FK
+- Rate limiting: 20 req/min, 100 req/hr per user
+- Automatic conversation completion tracking
+
+**Rate Limiting:** Shared with AI endpoints (20 req/min, 100 req/hr)
+
+### 10. Language Context Module (3 files, ~150 LOC)
+
+**Purpose:** Request-scoped language context resolution and caching for multi-language content API routes
+
+**Components:**
+- `@ActiveLanguage()` param decorator — extracts resolved language context from request
+- `@SkipLanguageContext()` class/method decorator — marks routes that don't require language context
+- `@AutoEnrollLanguage()` class/method decorator — enables auto-creation of UserLanguage row for unenrolled languages (opt-in)
+- `LanguageContextGuard` — resolves `X-Learning-Language` header to Language entity, caches result
+- `LanguageContextCacheService` — LRU cache (1000 items, 60s TTL) for language_code → {id, code} lookups
+
+**Behavior:**
+- Global guard applies to all authenticated routes (bypassed by `@SkipLanguageContext()`)
+- Reads `X-Learning-Language: <code>` header from request
+- Queries Language table if code not in cache, stores result in request context
+- Throws 400 if header missing or language code invalid
+- Throws 403 if header language not enrolled by user (unless route has `@AutoEnrollLanguage()`)
+- `@AutoEnrollLanguage()` enabled on specific routes (e.g. LessonController) to auto-create inactive UserLanguage row if missing
+- Auto-enroll only if Language is active and `isLearningAvailable=true`; idempotent (race-safe)
+- Auto-enrolled row is inactive (doesn't affect user's active language); user must explicitly activate via `PATCH /languages/user/:id`
+- Used by content endpoints (Lesson, Scenario Chat, AI) to partition results by user's active language
+
+**Key Convention:** Content API routes decorated with `@ActiveLanguage()` receive language context automatically; opt-in with `@AutoEnrollLanguage()` for learning-first UX
+
+### 11. Admin Content Module (8 files, ~600 LOC)
+
+**Purpose:** LLM-powered content generation and lifecycle management for scenarios/exercises/lessons
+
+**Endpoints:**
+- `POST /admin/content/generate` — Generate N draft content items (language, type, level)
+- `GET /admin/content` — List content with filters (status, type, language, page)
+- `PATCH /admin/content/:id/publish` — Promote draft to published
+- `PATCH /admin/content/:id` — Edit title/description (text fields)
+- `DELETE /admin/content/:id` — Archive content (soft delete via status=archived)
+
+**Features:**
+- AdminGuard checks `user.isAdmin` flag (seeded via ADMIN_EMAILS env var)
+- Supports content types: `LESSON`, `EXERCISE`, `SCENARIO`
+- Uses LLM to generate structured content in batches
+- ContentStatus enum: draft, published, archived (existing content defaults to published)
+- Rate limit: 5 req/min on /generate endpoint (throttle guard)
+- Returns paginated list with total count
+- Implements soft delete (status change, record retention)
+
+**DTOs:**
+- `GenerateContentDto`: language (UUID), type (enum), level (difficulty), count (default: 5)
+- `ListContentQueryDto`: status (enum), type (enum), language (UUID), page, limit
+- `UpdateContentDto`: title, description
+
+**Security:** Requires isAdmin flag; ADMIN_EMAILS env var bootstraps initial admins
+
+### 12. Scenario Module (17 files, ~900 LOC)
+
+**Purpose:** Default + personalized scenario listing and KOL gift code redemption
+
+**Endpoints:**
+- GET /scenarios/default — list default scenarios for active language (paginated, auto-enroll)
+- GET /scenarios/personal — list user's AI-generated + KOL-granted scenarios (merged)
+- POST /scenarios/redeem — redeem KOL gift code, grant scenarios (throttled 5/min)
+
+**Services:**
+- ScenariosListingService: Query default scenarios, merge AI + KOL grants
+- ScenariosRedeemService: Validate gift code, create UserAiScenario grants (idempotent)
+
+**DTOs:** ListScenariosQueryDto (page, limit), RedeemScenarioDto (giftCode)
+
+**Key Features:**
+- Type filtering: default vs kol scenario variants
+- Idempotent redemption (duplicate codes safe)
+- Auto-enrollment in language via @AutoEnrollLanguage()
+
+### 13. KOL Bundle Module (7 files, ~350 LOC)
+
+**Purpose:** Admin-only KOL bundle creation and scenario attachment for gift code distribution
+
+**Endpoints:**
+- POST /admin/kol-bundles — create bundle with gift code + scenarios (admin-only)
+- GET /admin/kol-bundles — list bundles paginated (admin-only)
+- POST /admin/kol-bundles/:id/scenarios — attach scenarios to bundle (admin-only, idempotent)
+
+**Services:**
+- KolBundleService: Bundle CRUD, scenario attachment with unique constraint
+
+**DTOs:** CreateKolBundleDto (name, gift_code, scenario_ids), AttachScenariosDto (scenario_ids)
+
+**Security:** @Roles('admin') decorator enforces admin-only access via RolesGuard
+
+**Key Features:**
+- Gift code uniqueness enforced at DB level
+- Scenario attachment idempotent via unique constraint
+- Scenario count computed from KolBundleScenario join
+
+### 14. Progress Module (3 files, ~80 LOC)
+
+**Purpose:** Internal progress tracking (no HTTP endpoints; used by scenario/lesson completion flows)
+
+**Key Features:**
+- UserProgress entity: tracks completed lessons, scores per language
+- UserExerciseAttempt entity: records exercise answers
+- Completion tracking for lessons and scenarios (internal service calls)
+
+### 15. Vocabulary Module (16 files, ~800 LOC)
+
+**Purpose:** User vocabulary management with Leitner 5-box spaced repetition system (SRS)
+
+**Endpoints:**
+- GET /vocabulary (paginated list with filters)
+- GET /vocabulary/:id (single item)
+- DELETE /vocabulary/:id (delete item)
+- POST /vocabulary/review/start (begin review session, fetch due cards)
+- POST /vocabulary/review/:sessionId/rate (rate card, apply Leitner transition)
+- POST /vocabulary/review/:sessionId/complete (finish session, return stats)
+
+**Services:**
+- VocabularyService: CRUD operations, pagination, filtering by language/box/search
+- VocabularyReviewService: Session orchestration, Leitner state transitions, card rating
+- ReviewSessionStore: In-memory session storage with 1h TTL and 5m cleanup sweep
+- leitner.ts: Pure Leitner algorithm (box transitions, interval calculations)
+
+**Key Features:**
+- Leitner intervals: box 1→2 (+3d correct), box 2→3 (+7d), box 3→4 (+14d), box 4→5 (+30d), box 5→5 (cap +30d), any→1 (+1d wrong)
+- Session-based review: cards marked due in session, one rating per card, session expires after 1h
+- Auto-save regression prevention: POST /ai/translate (type=word) upserts without resetting SRS fields (orUpdate excludes box/dueAt/lastReviewedAt/etc.)
+- Full test coverage (4 spec files): unit tests for CRUD, Leitner transitions, session store, review service
+- No rate limits on review endpoints (not AI-powered)
+
+## Database Schema (21 Entities + 4 Enums)
 
 **Core:** User, Language, UserLanguage
-**Content:** Lesson, Exercise
+**Content:** Lesson, Exercise, ScenarioCategory, Scenario, UserScenarioAccess
+**Scenarios:** UserAiScenario, KolBundle, KolBundleScenario
 **Progress:** UserProgress, UserExerciseAttempt
 **AI:** AiConversation, AiConversationMessage, Vocabulary
-**Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent
+**Infrastructure:** Subscription, RefreshToken, PasswordReset, WebhookEvent, DeviceToken
+**Enums:** AccessTier (free|premium), ContentStatus (draft|published|archived), ScenarioType (default|kol), UserRole (user|admin)
 
-### Vocabulary Entity (New)
+### ScenarioCategory Entity
+- `id` - UUID primary key
+- `name` - String (max 100, e.g., "Greetings", "Food")
+- `icon` - Text (icon URL, nullable)
+- `order_index` - Integer for display ordering
+- `is_active` - Boolean (default: true)
+- Created/updated timestamps
+
+### Scenario Entity
+- `id` - UUID primary key
+- `category_id` - FK to ScenarioCategory (ON DELETE CASCADE)
+- `language_id` - FK to Language (non-nullable, each scenario owns exactly one language; partitioning key)
+- `creator_id` - FK to User (nullable, for future KOL support)
+- `type` - ScenarioType enum (default, kol; default: default) — categorizes scenarios by origin
+- `title` - String (max 255, e.g., "Meet & Greet")
+- `description` - Text (nullable)
+- `image_url` - Text (nullable)
+- `difficulty` - Enum (beginner, intermediate, advanced)
+- `access_tier` - Enum (free, premium; default: free) — determines subscription requirement
+- `status` - ContentStatus enum (draft, published, archived; default: published) — published = active, archived = inactive
+- `order_index` - Integer for display ordering within category
+- Created/updated timestamps
+
+### UserAiScenario Entity (New)
+- `id` - UUID primary key
+- `user_id` - FK to User (ON DELETE CASCADE)
+- `scenario_id` - FK to Scenario (ON DELETE CASCADE)
+- `source` - String (max 50; 'ai_generated', 'kol_granted', or other; indicates how user gained access)
+- `granted_at` - Timestamp (when access was granted, default: NOW())
+- Unique constraint: (user_id, scenario_id) for one-to-one access per user
+- **Purpose:** Tracks user's personal scenarios beyond default public ones (AI-generated or KOL-granted)
+
+### KolBundle Entity (New)
+- `id` - UUID primary key
+- `name` - String (max 255, bundle name for tracking)
+- `description` - Text (nullable, bundle description)
+- `gift_code` - String (max 50, nullable, unique) — code users redeem to access bundle scenarios
+- `is_active` - Boolean (default: true, soft disable without deletion)
+- `created_at` - Timestamp
+- `updated_at` - Timestamp
+- **Purpose:** Represents a collection of scenarios distributed via gift codes (Key Opinion Leader distribution)
+
+### KolBundleScenario Entity (New)
+- `id` - UUID primary key
+- `bundle_id` - FK to KolBundle (ON DELETE CASCADE)
+- `scenario_id` - FK to Scenario (ON DELETE CASCADE)
+- Unique constraint: (bundle_id, scenario_id) for idempotent attachment
+- **Purpose:** Join table linking scenarios to KOL bundles for batch distribution
+
+### Lesson Entity
+- `id` - UUID primary key
+- `language_id` - FK to Language (non-nullable, language partitioning key)
+- `title` - String (max 255)
+- `description` - Text (nullable)
+- `difficulty` - Enum (beginner, intermediate, advanced)
+- `access_tier` - Enum (free, premium; default: free) — determines subscription requirement
+- `status` - ContentStatus enum (draft, published, archived; default: published) — published = active, archived = inactive
+- `order_index` - Integer for display ordering
+- Created/updated timestamps
+
+### Exercise Entity
+- `id` - UUID primary key
+- `lesson_id` - FK to Lesson (ON DELETE CASCADE)
+- `language_id` - FK to Language (non-nullable, inherited from lesson for direct filtering)
+- `question` - String (max 1000, the exercise question/prompt)
+- `options` - JSONB (array of answer choices)
+- `correctAnswer` - String (the correct answer)
+- `difficulty` - Enum (beginner, intermediate, advanced)
+- `order_index` - Integer for display ordering within lesson
+- `status` - ContentStatus enum (draft, published, archived; default: published)
+- Created/updated timestamps
+
+### UserProgress Entity
+- `id` - UUID primary key
+- `user_id` - FK to User (ON DELETE CASCADE)
+- `language_id` - FK to Language (non-nullable, language partitioning key)
+- `lesson_id` - FK to Lesson (nullable, current lesson context)
+- `completed_lessons` - Integer (count of completed lessons, default: 0)
+- `current_score` - Integer (current session score, default: 0)
+- `total_score` - Integer (lifetime score, default: 0)
+- Created/updated timestamps
+
+### UserExerciseAttempt Entity
+- `id` - UUID primary key
+- `user_id` - FK to User (ON DELETE CASCADE)
+- `exercise_id` - FK to Exercise (ON DELETE CASCADE)
+- `language_id` - FK to Language (non-nullable, language partitioning key)
+- `answer` - String (user's submitted answer)
+- `is_correct` - Boolean (whether answer matches correct_answer)
+- `attempted_at` - Timestamp (when attempt was made)
+
+### UserScenarioAccess Entity
+- `id` - UUID primary key
+- `user_id` - FK to User (ON DELETE CASCADE)
+- `scenario_id` - FK to Scenario (ON DELETE CASCADE)
+- `granted_at` - Timestamp (when access was granted, default: now)
+- Unique constraint: (user_id, scenario_id) for one-to-one grants
+
+### Vocabulary Entity (Enhanced with SRS)
 - `id` - UUID primary key
 - `userId` - FK to User
 - `word` - String (lexeme)
 - `translation` - String
 - `sourceLang` - String (max 10, e.g., "en", "ja")
 - `targetLang` - String (max 10)
-- `partOfSpeech` - String (noun, verb, etc.)
-- `pronunciation` - String (IPA)
-- `definition` - Text
-- `examples` - JSONB (array of example sentences)
+- `partOfSpeech` - String (noun, verb, etc., nullable)
+- `pronunciation` - String (IPA, nullable)
+- `definition` - Text (nullable)
+- `examples` - JSONB (array of example sentences, nullable)
+- **SRS Fields (NEW):**
+  - `box` - smallint (1-5, CHECK constraint, default: 1)
+  - `dueAt` - timestamptz (when next review due, default: NOW())
+  - `lastReviewedAt` - timestamptz (last review timestamp, nullable)
+  - `reviewCount` - int (total reviews, default: 0)
+  - `correctCount` - int (correct reviews, default: 0)
 - Unique constraint: (userId, word, sourceLang, targetLang)
+- **Index:** idx_vocabulary_user_due on (user_id, due_at) for efficient due cards lookup
+- **Migration:** 1775800000000-add-srs-columns-to-vocabulary.ts
 
 ### User Entity Updates
 - `googleProviderId` - OAuth account linking
 - `appleProviderId` - OAuth account linking
+- `roles` - text[] (default: ['user'], replaces isAdmin boolean; includes 'admin' for admin users, seeded via ADMIN_EMAILS env var)
 
 ### AiConversation Entity Updates
 - `type` - ANONYMOUS or AUTHENTICATED
-- `sessionToken` - Session identifier for anonymous users
-- `expiresAt` - Session expiration (7 days)
+- `id` - UUID primary key (conversation identifier for all sessions)
 - `messageCount` - Turn counter
 - `metadata` - JSONB for flexible data storage
+- `scenarioId` - FK to Scenario (nullable, indicates scenario chat conversation)
+- `extractedProfile` - JSONB, nullable — cached learner profile (added 2026-04-15)
+- `scenarios` - JSONB, nullable — cached 5-scenario array with stable UUIDs (added 2026-04-15)
+- `expiresAt` - DEPRECATED: Session expiry logic removed (2026-04-14)
 
 ### AiConversationMessage Entity Updates
 - `translatedContent` - Cached sentence translation
@@ -322,7 +620,7 @@ npm run build
 
 **Database:** typeorm, pg, @supabase/supabase-js
 
-**Auth:** passport, passport-jwt, google-auth-library, bcrypt, apple-signin-auth
+**Auth:** passport, passport-jwt, firebase-admin, bcrypt
 
 **AI:** langchain, @langchain/core, @langchain/openai, @langchain/anthropic, @langchain/google-genai, openai, langfuse-langchain
 

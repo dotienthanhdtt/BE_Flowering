@@ -17,22 +17,25 @@ import { User } from '../../database/entities/user.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { AiConversation, AiConversationType } from '../../database/entities/ai-conversation.entity';
 import { PasswordReset } from '../../database/entities/password-reset.entity';
-import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto } from './dto';
-import { AppleStrategy } from './strategies/apple.strategy';
-import { GoogleIdTokenStrategy } from './strategies/google-id-token-validator.strategy';
+import { UserLanguage } from '../../database/entities/user-language.entity';
+import { RegisterDto, LoginDto, AuthResponseDto, UserResponseDto, FirebaseAuthDto } from './dto';
+import { UserLanguageDto } from '../language/dto/user-language.dto';
+import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
+import { FirebaseTokenStrategy, OAuthProvider } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_EXPIRY = '30d';
 const REFRESH_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
-type OAuthProvider = 'google' | 'apple';
-
 interface OAuthProviderUser {
+  firebaseUid: string;
   email: string;
+  emailVerified: boolean;
   providerId: string;
   displayName?: string;
   avatarUrl?: string;
+  phoneNumber?: string;
 }
 
 @Injectable()
@@ -41,8 +44,7 @@ export class AuthService {
 
   constructor(
     private jwtService: JwtService,
-    private appleStrategy: AppleStrategy,
-    private googleIdTokenStrategy: GoogleIdTokenStrategy,
+    private firebaseTokenStrategy: FirebaseTokenStrategy,
     private emailService: EmailService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -52,6 +54,9 @@ export class AuthService {
     private conversationRepository: Repository<AiConversation>,
     @InjectRepository(PasswordReset)
     private passwordResetRepository: Repository<PasswordReset>,
+    @InjectRepository(UserLanguage)
+    private userLanguageRepository: Repository<UserLanguage>,
+    private frameworkLevels: FrameworkLevelsService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -74,8 +79,8 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
-    if (dto.sessionToken) {
-      await this.linkOnboardingSession(user.id, dto.sessionToken);
+    if (dto.conversationId) {
+      await this.linkOnboardingSession(user.id, dto.conversationId);
     }
 
     return this.generateTokens(user);
@@ -96,40 +101,25 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (dto.sessionToken) {
-      await this.linkOnboardingSession(user.id, dto.sessionToken);
+    if (dto.conversationId) {
+      await this.linkOnboardingSession(user.id, dto.conversationId);
     }
 
     return this.generateTokens(user);
   }
 
-  async googleLogin(
-    idToken: string,
-    displayName?: string,
-    sessionToken?: string,
-  ): Promise<AuthResponseDto> {
-    const googleUser = await this.googleIdTokenStrategy.validate(idToken);
+  async firebaseLogin(dto: FirebaseAuthDto): Promise<AuthResponseDto> {
+    const firebaseUser = await this.firebaseTokenStrategy.validate(dto.idToken);
     const providerUser: OAuthProviderUser = {
-      email: googleUser.email,
-      providerId: googleUser.providerId,
-      displayName: displayName ?? googleUser.displayName,
-      avatarUrl: googleUser.avatarUrl,
+      firebaseUid: firebaseUser.firebaseUid,
+      email: firebaseUser.email,
+      emailVerified: firebaseUser.emailVerified,
+      providerId: firebaseUser.providerId,
+      displayName: dto.displayName ?? firebaseUser.displayName,
+      avatarUrl: dto.avatarUrl ?? firebaseUser.avatarUrl,
+      phoneNumber: dto.phoneNumber,
     };
-    return this.oauthLogin('google', providerUser, sessionToken);
-  }
-
-  async appleLogin(
-    idToken: string,
-    displayName?: string,
-    sessionToken?: string,
-  ): Promise<AuthResponseDto> {
-    const appleUser = await this.appleStrategy.validate(idToken);
-    const providerUser: OAuthProviderUser = {
-      email: appleUser.email,
-      providerId: appleUser.providerId,
-      displayName,
-    };
-    return this.oauthLogin('apple', providerUser, sessionToken);
+    return this.oauthLogin(firebaseUser.provider, providerUser, dto.conversationId);
   }
 
   /**
@@ -139,7 +129,7 @@ export class AuthService {
   private async oauthLogin(
     provider: OAuthProvider,
     providerUser: OAuthProviderUser,
-    sessionToken?: string,
+    conversationId?: string,
   ): Promise<AuthResponseDto> {
     const providerColumn = provider === 'google' ? 'googleProviderId' : 'appleProviderId';
 
@@ -148,36 +138,62 @@ export class AuthService {
       where: { [providerColumn]: providerUser.providerId },
     });
 
-    if (!user) {
+    if (user) {
+      // Update profile fields that may have changed (e.g. Google avatar, name, email verification)
+      const profileUpdate: Partial<User> = {};
+      if (providerUser.displayName && !user.displayName)
+        profileUpdate.displayName = providerUser.displayName;
+      if (providerUser.avatarUrl && providerUser.avatarUrl !== user.avatarUrl)
+        profileUpdate.avatarUrl = providerUser.avatarUrl;
+      if (providerUser.firebaseUid && !user.firebaseUid)
+        profileUpdate.firebaseUid = providerUser.firebaseUid;
+      if (providerUser.emailVerified && !user.emailVerified) profileUpdate.emailVerified = true;
+      if (providerUser.phoneNumber && providerUser.phoneNumber !== user.phoneNumber)
+        profileUpdate.phoneNumber = providerUser.phoneNumber;
+
+      if (Object.keys(profileUpdate).length > 0) {
+        await this.userRepository.update({ id: user.id }, profileUpdate as never);
+        user = { ...user, ...profileUpdate };
+      }
+    } else {
       // 2. Find by email — auto-link if matched, create if not
       const existingEmailUser = await this.userRepository.findOne({
         where: { email: providerUser.email },
       });
 
       if (existingEmailUser) {
-        // Auto-link: attach this provider to the existing account using typed update
-        const update =
-          provider === 'google'
-            ? { googleProviderId: providerUser.providerId }
-            : { appleProviderId: providerUser.providerId };
-        await this.userRepository.update({ id: existingEmailUser.id }, update);
+        // Auto-link: attach provider + Firebase UID + update profile
+        const update: Partial<User> = {
+          [providerColumn]: providerUser.providerId,
+          firebaseUid: providerUser.firebaseUid,
+          emailVerified: providerUser.emailVerified,
+          ...(providerUser.displayName && !existingEmailUser.displayName
+            ? { displayName: providerUser.displayName }
+            : {}),
+          ...(providerUser.avatarUrl ? { avatarUrl: providerUser.avatarUrl } : {}),
+          ...(providerUser.phoneNumber ? { phoneNumber: providerUser.phoneNumber } : {}),
+        };
+        await this.userRepository.update({ id: existingEmailUser.id }, update as never);
         user = { ...existingEmailUser, ...update };
       } else {
         // New user
         user = this.userRepository.create({
           email: providerUser.email,
+          emailVerified: providerUser.emailVerified,
           displayName: providerUser.displayName,
           avatarUrl: providerUser.avatarUrl,
+          phoneNumber: providerUser.phoneNumber,
           authProvider: provider,
           providerId: providerUser.providerId,
+          firebaseUid: providerUser.firebaseUid,
           [providerColumn]: providerUser.providerId,
         });
         await this.userRepository.save(user);
       }
     }
 
-    if (sessionToken) {
-      await this.linkOnboardingSession(user.id, sessionToken);
+    if (conversationId) {
+      await this.linkOnboardingSession(user.id, conversationId);
     }
 
     return this.generateTokens(user);
@@ -224,11 +240,8 @@ export class AuthService {
     await this.refreshTokenRepository.update({ userId, revoked: false }, { revoked: true });
   }
 
-  async forgotPassword(email: string): Promise<{ email: string }> {
-    const user = await this.userRepository.findOne({ where: { email } });
-    if (!user) throw new NotFoundException('Email not found');
-
-    // Rate limit: max 3 requests per hour per email
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    // Rate limit FIRST by email — before user lookup to prevent enumeration
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const recentCount = await this.passwordResetRepository.count({
       where: { email, createdAt: MoreThan(oneHourAgo) },
@@ -237,6 +250,9 @@ export class AuthService {
       throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    // Always generate OTP + save record to prevent timing/rate-limit side-channels
     const otp = crypto.randomInt(100000, 999999).toString();
     const otpHash = this.sha256(otp);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // +10min
@@ -245,14 +261,17 @@ export class AuthService {
       this.passwordResetRepository.create({ email, otpHash, expiresAt }),
     );
 
-    // Fire-and-forget: never expose SMTP errors to client
-    try {
-      await this.emailService.sendOtp(email, otp);
-    } catch (error) {
-      this.logger.warn('Failed to send OTP email', { email: this.maskEmail(email), error });
+    // Only send email if user exists — but always do the DB write above
+    if (user) {
+      try {
+        await this.emailService.sendOtp(email, otp);
+      } catch (error) {
+        this.logger.warn('Failed to send OTP email', { email: this.maskEmail(email), error });
+      }
     }
 
-    return { email: this.maskEmail(email) };
+    // Always return identical response regardless of email existence
+    return { message: 'If that email is registered, you will receive an OTP' };
   }
 
   async verifyOtp(email: string, otp: string): Promise<{ resetToken: string }> {
@@ -323,18 +342,85 @@ export class AuthService {
    * Link anonymous onboarding conversation to a user account.
    * Best-effort: logs warning on failure, never throws.
    */
-  private async linkOnboardingSession(userId: string, sessionToken: string): Promise<void> {
+  private async linkOnboardingSession(userId: string, conversationId: string): Promise<void> {
+    let conversation: AiConversation | null = null;
     try {
+      // Load conversation for languageId — filtered by ANONYMOUS type acts as a trust check
+      conversation = await this.conversationRepository.findOne({
+        where: { id: conversationId, type: AiConversationType.ANONYMOUS },
+      });
+      if (!conversation) {
+        this.logger.warn(`No anonymous onboarding session found for id: ${conversationId}`);
+        return;
+      }
+
+      // Atomic conditional update — if affected=0, another auth flow won the race
+      // OR this conversation was already claimed by a different user. Either way,
+      // we must NOT bootstrap this user's language from a conversation we didn't own.
       const result = await this.conversationRepository.update(
-        { sessionToken, type: AiConversationType.ANONYMOUS },
-        { userId, sessionToken: null, type: AiConversationType.AUTHENTICATED },
+        { id: conversationId, type: AiConversationType.ANONYMOUS },
+        { userId, type: AiConversationType.AUTHENTICATED },
       );
       if (result.affected === 0) {
-        this.logger.warn(`No anonymous onboarding session found for token: ${sessionToken}`);
+        this.logger.warn(
+          `Onboarding session already linked — skipping bootstrap for conversationId: ${conversationId}`,
+        );
+        return;
       }
     } catch (error) {
-      this.logger.warn('Failed to link onboarding session', { sessionToken, error });
+      this.logger.warn('Failed to link onboarding session', { conversationId, error });
+      return;
     }
+
+    // Bootstrap user_languages in a separate try block so its failures are
+    // distinguishable in logs AND don't leave the conversation-link rolled back.
+    try {
+      await this.bootstrapUserLanguage(userId, conversation.languageId);
+    } catch (error) {
+      this.logger.warn('Failed to bootstrap user language from onboarding', {
+        conversationId,
+        userId,
+        languageId: conversation.languageId,
+        error,
+      });
+    }
+
+    // Bootstrap user.nativeLanguage from onboarding column (language code).
+    try {
+      const nativeLanguageCode = conversation.nativeLanguage;
+      if (nativeLanguageCode) {
+        await this.userRepository.update(userId, { nativeLanguage: nativeLanguageCode });
+      }
+    } catch (error) {
+      this.logger.warn('Failed to bootstrap user native language from onboarding', {
+        conversationId,
+        userId,
+        error,
+      });
+    }
+  }
+
+  /**
+   * Idempotently create or reactivate the learner's UserLanguage row based on the
+   * onboarding conversation's language. Deactivates other active languages for this user.
+   */
+  private async bootstrapUserLanguage(userId: string, languageId: string): Promise<void> {
+    await this.userLanguageRepository.manager.transaction(async (mgr) => {
+      const repo = mgr.getRepository(UserLanguage);
+
+      // Clear last_learned flag from other languages for this user
+      await repo.update({ userId, lastLearned: true }, { lastLearned: false });
+
+      // Check if a row exists for this specific language
+      const existing = await repo.findOne({ where: { userId, languageId } });
+      if (existing) {
+        // Mark the existing row as last learned
+        await repo.update(existing.id, { lastLearned: true });
+      } else {
+        // Create a new row marked as last learned
+        await repo.save(repo.create({ userId, languageId, lastLearned: true }));
+      }
+    });
   }
 
   private async generateTokens(user: User): Promise<AuthResponseDto> {
@@ -360,19 +446,55 @@ export class AuthService {
 
     await this.refreshTokenRepository.save(refreshTokenEntity);
 
+    const languages = await this.getUserLanguages(user.id);
+
     return {
       accessToken,
       refreshToken: rawRefreshToken,
       user: this.mapToUserDto(user),
+      languages,
     };
+  }
+
+  private async getUserLanguages(userId: string): Promise<UserLanguageDto[]> {
+    const userLanguages = await this.userLanguageRepository.find({
+      where: { userId },
+      relations: ['language'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return userLanguages.map((ul) => {
+      const level = ul.proficiencyLevel ?? '';
+      return {
+        id: ul.id,
+        languageId: ul.languageId,
+        proficiencyLevel: level,
+        description: this.frameworkLevels.getDescription(ul.languageId, level),
+        lastLearned: ul.lastLearned,
+        createdAt: ul.createdAt,
+        language: {
+          id: ul.language.id,
+          code: ul.language.code,
+          name: ul.language.name,
+          nativeName: ul.language.nativeName,
+          flagUrl: ul.language.flagUrl,
+          isNativeAvailable: ul.language.isNativeAvailable,
+          isLearningAvailable: ul.language.isLearningAvailable,
+          levels: this.frameworkLevels.getLevels(ul.languageId),
+        },
+      };
+    });
   }
 
   private mapToUserDto(user: User): UserResponseDto {
     return {
       id: user.id,
       email: user.email,
+      emailVerified: user.emailVerified ?? false,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
+      phoneNumber: user.phoneNumber,
+      authProvider: user.authProvider,
     };
   }
 }

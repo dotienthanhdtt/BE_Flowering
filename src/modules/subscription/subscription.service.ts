@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
   Subscription,
   SubscriptionPlan,
@@ -8,11 +9,33 @@ import {
 } from '../../database/entities/subscription.entity';
 import { User } from '../../database/entities/user.entity';
 import { WebhookEvent } from '../../database/entities/webhook-event.entity';
-import { RevenueCatWebhookDto, RevenueCatEventDto } from './dto/revenuecat-webhook.dto';
+import {
+  RevenueCatWebhookDto,
+  RevenueCatEventDto,
+  RevenueCatCancelReason,
+} from './dto/revenuecat-webhook.dto';
 import { SubscriptionDto } from './dto/subscription.dto';
+import { RcSubscriberPayload } from './clients/revenuecat-rest-client';
+import { isUniqueViolation } from './utils/db-errors.util';
+
+/** Cancel reasons that trigger immediate revocation (not period-end). */
+const IMMEDIATE_REVOKE_REASONS: RevenueCatCancelReason[] = ['CUSTOMER_SUPPORT', 'BILLING_ERROR'];
+
+/** RC events that should be silently acknowledged — we don't act on them yet. */
+const SILENT_ACK_EVENTS = new Set<string>([
+  'TEST',
+  'INVOICE_ISSUANCE',
+  'VIRTUAL_CURRENCY_TRANSACTION',
+  'EXPERIMENT_ENROLLMENT',
+]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isResolvableCandidate = (id: unknown): id is string =>
+  typeof id === 'string' && id.length > 0 && !id.startsWith('$RCAnonymousID:');
 
 /**
- * Service handling subscription operations and RevenueCat webhook processing
+ * Service handling subscription operations and RevenueCat webhook processing.
  */
 @Injectable()
 export class SubscriptionService {
@@ -21,170 +44,579 @@ export class SubscriptionService {
   constructor(
     @InjectRepository(Subscription)
     private readonly subscriptionRepo: Repository<Subscription>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
     @InjectRepository(WebhookEvent)
     private readonly webhookEventRepo: Repository<WebhookEvent>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
+  private emitChanged(userId: string): void {
+    this.eventEmitter.emit('subscription.changed', { userId });
+  }
+
   /**
-   * Get user's current subscription
+   * Get user's current subscription.
    */
   async getUserSubscription(userId: string): Promise<SubscriptionDto | null> {
-    const subscription = await this.subscriptionRepo.findOne({
-      where: { userId },
-    });
-
+    const subscription = await this.subscriptionRepo.findOne({ where: { userId } });
     if (!subscription) return null;
-
     return this.mapToDto(subscription);
   }
 
   /**
-   * Process RevenueCat webhook event
+   * Process a RevenueCat webhook event.
+   *
+   * Guards (in order): sandbox-in-prod filter → silent-ack short-circuit →
+   * transactional dispatch (idempotency lock + handler in one atomic unit).
+   *
+   * If the handler throws, the transaction rolls back including the
+   * idempotency row, so RevenueCat's retry will reprocess the event.
+   *
+   * Returns an outcome string for the controller to propagate in the response body.
    */
-  async processWebhook(payload: RevenueCatWebhookDto): Promise<void> {
+  async processWebhook(payload: RevenueCatWebhookDto): Promise<{ outcome: string }> {
     const { event } = payload;
+    const startMs = Date.now();
 
-    // DB-based idempotency: insert first as lock, catch duplicate
-    try {
-      await this.webhookEventRepo.insert({
-        eventId: event.id,
-        eventType: event.type,
-      });
-    } catch (error: unknown) {
-      const dbError = error as { code?: string };
-      if (dbError.code === '23505') {
-        this.logger.debug(`Event ${event.id} already processed, skipping`);
-        return;
-      }
-      throw error;
+    if (process.env.NODE_ENV === 'production' && event.environment === 'SANDBOX') {
+      this.logger.warn(
+        `event=${event.type} outcome=sandbox_dropped id=${event.id} userId=${event.app_user_id ?? 'unknown'}`,
+      );
+      return { outcome: 'sandbox_dropped' };
     }
 
-    // Find user by RevenueCat app_user_id (which should be our user ID)
-    const user = await this.userRepo.findOne({ where: { id: event.app_user_id } });
+    if (SILENT_ACK_EVENTS.has(event.type)) {
+      this.logger.debug(`event=${event.type} outcome=ack_silent id=${event.id}`);
+      // Still record it for idempotency — outside a transaction is fine since handler is a no-op.
+      await this.recordIdempotency(event);
+      return { outcome: 'processed' };
+    }
+
+    let outcome = 'processed';
+
+    const touchedIds = await this.dataSource.transaction(async (manager) => {
+      // Idempotency lock — insert first; on duplicate-key, we've seen this event before.
+      try {
+        await manager.insert(WebhookEvent, { eventId: event.id, eventType: event.type });
+      } catch (error: unknown) {
+        if (isUniqueViolation(error)) {
+          outcome = 'duplicate';
+          this.logger.debug(
+            `event=${event.type} outcome=duplicate id=${event.id} userId=${event.app_user_id ?? 'unknown'}`,
+          );
+          return [];
+        }
+        throw error;
+      }
+
+      return this.dispatch(event, manager);
+    });
+
+    const latencyMs = Date.now() - startMs;
+
+    // Emit after transaction commits so guard re-reads committed state
+    for (const id of touchedIds ?? []) {
+      this.emitChanged(id);
+    }
+
+    this.logger.log(
+      `event=${event.type} outcome=${outcome} id=${event.id} userId=${event.app_user_id ?? 'unknown'} latency_ms=${latencyMs}`,
+    );
+
+    return { outcome };
+  }
+
+  /** Insert idempotency row, swallow duplicate-key errors. Used outside transactions. */
+  private async recordIdempotency(event: RevenueCatEventDto): Promise<void> {
+    try {
+      await this.webhookEventRepo.insert({ eventId: event.id, eventType: event.type });
+    } catch (error: unknown) {
+      if (isUniqueViolation(error)) return;
+      throw error;
+    }
+  }
+
+  /** Resolve event to user, apply out-of-order guard, route to handler. Returns mutated userIds. */
+  private async dispatch(event: RevenueCatEventDto, manager: EntityManager): Promise<string[]> {
+    const subscriptionRepo = manager.getRepository(Subscription);
+    const userRepo = manager.getRepository(User);
+
+    // TRANSFER has its own user-resolution path; delegate before standard user lookup.
+    if (event.type === 'TRANSFER') {
+      return this.handleTransfer(event, subscriptionRepo, userRepo);
+    }
+
+    const user = await this.resolveUser(event, userRepo);
     if (!user) {
-      this.logger.warn(`User not found for RevenueCat ID: ${event.app_user_id}`);
-      return;
+      this.logger.warn(
+        `User not found for RC event ${event.id} (app_user_id=${event.app_user_id ?? 'null'})`,
+      );
+      return [];
+    }
+
+    // Single locked read — result reused by stale guard and handlers to avoid double round-trip.
+    const existing = await subscriptionRepo.findOne({
+      where: { userId: user.id },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    this.logUserDrift(event, existing, user.id);
+
+    if (this.isStaleEvent(event, existing)) {
+      this.logger.warn(`Stale event ${event.id} ts=${event.event_timestamp_ms} — skipping`);
+      return [];
     }
 
     switch (event.type) {
       case 'INITIAL_PURCHASE':
       case 'RENEWAL':
       case 'UNCANCELLATION':
-        await this.handlePurchaseOrRenewal(user.id, event);
-        break;
-      case 'CANCELLATION':
-        await this.handleCancellation(user.id);
-        break;
-      case 'EXPIRATION':
-        await this.handleExpiration(user.id);
-        break;
-      case 'BILLING_ISSUE':
-        await this.handleBillingIssue(user.id);
+      case 'NON_RENEWING_PURCHASE':
+      case 'TEMPORARY_ENTITLEMENT_GRANT':
+      case 'REFUND_REVERSED':
+        await this.handlePurchaseOrRenewal(user.id, event, subscriptionRepo, existing);
         break;
       case 'PRODUCT_CHANGE':
-        await this.handlePurchaseOrRenewal(user.id, event);
+        await this.handleProductChange(user.id, event, subscriptionRepo, existing);
         break;
+      case 'SUBSCRIPTION_EXTENDED':
+        await this.handleExtension(user.id, event, subscriptionRepo);
+        break;
+      case 'REFUND':
+        await this.handleRefund(user.id, event, subscriptionRepo, existing);
+        break;
+      case 'CANCELLATION':
+        await this.handleCancellation(user.id, event, subscriptionRepo);
+        break;
+      case 'EXPIRATION':
+        await this.handleExpiration(user.id, event, subscriptionRepo);
+        break;
+      case 'BILLING_ISSUE':
+        await this.handleBillingIssue(user.id, event, subscriptionRepo);
+        return []; // no premium-access state changed — skip cache eviction
+      case 'SUBSCRIPTION_PAUSED':
+        await this.handlePaused(user.id, event, subscriptionRepo);
+        break;
+      default:
+        this.logger.warn(`Unhandled RC event type: ${event.type}`);
+        return [];
     }
+    return [user.id];
   }
 
   /**
-   * Handle purchase or renewal event
+   * Resolve a User row from any of the IDs RC may send.
+   *
+   * Precedence:
+   *   1. `app_user_id` (current logged-in identity).
+   *   2. `original_app_user_id` (first ID ever used; often the anonymous ID).
+   *   3. `aliases[]` fallback — emits a warning so we can audit RC linking drift.
+   *
+   * UUID-shaped, non-anonymous candidates are checked against `users.id`. This
+   * prevents an older anonymous-linked alias from winning over the current
+   * logged-in UUID when both resolve to different rows.
    */
-  private async handlePurchaseOrRenewal(userId: string, event: RevenueCatEventDto): Promise<void> {
+  private async resolveUser(
+    event: RevenueCatEventDto,
+    userRepo: Repository<User>,
+  ): Promise<User | null> {
+    const tryLookup = async (id: string | undefined): Promise<User | null> => {
+      if (!isResolvableCandidate(id) || !UUID_RE.test(id)) return null;
+      return userRepo.findOne({ where: { id } });
+    };
+
+    const primary = await tryLookup(event.app_user_id);
+    if (primary) return primary;
+
+    const original = await tryLookup(event.original_app_user_id);
+    if (original) return original;
+
+    for (const alias of event.aliases ?? []) {
+      const aliasUser = await tryLookup(alias);
+      if (aliasUser) {
+        this.logger.warn(
+          `resolveUser_via_aliases userId=${aliasUser.id} alias=${alias} event_id=${event.id} event_type=${event.type}`,
+        );
+        return aliasUser;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Warn when an event's `app_user_id` differs from the row already on file.
+   * Signals RC alias-linking drift or a missed `RC.logIn(uuid)` on the client.
+   * Skipped on first-time row creation and when either side is anonymous.
+   */
+  private logUserDrift(
+    event: RevenueCatEventDto,
+    existing: Subscription | null,
+    resolvedUserId: string,
+  ): void {
+    if (!existing) return;
+    const eventAppUserId = event.app_user_id;
+    const storedAppUserId = existing.appUserId;
+    if (!eventAppUserId || !storedAppUserId) return;
+    if (
+      eventAppUserId.startsWith('$RCAnonymousID:') ||
+      storedAppUserId.startsWith('$RCAnonymousID:')
+    ) {
+      return;
+    }
+    if (eventAppUserId === storedAppUserId) return;
+
+    this.logger.warn(
+      `subscription_user_drift userId=${resolvedUserId} event_app_user_id=${eventAppUserId} stored_app_user_id=${storedAppUserId} event_type=${event.type} event_id=${event.id}`,
+    );
+  }
+
+  private isStaleEvent(event: RevenueCatEventDto, existing: Subscription | null): boolean {
+    const incomingTs = event.event_timestamp_ms ?? null;
+    if (incomingTs === null || !existing || existing.eventTimestampMs === null) return false;
+    return incomingTs <= existing.eventTimestampMs;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private handlers — all take the transactional Subscription repo
+  // ---------------------------------------------------------------------------
+
+  private async handlePurchaseOrRenewal(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+    existing: Subscription | null,
+  ): Promise<void> {
+    if (!event.product_id) {
+      this.logger.warn(`Event ${event.id} (${event.type}) missing product_id — skipping`);
+      return;
+    }
     const plan = this.mapProductToPlan(event.product_id);
     const expiresAt = event.expiration_at_ms ? new Date(event.expiration_at_ms) : undefined;
     const purchaseDate = event.purchased_at_ms ? new Date(event.purchased_at_ms) : new Date();
 
-    const existing = await this.subscriptionRepo.findOne({ where: { userId } });
+    const tsField = { eventTimestampMs: event.event_timestamp_ms ?? null };
 
     if (existing) {
-      await this.subscriptionRepo.update(existing.id, {
+      await subscriptionRepo.update(existing.id, {
         plan,
         status: SubscriptionStatus.ACTIVE,
         currentPeriodEnd: expiresAt,
         currentPeriodStart: purchaseDate,
         cancelAtPeriodEnd: false,
-        revenuecatId: event.original_app_user_id,
+        appUserId: event.original_app_user_id,
+        ...tsField,
       });
     } else {
-      const subscription = this.subscriptionRepo.create({
+      const sub = subscriptionRepo.create({
         userId,
         plan,
         status: SubscriptionStatus.ACTIVE,
         currentPeriodEnd: expiresAt,
         currentPeriodStart: purchaseDate,
-        revenuecatId: event.original_app_user_id,
+        appUserId: event.original_app_user_id,
+        ...tsField,
       });
-      await this.subscriptionRepo.save(subscription);
+      await subscriptionRepo.save(sub);
     }
 
-    this.logger.log(`Subscription activated for user ${userId}: ${plan}`);
+    this.logger.log(`Subscription activated for user ${userId}: ${plan} (event=${event.type})`);
+  }
+
+  /** PRODUCT_CHANGE — switch plan to new_product_id (or product_id) and refresh expiry. */
+  private async handleProductChange(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+    existing: Subscription | null,
+  ): Promise<void> {
+    const productId = event.new_product_id ?? event.product_id;
+    if (!productId) {
+      this.logger.warn(`PRODUCT_CHANGE event ${event.id} missing product info — skipping`);
+      return;
+    }
+    await this.handlePurchaseOrRenewal(
+      userId,
+      { ...event, product_id: productId },
+      subscriptionRepo,
+      existing,
+    );
+  }
+
+  /** SUBSCRIPTION_EXTENDED — push currentPeriodEnd forward; do NOT change plan or status. */
+  private async handleExtension(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+  ): Promise<void> {
+    if (!event.expiration_at_ms) {
+      this.logger.warn(`SUBSCRIPTION_EXTENDED ${event.id} missing expiration_at_ms — skipping`);
+      return;
+    }
+    const result = await subscriptionRepo.update(
+      { userId },
+      {
+        currentPeriodEnd: new Date(event.expiration_at_ms),
+        eventTimestampMs: event.event_timestamp_ms ?? null,
+      },
+    );
+    if (!result.affected || result.affected === 0) {
+      this.logger.warn(
+        `handleExtension: no subscription found for user ${userId} — 0 rows updated (event=${event.id}, expiration_at_ms=${event.expiration_at_ms})`,
+      );
+    } else {
+      this.logger.log(`Subscription extended for user ${userId} until ${event.expiration_at_ms}`);
+    }
+  }
+
+  /** REFUND — immediately revoke premium access. Idempotent: repeated calls leave status=EXPIRED. */
+  private async handleRefund(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+    existing: Subscription | null,
+  ): Promise<void> {
+    if (!existing) {
+      this.logger.warn(
+        `REFUND event ${event.id}: no subscription found for user ${userId} — skipping`,
+      );
+      return;
+    }
+    const incomingTs = event.event_timestamp_ms ?? null;
+    // Preserve the existing guard when the event has no timestamp — avoids nulling out
+    // the out-of-order guard, which would let a subsequent stale RENEWAL slip through.
+    const effectiveTs =
+      existing.eventTimestampMs !== null && incomingTs === null
+        ? existing.eventTimestampMs
+        : incomingTs;
+
+    await subscriptionRepo.update(existing.id, {
+      status: SubscriptionStatus.EXPIRED,
+      currentPeriodEnd: new Date(),
+      cancelAtPeriodEnd: false,
+      eventTimestampMs: effectiveTs,
+    });
+    this.logger.log(`Subscription refunded (immediately revoked) for user ${userId}`);
+
+    // Warn when CANCELLATION with support/billing reason is the actual refund channel
+    // so we can audit whether RC emits REFUND directly or routes through CANCELLATION.
   }
 
   /**
-   * Handle cancellation event - subscription still active until period end
+   * CANCELLATION — differentiate by cancel_reason:
+   *   UNSUBSCRIBE / DEVELOPER_INITIATED / PRICE_INCREASE / UNKNOWN → period-end
+   *     (keep ACTIVE, set cancelAtPeriodEnd=true).
+   *   CUSTOMER_SUPPORT / BILLING_ERROR → immediate revoke (refunds and support pulls).
    */
-  private async handleCancellation(userId: string): Promise<void> {
-    await this.subscriptionRepo.update({ userId }, { cancelAtPeriodEnd: true });
-    this.logger.log(`Subscription cancelled (will expire at period end) for user ${userId}`);
+  private async handleCancellation(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+  ): Promise<void> {
+    const reason = event.cancel_reason as RevenueCatCancelReason | undefined;
+    const isImmediateRevoke = reason !== undefined && IMMEDIATE_REVOKE_REASONS.includes(reason);
+
+    if (isImmediateRevoke) {
+      await subscriptionRepo.update(
+        { userId },
+        {
+          status: SubscriptionStatus.EXPIRED,
+          currentPeriodEnd: new Date(),
+          cancelAtPeriodEnd: false,
+          eventTimestampMs: event.event_timestamp_ms ?? null,
+        },
+      );
+      this.logger.log(
+        `Subscription immediately revoked (cancel_reason=${reason}) for user ${userId}`,
+      );
+    } else {
+      await subscriptionRepo.update(
+        { userId },
+        {
+          cancelAtPeriodEnd: true,
+          eventTimestampMs: event.event_timestamp_ms ?? null,
+        },
+      );
+      this.logger.log(
+        `Subscription will cancel at period end (cancel_reason=${reason ?? 'UNSUBSCRIBE'}) for user ${userId}`,
+      );
+    }
   }
 
-  /**
-   * Handle expiration event
-   */
-  private async handleExpiration(userId: string): Promise<void> {
-    await this.subscriptionRepo.update(
+  private async handleExpiration(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+  ): Promise<void> {
+    await subscriptionRepo.update(
       { userId },
       {
         status: SubscriptionStatus.EXPIRED,
+        plan: SubscriptionPlan.FREE,
         cancelAtPeriodEnd: false,
+        eventTimestampMs: event.event_timestamp_ms ?? null,
       },
     );
-    this.logger.log(`Subscription expired for user ${userId}`);
+    this.logger.log(
+      `Subscription expired for user ${userId} (reason=${event.expiration_reason ?? 'UNKNOWN'}) event=${event.type} userId=${userId}`,
+    );
   }
 
   /**
-   * Handle billing issue event
+   * BILLING_ISSUE — RC is retrying the charge. The subscription is NOT expired yet;
+   * if a grace period is in effect, the user keeps premium access until grace ends.
+   * We log the grace deadline; expiry will arrive as a separate EXPIRATION event.
    */
-  private async handleBillingIssue(userId: string): Promise<void> {
-    // Could send notification to user about billing issue
-    this.logger.warn(`Billing issue for user ${userId}`);
+  private async handleBillingIssue(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+  ): Promise<void> {
+    await subscriptionRepo.update(
+      { userId },
+      { eventTimestampMs: event.event_timestamp_ms ?? null },
+    );
+    const graceUntil = event.grace_period_expiration_at_ms
+      ? new Date(event.grace_period_expiration_at_ms).toISOString()
+      : 'none';
+    this.logger.warn(`Billing issue for user ${userId} (grace_until=${graceUntil})`);
+  }
+
+  /** SUBSCRIPTION_PAUSED → status=PAUSED; no access during pause. Captures auto_resume_at_ms if present. */
+  private async handlePaused(
+    userId: string,
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+  ): Promise<void> {
+    const resumeMs = event.auto_resume_at_ms ?? null;
+    await subscriptionRepo.update(
+      { userId },
+      {
+        status: SubscriptionStatus.PAUSED,
+        autoResumeAt: resumeMs ? new Date(resumeMs) : null,
+        eventTimestampMs: event.event_timestamp_ms ?? null,
+      },
+    );
+    this.logger.log(
+      `Subscription paused for user ${userId} event=${event.type} autoResumeAt=${resumeMs ? new Date(resumeMs).toISOString() : 'none'}`,
+    );
   }
 
   /**
-   * Map RevenueCat product ID to our subscription plan
+   * TRANSFER — relink subscription row from transferred_from userId to transferred_to.
+   * RC sends both as arrays; we use the first ID in each. Validates both exist before
+   * relinking to prevent silent privilege grants.
+   */
+  private async handleTransfer(
+    event: RevenueCatEventDto,
+    subscriptionRepo: Repository<Subscription>,
+    userRepo: Repository<User>,
+  ): Promise<string[]> {
+    const fromId = event.transferred_from?.[0];
+    const toId = event.transferred_to?.[0];
+
+    if (!fromId || !toId) {
+      this.logger.error(
+        `TRANSFER event ${event.id} missing transferred_from/transferred_to — skipping`,
+      );
+      return [];
+    }
+    if ((event.transferred_from?.length ?? 0) > 1 || (event.transferred_to?.length ?? 0) > 1) {
+      this.logger.warn(
+        `TRANSFER event ${event.id} has multiple from/to IDs — using first only ` +
+          `(from=${event.transferred_from?.join(',')}, to=${event.transferred_to?.join(',')})`,
+      );
+    }
+
+    const [fromUser, toUser] = await Promise.all([
+      userRepo.findOne({ where: { id: fromId } }),
+      userRepo.findOne({ where: { id: toId } }),
+    ]);
+
+    if (!fromUser) {
+      this.logger.warn(`TRANSFER: source user ${fromId} not found — skipping`);
+      return [];
+    }
+    if (!toUser) {
+      this.logger.warn(`TRANSFER: destination user ${toId} not found — skipping`);
+      return [];
+    }
+
+    // Lock rows in consistent userId order to prevent AB/BA deadlock on concurrent swapped TRANSFERs.
+    const [firstId, secondId] = [fromId, toId].sort();
+    const [firstRow, secondRow] = await Promise.all([
+      subscriptionRepo.findOne({ where: { userId: firstId }, lock: { mode: 'pessimistic_write' } }),
+      subscriptionRepo.findOne({
+        where: { userId: secondId },
+        lock: { mode: 'pessimistic_write' },
+      }),
+    ]);
+    const subscription = firstId === fromId ? firstRow : secondRow;
+    const existingDestination = firstId === toId ? firstRow : secondRow;
+
+    if (!subscription) {
+      this.logger.warn(`TRANSFER: no subscription found for source user ${fromId} — skipping`);
+      return [];
+    }
+
+    if (existingDestination) {
+      this.logger.error(
+        `TRANSFER event ${event.id}: destination user ${toId} already has subscription id=${existingDestination.id} — conflict with source user ${fromId}`,
+      );
+      throw new ConflictException(
+        `Cannot transfer subscription: destination user ${toId} already has an active subscription`,
+      );
+    }
+
+    await subscriptionRepo.update(subscription.id, {
+      userId: toId,
+      eventTimestampMs: event.event_timestamp_ms ?? null,
+    });
+    this.logger.log(`Subscription transferred from user ${fromId} to ${toId}`);
+    return [fromId, toId];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Map RC product identifier to internal SubscriptionPlan.
+   * Uses substring matching to cover store-specific suffixes (e.g. _ios, _android).
+   * Throws on unrecognised product IDs — caller's transaction rolls back and RC will retry.
+   * Add new product prefixes here when launching new SKUs.
    */
   private mapProductToPlan(productId: string): SubscriptionPlan {
-    const lowerProductId = productId.toLowerCase();
-
-    if (lowerProductId.includes('lifetime')) {
-      return SubscriptionPlan.LIFETIME;
-    }
-    if (lowerProductId.includes('yearly') || lowerProductId.includes('annual')) {
-      return SubscriptionPlan.YEARLY;
-    }
-    if (lowerProductId.includes('monthly')) {
-      return SubscriptionPlan.MONTHLY;
-    }
-
-    return SubscriptionPlan.MONTHLY; // Default to monthly
+    const lower = productId.toLowerCase();
+    if (lower.includes('lifetime')) return SubscriptionPlan.LIFETIME;
+    if (lower.includes('yearly') || lower.includes('annual')) return SubscriptionPlan.YEARLY;
+    if (lower.includes('monthly')) return SubscriptionPlan.MONTHLY;
+    this.logger.error(
+      `mapProductToPlan: unknown productId="${productId}" — no plan mapped; throwing to trigger RC retry`,
+    );
+    throw new Error(`Unknown product ID: ${productId}`);
   }
 
   /**
-   * Check if subscription is currently active
+   * Returns true if the user has an active non-free subscription.
+   * Used by resource-level access guards.
    */
-  private isSubscriptionActive(subscription: Subscription): boolean {
+  async isUserPremium(userId: string): Promise<boolean> {
+    const subscription = await this.subscriptionRepo.findOne({ where: { userId } });
+    if (!subscription || subscription.plan === SubscriptionPlan.FREE) return false;
+    return this.isSubscriptionActive(subscription);
+  }
+
+  /**
+   * Check if subscription is currently active (considers expiration and status).
+   */
+  isSubscriptionActive(subscription: Subscription): boolean {
     if (subscription.status !== SubscriptionStatus.ACTIVE) return false;
     if (subscription.plan === SubscriptionPlan.LIFETIME) return true;
     if (!subscription.currentPeriodEnd) return true;
     return subscription.currentPeriodEnd > new Date();
   }
 
-  /**
-   * Map subscription entity to DTO
-   */
   private mapToDto(subscription: Subscription): SubscriptionDto {
     return {
       id: subscription.id,
@@ -193,6 +625,93 @@ export class SubscriptionService {
       expiresAt: subscription.currentPeriodEnd,
       isActive: this.isSubscriptionActive(subscription),
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+      autoResumeAt: subscription.autoResumeAt ?? null,
     };
+  }
+
+  /**
+   * Apply RC ground truth to a user's subscription row.
+   * Safe to call concurrently with webhook handlers — the out-of-order
+   * timestamp guard (event_timestamp_ms) prevents stale writes.
+   *
+   * @param source - 'fallback' (PremiumGuard read-path) | 'cron' (reconciliation)
+   */
+  async applyRcGroundTruth(
+    userId: string,
+    rcPayload: RcSubscriberPayload,
+    source: 'fallback' | 'cron' = 'cron',
+  ): Promise<void> {
+    const incomingTs = rcPayload.fetchedAtMs;
+    let changed = false;
+
+    await this.dataSource.transaction(async (mgr) => {
+      const existing = await mgr.findOne(Subscription, {
+        where: { userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      // Out-of-order guard: skip if stored timestamp is same or newer
+      if (
+        existing &&
+        existing.eventTimestampMs !== null &&
+        incomingTs <= existing.eventTimestampMs
+      ) {
+        this.logger.warn(
+          `applyRcGroundTruth: stale payload ts=${incomingTs} <= stored=${existing.eventTimestampMs} for user ${userId} (source=${source}) — skipping`,
+        );
+        return;
+      }
+
+      const hasActive = rcPayload.hasActiveEntitlement;
+      const expiresAtMs = rcPayload.activeExpiresAtMs;
+      const productId = rcPayload.activeProductId;
+
+      if (hasActive && productId) {
+        const plan = this.mapProductToPlan(productId);
+        const currentPeriodEnd = expiresAtMs ? new Date(expiresAtMs) : undefined;
+        const beforeStatus = existing?.status ?? 'none';
+
+        if (existing) {
+          await mgr.update(Subscription, existing.id, {
+            plan,
+            status: SubscriptionStatus.ACTIVE,
+            currentPeriodEnd,
+            cancelAtPeriodEnd: false,
+            eventTimestampMs: incomingTs,
+          });
+        } else {
+          const sub = mgr.create(Subscription, {
+            userId,
+            plan,
+            status: SubscriptionStatus.ACTIVE,
+            currentPeriodEnd,
+            eventTimestampMs: incomingTs,
+          });
+          await mgr.save(Subscription, sub);
+        }
+
+        this.logger.log(
+          `applyRcGroundTruth: ACTIVE applied for user ${userId} plan=${plan} (${beforeStatus}→ACTIVE source=${source})`,
+        );
+        changed = true;
+      } else if (existing && existing.status === SubscriptionStatus.ACTIVE) {
+        // RC says no active entitlement but DB says ACTIVE — expire the row
+        await mgr.update(Subscription, existing.id, {
+          status: SubscriptionStatus.EXPIRED,
+          cancelAtPeriodEnd: false,
+          eventTimestampMs: incomingTs,
+        });
+        this.logger.log(
+          `applyRcGroundTruth: EXPIRED applied for user ${userId} (ACTIVE→EXPIRED source=${source})`,
+        );
+        changed = true;
+      } else {
+        this.logger.debug(
+          `applyRcGroundTruth: no change needed for user ${userId} (source=${source})`,
+        );
+      }
+    });
+    // Emit after transaction commits so guard re-reads committed state
+    if (changed) this.emitChanged(userId);
   }
 }

@@ -1,20 +1,13 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, HttpException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public-route.decorator';
 import { AuthService } from './auth.service';
-import {
-  RegisterDto,
-  LoginDto,
-  AuthResponseDto,
-  RefreshTokenDto,
-  AppleAuthDto,
-  GoogleAuthDto,
-  ForgotPasswordDto,
-  VerifyOtpDto,
-  ResetPasswordDto,
-} from './dto';
+import { AuthResponseDto, RefreshTokenDto, FirebaseAuthDto } from './dto';
 import { CurrentUser } from './decorators';
 import { User } from '../../database/entities/user.entity';
+
+const EMAIL_AUTH_DISABLED_MSG =
+  'Email/password authentication is disabled. Please sign in with Google or Apple.';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -23,41 +16,30 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @ApiOperation({ summary: 'Register new user with email/password' })
-  @ApiResponse({ status: 201, type: AuthResponseDto })
-  @ApiResponse({ status: 409, description: 'Email already registered' })
-  async register(@Body() dto: RegisterDto): Promise<AuthResponseDto> {
-    return this.authService.register(dto);
+  @HttpCode(HttpStatus.GONE)
+  @ApiOperation({ summary: 'Register new user with email/password (disabled)' })
+  @ApiResponse({ status: 410, description: 'Email/password auth disabled' })
+  register(): never {
+    throw new HttpException(EMAIL_AUTH_DISABLED_MSG, HttpStatus.GONE);
   }
 
   @Public()
   @Post('login')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email/password' })
-  @ApiResponse({ status: 200, type: AuthResponseDto })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
-    return this.authService.login(dto);
+  @HttpCode(HttpStatus.GONE)
+  @ApiOperation({ summary: 'Login with email/password (disabled)' })
+  @ApiResponse({ status: 410, description: 'Email/password auth disabled' })
+  login(): never {
+    throw new HttpException(EMAIL_AUTH_DISABLED_MSG, HttpStatus.GONE);
   }
 
   @Public()
-  @Post('google')
+  @Post('firebase')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Sign in with Google ID token (mobile-compatible)' })
+  @ApiOperation({ summary: 'Sign in with Firebase (Google or Apple)' })
   @ApiResponse({ status: 200, type: AuthResponseDto })
-  @ApiResponse({ status: 401, description: 'Invalid Google ID token' })
-  async googleAuth(@Body() dto: GoogleAuthDto): Promise<AuthResponseDto> {
-    return this.authService.googleLogin(dto.idToken, dto.displayName, dto.sessionToken);
-  }
-
-  @Public()
-  @Post('apple')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Apple Sign In with ID token' })
-  @ApiResponse({ status: 200, type: AuthResponseDto })
-  @ApiResponse({ status: 401, description: 'Invalid Apple ID token' })
-  async appleAuth(@Body() dto: AppleAuthDto): Promise<AuthResponseDto> {
-    return this.authService.appleLogin(dto.idToken, dto.displayName, dto.sessionToken);
+  @ApiResponse({ status: 401, description: 'Invalid Firebase ID token' })
+  async firebaseAuth(@Body() dto: FirebaseAuthDto): Promise<AuthResponseDto> {
+    return this.authService.firebaseLogin(dto);
   }
 
   @Public()
@@ -72,35 +54,29 @@ export class AuthController {
 
   @Public()
   @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send OTP to email for password reset' })
-  @ApiResponse({ status: 200, description: 'OTP sent to email (masked)' })
-  @ApiResponse({ status: 404, description: 'Email not found' })
-  @ApiResponse({ status: 429, description: 'Too many requests (3/hour limit)' })
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto.email);
+  @HttpCode(HttpStatus.GONE)
+  @ApiOperation({ summary: 'Send OTP for password reset (disabled)' })
+  @ApiResponse({ status: 410, description: 'Email/password auth disabled' })
+  forgotPassword(): never {
+    throw new HttpException(EMAIL_AUTH_DISABLED_MSG, HttpStatus.GONE);
   }
 
   @Public()
   @Post('verify-otp')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify OTP and get password reset token (15min)' })
-  @ApiResponse({ status: 200, description: 'OTP verified, reset token returned' })
-  @ApiResponse({ status: 400, description: 'Invalid or expired OTP; too many attempts' })
-  async verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto.email, dto.otp);
+  @HttpCode(HttpStatus.GONE)
+  @ApiOperation({ summary: 'Verify OTP (disabled)' })
+  @ApiResponse({ status: 410, description: 'Email/password auth disabled' })
+  verifyOtp(): never {
+    throw new HttpException(EMAIL_AUTH_DISABLED_MSG, HttpStatus.GONE);
   }
 
   @Public()
   @Post('reset-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password using reset token from verify-otp' })
-  @ApiResponse({ status: 200, description: 'Password reset successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid or expired reset token' })
-  @ApiResponse({ status: 401, description: 'Token already used' })
-  async resetPassword(@Body() dto: ResetPasswordDto) {
-    await this.authService.resetPassword(dto.resetToken, dto.newPassword);
-    return null;
+  @HttpCode(HttpStatus.GONE)
+  @ApiOperation({ summary: 'Reset password (disabled)' })
+  @ApiResponse({ status: 410, description: 'Email/password auth disabled' })
+  resetPassword(): never {
+    throw new HttpException(EMAIL_AUTH_DISABLED_MSG, HttpStatus.GONE);
   }
 
   @Post('logout')

@@ -9,10 +9,17 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Language } from './language.entity';
+import { Scenario } from './scenario.entity';
 
 export enum AiConversationType {
   ANONYMOUS = 'anonymous',
   AUTHENTICATED = 'authenticated',
+  PERSONALIZE_INTAKE = 'personalize_intake',
+}
+
+export enum ScenarioChatStatus {
+  CHATTING = 'CHATTING',
+  DONE = 'DONE',
 }
 
 @Entity('ai_conversations')
@@ -27,15 +34,12 @@ export class AiConversation {
   @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId?: string | null;
 
-  @ManyToOne(() => Language, { nullable: true })
+  @ManyToOne(() => Language)
   @JoinColumn({ name: 'language_id' })
-  language?: Language | null;
+  language!: Language;
 
-  @Column({ type: 'uuid', name: 'language_id', nullable: true })
-  languageId?: string | null;
-
-  @Column({ type: 'varchar', length: 255, name: 'session_token', nullable: true, unique: true })
-  sessionToken?: string | null;
+  @Column({ type: 'uuid', name: 'language_id' })
+  languageId!: string;
 
   @Column({
     type: 'enum',
@@ -56,8 +60,37 @@ export class AiConversation {
   @Column({ type: 'int', name: 'message_count', default: 0 })
   messageCount!: number;
 
+  @ManyToOne(() => Scenario, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'scenario_id' })
+  scenario?: Scenario;
+
+  @Column({ type: 'uuid', name: 'scenario_id', nullable: true })
+  scenarioId?: string;
+
+  @Column({
+    type: 'enum',
+    enum: ScenarioChatStatus,
+    enumName: 'scenario_chat_status_enum',
+    default: ScenarioChatStatus.CHATTING,
+  })
+  status!: ScenarioChatStatus;
+
+  @Column({ type: 'int', name: 'max_turns', default: 12 })
+  maxTurns!: number;
+
+  @Column({ type: 'varchar', length: 10, name: 'native_language', nullable: true })
+  nativeLanguage?: string | null;
+
+  // Cached learner profile extracted by `POST /onboarding/complete` for idempotency.
+  @Column({ type: 'jsonb', name: 'extracted_profile', nullable: true })
+  extractedProfile?: Record<string, unknown> | null;
+
+  // Cached 5-scenario payload (full OnboardingScenarioDto shape) for stable UUIDs across resumes.
   @Column({ type: 'jsonb', nullable: true })
-  metadata?: Record<string, unknown>;
+  scenarios?: Array<Record<string, unknown>> | null;
+
+  @Column({ type: 'uuid', array: true, name: 'injected_vocab_ids', nullable: true })
+  injectedVocabIds?: string[] | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

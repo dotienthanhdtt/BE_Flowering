@@ -1,13 +1,23 @@
-import './instrument';
+import { langfuseSdk } from './instrument';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { useContainer } from 'class-validator';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { setupSwaggerDocumentation } from './swagger/swagger-documentation-setup';
 import { ResponseTransformInterceptor, AllExceptionsFilter } from './common';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  // Disable NestJS built-in body parser (defaults to 100 KB) so we can enforce our own limit
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  // Cap request bodies at 256 KB — must be registered before NestJS route handlers
+  app.use(json({ limit: '256kb' }));
+  app.use(urlencoded({ limit: '256kb', extended: true }));
+
+  // Enables async class-validator constraints (e.g. IsValidLevelForLanguage) to use NestJS DI
+  useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port', 3000);
@@ -44,6 +54,13 @@ async function bootstrap(): Promise<void> {
   if (nodeEnv !== 'production') {
     setupSwaggerDocumentation(app);
     console.log(`Swagger docs available at http://localhost:${port}/api/docs`);
+  }
+
+  // Graceful shutdown flushes Langfuse traces
+  if (langfuseSdk) {
+    app.enableShutdownHooks();
+    const sdk = langfuseSdk;
+    process.on('SIGTERM', () => sdk.shutdown());
   }
 
   // Bind to 0.0.0.0 explicitly for Railway/Docker compatibility (IPv4)

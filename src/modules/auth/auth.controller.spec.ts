@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, RefreshTokenDto, AppleAuthDto, GoogleAuthDto, AuthResponseDto } from './dto';
+import { RefreshTokenDto, FirebaseAuthDto, AuthResponseDto } from './dto';
 import { User } from '../../database/entities/user.entity';
 
 describe('AuthController', () => {
@@ -15,22 +15,28 @@ describe('AuthController', () => {
     user: {
       id: 'user-123',
       email: 'test@example.com',
+      emailVerified: false,
       displayName: 'Test User',
       avatarUrl: undefined,
+      authProvider: 'email',
     },
+    languages: [],
   };
 
   const mockUser: User = {
     id: 'user-123',
     email: 'test@example.com',
+    emailVerified: false,
     displayName: 'Test User',
     passwordHash: 'hashed',
     authProvider: 'email',
     providerId: undefined,
     googleProviderId: undefined,
     appleProviderId: undefined,
+    firebaseUid: undefined,
     avatarUrl: undefined,
-    nativeLanguageId: undefined,
+    nativeLanguage: undefined,
+    roles: ['user'],
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -42,10 +48,7 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: {
-            register: jest.fn(),
-            login: jest.fn(),
-            googleLogin: jest.fn(),
-            appleLogin: jest.fn(),
+            firebaseLogin: jest.fn(),
             refreshTokens: jest.fn(),
             logout: jest.fn(),
           },
@@ -61,157 +64,103 @@ describe('AuthController', () => {
     jest.clearAllMocks();
   });
 
-  describe('register', () => {
-    it('should register new user successfully', async () => {
-      const registerDto: RegisterDto = {
-        email: 'new@example.com',
-        password: 'SecurePass123!',
-        displayName: 'New User',
-      };
-
-      authService.register.mockResolvedValue(mockAuthResponse);
-
-      const result = await controller.register(registerDto);
-
-      expect(authService.register).toHaveBeenCalledWith(registerDto);
-      expect(result).toEqual(mockAuthResponse);
-      expect(result.accessToken).toBe('access-token');
-      expect(result.user.email).toBe('test@example.com');
+  describe('register (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.register()).toThrow(HttpException);
+      try {
+        controller.register();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
     });
 
-    it('should throw ConflictException if email already exists', async () => {
-      const registerDto: RegisterDto = {
-        email: 'existing@example.com',
-        password: 'SecurePass123!',
-      };
-
-      authService.register.mockRejectedValue(new ConflictException('Email already registered'));
-
-      await expect(controller.register(registerDto)).rejects.toThrow(ConflictException);
-      expect(authService.register).toHaveBeenCalledWith(registerDto);
+    it('should not call authService', () => {
+      expect(() => controller.register()).toThrow();
     });
   });
 
-  describe('login', () => {
-    it('should login user successfully', async () => {
-      const loginDto: LoginDto = {
-        email: 'test@example.com',
-        password: 'SecurePass123!',
-      };
-
-      authService.login.mockResolvedValue(mockAuthResponse);
-
-      const result = await controller.login(loginDto);
-
-      expect(authService.login).toHaveBeenCalledWith(loginDto);
-      expect(result).toEqual(mockAuthResponse);
-      expect(result.accessToken).toBe('access-token');
-    });
-
-    it('should throw UnauthorizedException with invalid credentials', async () => {
-      const loginDto: LoginDto = {
-        email: 'test@example.com',
-        password: 'WrongPassword',
-      };
-
-      authService.login.mockRejectedValue(new UnauthorizedException('Invalid credentials'));
-
-      await expect(controller.login(loginDto)).rejects.toThrow(UnauthorizedException);
-      expect(authService.login).toHaveBeenCalledWith(loginDto);
+  describe('login (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.login()).toThrow(HttpException);
+      try {
+        controller.login();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
     });
   });
 
-  describe('googleAuth (POST /auth/google)', () => {
-    it('should sign in with Google ID token successfully', async () => {
-      const googleAuthDto: GoogleAuthDto = {
-        idToken: 'google-id-token',
-        displayName: 'Google User',
+  describe('forgotPassword (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.forgotPassword()).toThrow(HttpException);
+      try {
+        controller.forgotPassword();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
+    });
+  });
+
+  describe('verifyOtp (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.verifyOtp()).toThrow(HttpException);
+      try {
+        controller.verifyOtp();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
+    });
+  });
+
+  describe('resetPassword (disabled)', () => {
+    it('should throw 410 Gone', () => {
+      expect(() => controller.resetPassword()).toThrow(HttpException);
+      try {
+        controller.resetPassword();
+      } catch (err) {
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.GONE);
+      }
+    });
+  });
+
+  describe('firebaseAuth (POST /auth/firebase)', () => {
+    it('should sign in with Firebase ID token successfully', async () => {
+      const firebaseAuthDto: FirebaseAuthDto = {
+        idToken: 'firebase-id-token',
+        displayName: 'Firebase User',
       };
 
-      authService.googleLogin.mockResolvedValue(mockAuthResponse);
+      authService.firebaseLogin.mockResolvedValue(mockAuthResponse);
 
-      const result = await controller.googleAuth(googleAuthDto);
+      const result = await controller.firebaseAuth(firebaseAuthDto);
 
-      expect(authService.googleLogin).toHaveBeenCalledWith(
-        googleAuthDto.idToken,
-        googleAuthDto.displayName,
-        googleAuthDto.sessionToken,
-      );
+      expect(authService.firebaseLogin).toHaveBeenCalledWith(firebaseAuthDto);
       expect(result).toEqual(mockAuthResponse);
     });
 
-    it('should throw UnauthorizedException with invalid Google ID token', async () => {
-      const googleAuthDto: GoogleAuthDto = {
+    it('should throw UnauthorizedException with invalid Firebase ID token', async () => {
+      const firebaseAuthDto: FirebaseAuthDto = {
         idToken: 'invalid-token',
       };
 
-      authService.googleLogin.mockRejectedValue(
-        new UnauthorizedException('Invalid Google ID token'),
+      authService.firebaseLogin.mockRejectedValue(
+        new UnauthorizedException('Invalid Firebase ID token'),
       );
 
-      await expect(controller.googleAuth(googleAuthDto)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.firebaseAuth(firebaseAuthDto)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should pass sessionToken to googleLogin for onboarding linking', async () => {
-      const googleAuthDto: GoogleAuthDto = {
-        idToken: 'google-id-token',
-        sessionToken: 'onboard-sess-uuid',
+    it('should pass conversationId for onboarding linking', async () => {
+      const firebaseAuthDto: FirebaseAuthDto = {
+        idToken: 'firebase-id-token',
+        conversationId: 'onboard-conv-uuid',
       };
 
-      authService.googleLogin.mockResolvedValue(mockAuthResponse);
+      authService.firebaseLogin.mockResolvedValue(mockAuthResponse);
 
-      await controller.googleAuth(googleAuthDto);
+      await controller.firebaseAuth(firebaseAuthDto);
 
-      expect(authService.googleLogin).toHaveBeenCalledWith(
-        'google-id-token',
-        undefined,
-        'onboard-sess-uuid',
-      );
-    });
-  });
-
-  describe('appleAuth', () => {
-    it('should handle Apple Sign In successfully', async () => {
-      const appleAuthDto: AppleAuthDto = {
-        idToken: 'apple-id-token',
-        displayName: 'Apple User',
-      };
-
-      authService.appleLogin.mockResolvedValue(mockAuthResponse);
-
-      const result = await controller.appleAuth(appleAuthDto);
-
-      expect(authService.appleLogin).toHaveBeenCalledWith(
-        appleAuthDto.idToken,
-        appleAuthDto.displayName,
-        appleAuthDto.sessionToken,
-      );
-      expect(result).toEqual(mockAuthResponse);
-    });
-
-    it('should handle Apple Sign In without displayName', async () => {
-      const appleAuthDto: AppleAuthDto = {
-        idToken: 'apple-id-token',
-      };
-
-      authService.appleLogin.mockResolvedValue(mockAuthResponse);
-
-      const result = await controller.appleAuth(appleAuthDto);
-
-      expect(authService.appleLogin).toHaveBeenCalledWith(appleAuthDto.idToken, undefined, undefined);
-      expect(result).toEqual(mockAuthResponse);
-    });
-
-    it('should throw UnauthorizedException with invalid Apple ID token', async () => {
-      const appleAuthDto: AppleAuthDto = {
-        idToken: 'invalid-token',
-      };
-
-      authService.appleLogin.mockRejectedValue(
-        new UnauthorizedException('Invalid Apple ID token'),
-      );
-
-      await expect(controller.appleAuth(appleAuthDto)).rejects.toThrow(UnauthorizedException);
+      expect(authService.firebaseLogin).toHaveBeenCalledWith(firebaseAuthDto);
     });
   });
 
@@ -233,18 +182,6 @@ describe('AuthController', () => {
     it('should throw UnauthorizedException with invalid refresh token', async () => {
       const refreshDto: RefreshTokenDto = {
         refreshToken: 'invalid-token',
-      };
-
-      authService.refreshTokens.mockRejectedValue(
-        new UnauthorizedException('Invalid or expired refresh token'),
-      );
-
-      await expect(controller.refresh(refreshDto)).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should throw UnauthorizedException with expired refresh token', async () => {
-      const refreshDto: RefreshTokenDto = {
-        refreshToken: 'expired-token',
       };
 
       authService.refreshTokens.mockRejectedValue(

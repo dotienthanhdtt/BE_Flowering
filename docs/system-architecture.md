@@ -1,10 +1,10 @@
 # System Architecture
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-21
 
 ## Architecture Overview
 
-AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 7 feature modules and clear separation of concerns.
+AI-powered language learning backend following Clean Architecture principles with NestJS framework. Modular design with 13 feature modules and clear separation of concerns. Implements language partitioning strategy for multi-language content isolation.
 
 ## Architecture Layers
 
@@ -33,33 +33,15 @@ AI-powered language learning backend following Clean Architecture principles wit
 ## Core Architecture Patterns
 
 ### 1. Modular Architecture
-7 feature modules (auth, ai, user, language, subscription, onboarding, email) with dependencies injected via NestJS DI. Each module is self-contained with distinct responsibilities.
+13 feature modules with NestJS DI; each self-contained. **Critical:** Register all entities in BOTH:
+1. `database.module.ts` (global entities array)
+2. Feature module's `TypeOrmModule.forFeature([...])` (@InjectRepository)
 
-**Module Structure:**
-```
-module/
-├── dto/                    # Data Transfer Objects
-├── module.controller.ts    # HTTP endpoints
-├── module.service.ts       # Business logic
-├── module.module.ts        # NestJS module definition (with TypeOrmModule.forFeature())
-└── [additional services]   # Feature-specific services
-```
-
-**Critical:** All entities must be registered in BOTH:
-1. `database.module.ts` (global entities array for DataSource)
-2. Feature module's `TypeOrmModule.forFeature([...])` (for @InjectRepository)
-
-### 2. Dependency Injection
-NestJS IoC container manages all dependencies for testability and loose coupling.
-
-### 3. Repository Pattern
-TypeORM provides repository abstraction for database operations.
-
-### 4. Strategy Pattern
-AI module uses strategy pattern for multi-provider support (OpenAI, Anthropic, Google AI).
-
-### 5. Factory Pattern
-AI client factory dynamically selects provider based on configuration.
+### 2. Design Patterns
+- **DI:** NestJS IoC manages all dependencies
+- **Repository:** TypeORM abstracts DB operations
+- **Strategy:** AI module multi-provider (OpenAI, Anthropic, Google)
+- **Factory:** Provider selection per request
 
 ## Module Architecture Details
 
@@ -67,7 +49,7 @@ AI client factory dynamically selects provider based on configuration.
 ```
 ┌──────────────────────────────────────────────────────┐
 │           Auth Controller                            │
-│  POST /auth/register, /login, /google, /apple       │
+│  POST /auth/register, /login, /firebase             │
 │  POST /auth/refresh, /logout                         │
 │  POST /auth/forgot-password, /verify-otp, /reset... │
 └──────────────────────────────────────────────────────┘
@@ -77,15 +59,15 @@ AI client factory dynamically selects provider based on configuration.
 │  - validateUser()                                   │
 │  - createUser()                                     │
 │  - generateJWT()                                    │
-│  - validateOAuth()                                  │
+│  - firebaseLogin() (Google & Apple unified)         │
 │  - processPasswordReset()                           │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
-│        Passport Strategies & Validators             │
+│        Firebase Admin & Passport Strategies         │
+│  - FirebaseAdminService (token verification)        │
 │  - JwtStrategy (JWT validation)                     │
-│  - GoogleIdTokenValidator (Google token verify)     │
-│  - AppleStrategy (Apple OAuth)                      │
+│  - FirebaseTokenStrategy (Firebase token validation)│
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
@@ -95,87 +77,68 @@ AI client factory dynamically selects provider based on configuration.
 └──────────────────────────────────────────────────────┘
 ```
 
-**Key Features:**
-- Composite refresh tokens (uuid:hex) for O(1) validation
-- OAuth auto-linking to existing email
-- Password reset: OTP (10min) + reset token (15min)
-- Provider-specific IDs prevent duplicates
+**Key Features:** Sole method: `POST /auth/firebase` (auto-detects Google/Apple). Composite refresh tokens (uuid:hex, 90d expiry). OAuth auto-links existing emails. Email/password disabled (410 Gone). Firebase gracefully degrades on init failure.
 
 ### AI Module Flow
 ```
 ┌──────────────────────────────────────────────────────┐
 │           AI Controller                              │
-│  POST /ai/chat, /exercises/...                      │
-│  POST /ai/chat/correct, /ai/translate              │
-│  SSE /ai/chat/stream, /ai/conversations/:id/msgs   │
+│  POST /ai/chat, /chat/correct, /translate           │
+│  POST /ai/transcribe (audio to text)                │
+│  SSE /ai/chat/stream                               │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌────────────────────────────────────────────────────────────────┐
-│           Learning Agent Service        │  Translation Service │
-│  - processChat()                        │  - translateWord()   │
-│  - checkCorrection()                    │  - translateSentence │
-│  - generateExercises()                  │  - upsertVocabulary()│
-│  - assessPronunciation()                │                      │
+│  Learning Agent  │  Translation Service  │  Transcription Svc  │
+│  - processChat() │  - translateWord()    │  - transcribe()     │
+│  - checkCorrect()│  - translateSentence()│  - validateFile()   │
+│                 │  - upsertVocab()      │  - selectProvider() │
 └────────────────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────────┐
-│        Unified LLM Service                           │
-│  - selectProvider()                                 │
-│  - callLLM()                                        │
-│  - handleFallback()                                 │
-└──────────────────────────────────────────────────────┘
-                    ↓
-┌─────────────────────┬──────────────────┬──────────────────┐
-│  OpenAI (3)         │  Anthropic (2)   │  Google AI (5)   │
-│  - GPT-4o           │  - Claude 3.5    │  - Gemini 2.5 FL │
-│  - GPT-4o-mini      │  - Claude 3 HK   │  - Gemini 2.0 FL │
-│  - GPT-4.1-nano     │                  │  - Gemini 1.5 Pro│
-│                     │                  │  - Gemini 1.5 FL │
-│                     │                  │  - Gemini 1.0 Pro│
-└─────────────────────┴──────────────────┴──────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────────┐
-│         Langfuse Observability                       │
-│  - Trace AI requests                                │
-│  - Log prompts & responses                          │
-│  - Track usage metrics                              │
-└──────────────────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────────────────┐
-│         Database Operations                          │
-│  - Save AiConversationMessage                       │
-│  - Save/update Vocabulary (word translations)       │
-│  - Cache sentence translation on message            │
-└──────────────────────────────────────────────────────┘
+        ┌───────────┴────────────────────────────────┐
+        ↓                                            ↓
+┌──────────────────────────────┐      ┌──────────────────────┐
+│  Unified LLM Service          │      │  Transcription Service    │
+│  - selectProvider()           │      │  (STT with Signed URLs)   │
+│  - callLLM()                  │      │  - validateFile()          │
+│  - handleFallback()           │      │  - uploadAudio() → bucket  │
+│  LLM Providers:               │      │  - transcribe()            │
+│  ├─ OpenAI (3 models)         │      │  - generateSignedUrl(1h)   │
+│  ├─ Anthropic (2 models)      │      └────────────────────────────┘
+│  └─ Google AI (3 models)      │             ↓
+└──────────────────────────────┘      STT Providers:
+        ↓                             ├─ OpenAI Whisper (primary)
+┌──────────────────────────────┐      └─ Gemini Multimodal (fallback)
+│   Langfuse Tracing           │             ↓
+│ (per-invocation handlers)    │      Supabase Private Bucket
+│   await handler.flushAsync() │      (Presigned URLs for mobile)
+└──────────────────────────────┘
+        ↓
+┌──────────────────────────────┐
+│  Database Operations         │
+│  - AiConversationMessage     │
+│  - Vocabulary (translations) │
+│  - Message translation cache │
+└──────────────────────────────┘
 ```
 
-**AI Provider Selection:** Load balancing with fallback, cost optimization per request type
+**Translation:** Word (LLM → Vocabulary) | Sentence (fetch & cache). Model: GPT4-1-NANO (temp 0.1)
 
-**Translation Service:**
-- Word translation: LLM call → save to Vocabulary entity for user recall
-- Sentence translation: Fetch AiConversationMessage by ID → cache on message entity
-- Model: OPENAI_GPT4_1_NANO (temp 0.1)
+**Correction:** Input: prev AI msg + user msg + lang. Output: correctedText (null if no errors). Public endpoint, optional premium. Model: GPT4-1-NANO (temp 0.3)
 
-**Correction Check:**
-- Input: Previous AI message + user message + target language
-- LLM prompt: correction-check-prompt.md (ignores punctuation/capitalization, bolds corrections)
-- Output: correctedText (null if no errors, handles gibberish/emoji input)
-- Model: OPENAI_GPT4_1_NANO (temp 0.3)
-- Access: Public endpoint with optional premium (both authenticated and anonymous)
+**STT:** POST /ai/transcribe (premium). Input: M4A/MP4/MPEG/WAV (max 10MB). Providers: OpenAI Whisper → Gemini (fallback). Config: STT_PROVIDER env var.
 
 ### Subscription Module Flow
 ```
 ┌──────────────────────────────────────────────────────┐
 │    Subscription Controller & Webhook Controller      │
 │  GET /subscriptions/me                              │
-│  POST /subscriptions/sync (mobile-initiated)        │
 │  POST /webhooks/revenuecat (public, bearer auth)   │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │        Subscription Service                          │
 │  - getUserSubscription()                            │
-│  - syncSubscription() → RevenueCat API              │
 │  - processWebhook()                                 │
 │  - updateSubscriptionStatus()                       │
 └──────────────────────────────────────────────────────┘
@@ -183,47 +146,363 @@ AI client factory dynamically selects provider based on configuration.
 ┌──────────────────────────────────────────────────────┘
 │        Webhook Processing Flow (Idempotent):         │
 │  1. Validate Bearer token (timing-safe)             │
-│  2. Check WebhookEvent table for eventId            │
-│  3. Respond immediately with 200 (< 60s)            │
-│  4. Process async via setImmediate()                │
+│  2. Reject if NODE_ENV=production and sandbox event │
+│  3. Check WebhookEvent table for eventId            │
+│  4. Process synchronously (RC retries on failure)  │
 │  5. Insert into WebhookEvent (acts as lock)         │
 │  6. Update subscription status in DB                │
-│  7. Log processing errors                           │
+│  7. Return 200 after processing; errors return 5xx  │
 └──────────────────────────────────────────────────────┘
 ```
 
-**Sync Flow (Mobile → Backend):**
+### Email Module Flow
 ```
-1. Mobile app calls POST /subscriptions/sync
-2. Backend queries RevenueCat API with user's app_user_id
-3. Parse entitlements from RevenueCat response
-4. Upsert local Subscription record
-5. Return updated subscription status to client
+┌──────────────────────────────────────────────────────┐
+│      Email Service (Internal, No Controller)         │
+│  - Nodemailer SMTP configuration                    │
+│  - Graceful initialization with try-catch          │
+│  - Status flag: initialized                         │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Email Service Methods                           │
+│  - sendPasswordResetEmail(email, token)             │
+│  - sendOtpEmail(email, otp)                         │
+│  - sendNotificationEmail(email, content)            │
+└──────────────────────────────────────────────────────┘
+                    ↓
+        [Service initialized?]
+        ↙              ↖
+     Yes            No (graceful degrade)
+      ↓                    ↓
+   Send via          Return error
+   Nodemailer        to caller
+   (configured       (endpoints
+   via env vars)     return proper
+                     error response)
 ```
+
+**Configuration:** Loaded from env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS). **Graceful Init:** Constructor wraps Nodemailer initialization in try-catch; sets `initialized = false` on failure. **Error Handling:** Callers check `initialized` flag before sending; return 500 if unavailable.
+
+### Progress Module Flow
+```
+┌──────────────────────────────────────────────────────┐
+│      Progress Service (Internal, No Controller)      │
+│  - upsertProgress(userId, languageId, data)        │
+│  - recordAttempt(userId, exerciseId, data)         │
+│  - getProgressByLanguage(userId, languageId)       │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Progress Entities                               │
+│  - UserProgress (total XP, streak, levels per lang) │
+│  - UserExerciseAttempt (score, time, correctness)  │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Language-Scoped Operations                      │
+│  - Progress tracked per (user, language) pair      │
+│  - UserLanguage links user to enrolled languages   │
+│  - No cross-language progress mixing               │
+└──────────────────────────────────────────────────────┘
+```
+
+**Invariants:** Progress created on-demand (lazy); updated transactionally with exercise attempts. Language context guard enforces scope at request level.
 
 ### Onboarding Module Flow
 ```
 ┌──────────────────────────────────────────────────────┐
 │      Onboarding Controller (No Auth Required)        │
-│  POST /onboarding/start, /chat, /complete           │
+│  POST /onboarding/chat (dual-purpose)              │
+│  POST /onboarding/complete (idempotent)            │
+│  GET /onboarding/conversations/:id/messages        │
 └──────────────────────────────────────────────────────┘
                     ↓
+        [Request contains conversationId?]
+                 ↙              ↖
+         No (New)            Yes (Resume)
+         ↙                      ↖
+   createSession()          processMessage()
+   (turn 1 greeting)        (standard turn)
+         ↓                      ↓
 ┌──────────────────────────────────────────────────────┐
 │        Onboarding Service                            │
-│  - createSession()                                  │
-│  - processMessage()                                 │
-│  - extractProfile()                                 │
-│  - cleanupExpiredSessions()                         │
+│  - createSession(native_lang, target_lang)         │
+│  - processMessage(conv_id, message)                │
+│  - complete(conv_id) — idempotent profile extract   │
+│  - getMessages(conv_id) — fetch transcript          │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │        AI Learning Agent (for Onboarding)           │
 │  - Session-based state management                   │
-│  - Profile extraction via AI                        │
+│  - Profile extraction (cached after first success)  │
+│  - Scenario generation (cached after first success) │
 │  - Max 10 turns per session                         │
-│  - 7-day session TTL                                │
 └──────────────────────────────────────────────────────┘
 ```
+
+**Rate Limiting (OnboardingThrottlerGuard):**
+- New session (no `conversation_id`): 5 req/hr per IP
+- Chat continuation (with `conversation_id`): 30 req/hr per IP
+- Message fetch GET endpoint: 30 req/hr per IP
+
+**First-Turn Detection:** Via `messageCount` on AiConversation (authoritative). **Caching:** /complete caches profile + scenarios (5 items, stable UUIDs); idempotent. **Resume:** GET messages fetches transcript for mobile rehydration.
+
+### Lesson Module Flow
+```
+┌──────────────────────────────────────────────────────┐
+│           Lesson Controller                          │
+│  GET /lessons?language=uuid&level=beginner&search=.. │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│           Lesson Service                             │
+│  - getLessons(userId, query)                        │
+│  - buildVisibilityFilter()                          │
+│  - computeScenarioStatus()                          │
+│  - groupByCategoryAndPaginate()                     │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌────────────────────────────────────────────────────────────┐
+│     Repository Queries (TypeORM QueryBuilder)              │
+│  - Scenario: visibility + difficulty + search filters     │
+│  - UserScenarioAccess: user-granted scenarios             │
+│  - Subscription: premium status for status computation    │
+│  - UserProgress: (future) learned status tracking        │
+└────────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Response Aggregation & Grouping                 │
+│  - Group scenarios by ScenarioCategory              │
+│  - Compute status per scenario                      │
+│  - Apply pagination on total count                  │
+│  - Return grouped response                          │
+└──────────────────────────────────────────────────────┘
+```
+
+**Visibility:** (status = 'published') AND (language_id NULL OR matches context OR user_scenario_access). **Status:** learned / locked (premium, free user) / available.
+
+### Scenario Module Flow (Dual Controllers)
+
+**ScenariosController** (Listing & Detail):
+```
+┌──────────────────────────────────────────────────────┐
+│    GET /scenarios (list all, default/personal/redeem)│
+│    GET /scenarios/:id (detail with soft-lock state) │
+│    POST /scenarios/redeem (gift code redeem, 5/min)  │
+└──────────────────────────────────────────────────────┘
+                    ↓
+        [Query filters: default|personal|redeem]
+                 ↓
+┌──────────────────────────────────────────────────────┐
+│    Scenarios Service                                 │
+│  - getDefaultScenarios()                            │
+│  - getPersonalScenarios()                           │
+│  - getScenarioDetail() — soft-lock (no 403)        │
+│  - redeemGiftCode() — grant access via KOL bundle  │
+└──────────────────────────────────────────────────────┘
+```
+
+**ScenarioChatController** (Roleplay Conversations):
+```
+┌──────────────────────────────────────────────────────┐
+│        POST /scenario/chat (roleplay turns)         │
+│        GET /scenario/conversations/:id (transcript)  │
+│        GET /scenario/:scenarioId/conversations      │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│        Scenario Chat Service                         │
+│  - processChat(scenarioId, message?, convId?)       │
+│  - validateScenarioAccess()                         │
+│  - generateAIReply()                                │
+│  - updateConversationState()                        │
+│  - checkCompletionStatus() — max 12 turns          │
+│  - getConversation(convId)                          │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Scenario Access Service                         │
+│  - checkAccessTierAccess()                          │
+│  - verifyScenarioExists()                           │
+└──────────────────────────────────────────────────────┘
+                    ↓
+┌────────────────────────────────────────────────────────────────┐
+│  LangChain AI Provider & Langfuse Tracing                      │
+│  - Multi-provider LLM support (OpenAI, Anthropic, Gemini)     │
+│  - Request tracing with prompt/response logging               │
+└────────────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────┐
+│      Database Operations                             │
+│  - AiConversation (with scenarioId FK)              │
+│  - AiConversationMessage (turn history)             │
+│  - Subscription (active status check)               │
+│  - Scenario (access_tier + content_status)          │
+└──────────────────────────────────────────────────────┘
+```
+
+**Access:** Free users cannot access premium tier. Premium can access all. User-granted access (user_scenario_access) overrides tier.
+
+**Turns:** First msg (no `message` param) → AI initiates. Subsequent → AI responds. Max turns reached → completed: true (immutable).
+
+### Vocabulary & Leitner SRS Module Flow
+```
+┌──────────────────────────────────────────────────────────────────┐
+│              Vocabulary CRUD Endpoints                            │
+│  GET /vocabulary, GET /vocabulary/:id, DELETE /vocabulary/:id   │
+└──────────────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────────────┐
+│              Vocabulary Service                                  │
+│  - list(userId, query)       → paginated list with filters      │
+│  - findOne(userId, id)       → single item or 404               │
+│  - remove(userId, id)        → delete and verify ownership      │
+└──────────────────────────────────────────────────────────────────┘
+                    ↓
+        ┌───────────────────────────────────────────┐
+        ↓                                           ↓
+┌──────────────────────────────────────┐   ┌──────────────────────────┐
+│   Review Session Endpoints:           │   │   Database:              │
+│   POST /vocabulary/review/start       │   │   - Vocabulary table     │
+│   POST /vocabulary/review/:id/rate    │   │     (box, due_at, etc.)  │
+│   POST /vocabulary/review/:id/complete│   │   - Index: user_id,      │
+│                                       │   │     due_at               │
+└──────────────────────────────────────┘   └──────────────────────────┘
+        ↓                                           ↑
+┌──────────────────────────────────────────────────────────────────┐
+│       Vocabulary Review Service                                  │
+│  - startSession(userId, query)                                   │
+│    → Query due cards WHERE due_at <= NOW()                       │
+│    → Create in-memory session (1h TTL)                           │
+│    → Return cards + session_id                                   │
+│                                                                  │
+│  - rateCard(sessionId, vocabId, correct)                         │
+│    → Verify card in session, not yet rated                       │
+│    → Apply Leitner transition (see table below)                  │
+│    → Update vocabulary.box, vocabulary.due_at                    │
+│    → Update vocabulary.last_reviewed_at, review_count, correct   │
+│    → Return updated box & new due_at                             │
+│                                                                  │
+│  - completeSession(sessionId)                                    │
+│    → Verify session exists                                       │
+│    → Compute stats (total, correct, wrong, accuracy)             │
+│    → Group final boxes for distribution                          │
+│    → Delete session from store                                   │
+│    → Return stats + box_distribution                             │
+└──────────────────────────────────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────────────────────────────────┐
+│       Review Session Store (In-Memory)                           │
+│  - Key: session UUID                                             │
+│  - Value: {userId, cardIds[], ratings: {cardId: bool}}           │
+│  - TTL: 1 hour (auto-eviction)                                   │
+│  - Cleanup: 5-minute sweep for expired sessions                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Leitner:** Box 1→2 (+3d), 2→3 (+7d), 3→4 (+14d), 4→5 (+30d), 5→5 (+30d). Wrong: any→1 (+1d).
+
+**Invariants:** Card cannot re-rate in same session. Session expiry doesn't delete vocab. dueAt query: `<= NOW()`. reviewCount increments always; correctCount only on correct.
+
+**Language Context Flow:** Guard extracts X-Learning-Language header → LRU cache (60s TTL) → store in req.activeLanguage → services filter by language_id. **Invariants:** All content routes require context. Missing/invalid header → 400.
+
+### Admin Content Module Flow
+```
+┌──────────────────────────────────────────────────────────┐
+│    Admin Content Controller                              │
+│    POST /admin/content/generate                         │
+│    GET /admin/content                                   │
+│    PATCH /admin/content/:id/publish                     │
+│    PATCH /admin/content/:id                             │
+│    DELETE /admin/content/:id                            │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    AdminGuard: Check user.isAdmin flag                  │
+│    (bootstrapped via ADMIN_EMAILS env var)              │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    Admin Content Service                                 │
+│    - generateDrafts(adminId, dto)                       │
+│    - listContent(query filters)                         │
+│    - publishContent(id, type)                           │
+│    - updateContent(id, type, updates)                   │
+│    - archiveContent(id, type)                           │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+        [For generateDrafts]
+                 ↓
+┌──────────────────────────────────────────────────────────┐
+│    Unified LLM Service (LangChain)                       │
+│    - Generate structured content in JSON                │
+│    - Batch generation (count parameter)                 │
+│    - LangFuse tracing per invocation                    │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    Insert Lesson/Exercise/Scenario entities              │
+│    - All content created with status=draft               │
+│    - All content includes specified language_id          │
+│    - All content initially hidden from users             │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Lifecycle:** draft → publish (visible) → archive (soft delete). **Rate Limit:** /generate 5 req/min (Throttle guard); others: none.
+
+### KOL Bundle Module Flow
+```
+┌──────────────────────────────────────────────────────────┐
+│    KOL Bundle Controller                                 │
+│    POST /admin/kol-bundles                              │
+│    GET /admin/kol-bundles                               │
+│    POST /admin/kol-bundles/:id/scenarios                │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    RolesGuard: Check 'admin' in user.roles               │
+│    (bootstrapped via ADMIN_EMAILS env var)              │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────────────────┐
+│    KOL Bundle Service                                    │
+│    - create(dto) — create bundle with scenarios          │
+│    - list(query) — paginated bundle list                │
+│    - attachScenarios(bundleId, dto) — add scenarios     │
+└──────────────────────────────────────────────────────────┘
+                    ↓
+        ┌───────────────────────────────┐
+        ↓                               ↓
+┌──────────────────────────────┐  ┌──────────────────────────┐
+│  KolBundle Entity            │  │  KolBundleScenario Table │
+│  - gift_code (unique)        │  │  (join table)            │
+│  - name, description         │  │  - Unique(bundle,        │
+│  - is_active flag            │  │    scenario) for         │
+│  - created/updated timestamps│  │    idempotent attach     │
+└──────────────────────────────┘  └──────────────────────────┘
+        ↓                               ↑
+        └───────────────────────────────┘
+```
+
+**Redemption Flow (User):**
+```
+User POST /scenarios/redeem {gift_code}
+        ↓
+ScenariosRedeemService.redeem()
+        ↓
+Validate gift_code exists in KolBundle
+        ↓
+Query KolBundleScenario.scenarios via bundle_id
+        ↓
+For each scenario: upsert UserAiScenario
+        (idempotent: duplicate codes safe)
+        ↓
+Return redeemed_count + scenario list
+```
+
+**Rate Limit:** None on bundle management. 5 req/min on redeem endpoint. **Idempotency:** Gift code uniqueness + UserAiScenario unique constraint ensure safe retries.
 
 ## Database Architecture
 
@@ -235,9 +514,26 @@ User (1) ──< (N) AiConversation
 User (1) ──< (N) RefreshToken
 User (1) ──< (N) PasswordReset
 User (1) ──< (N) Vocabulary
+User (1) ──< (N) UserScenarioAccess
+User (1) ──< (N) UserAiScenario  (personal scenarios: AI-generated or KOL-granted)
+User (1) ──< (N) UserProgress
+User (1) ──< (N) UserExerciseAttempt
 
 Language (1) ──< (N) UserLanguage
-Language (1) ──< (N) Lesson
+Language (1) ──< (N) Lesson  (non-nullable, language partitioning key)
+Language (1) ──< (N) Exercise  (non-nullable, language partitioning key)
+Language (1) ──< (N) Scenario  (non-nullable, language partitioning key)
+Language (1) ──< (N) UserProgress  (non-nullable, language partitioning key)
+Language (1) ──< (N) UserExerciseAttempt  (non-nullable, language partitioning key)
+
+ScenarioCategory (1) ──< (N) Scenario
+Scenario (1) ──< (N) UserScenarioAccess
+Scenario (1) ──< (N) UserAiScenario  (links to user's personal scenarios)
+Scenario (1) ──< (N) KolBundleScenario  (links to KOL bundle distribution)
+Scenario (1) ──< (N) AiConversation  (for scenario chat)
+User (1) ──< (N) Scenario  (as creator, nullable)
+
+KolBundle (1) ──< (N) KolBundleScenario  (gift code distribution)
 
 Lesson (1) ──< (N) Exercise
 Exercise (1) ──< (N) UserExerciseAttempt
@@ -256,110 +552,85 @@ AiConversation (1) ──< (N) AiConversationMessage
 - **Features:** Row-Level Security (RLS), timestamptz columns, UUID PKs, CASCADE deletion, indexed columns
 - **Connection:** TypeORM connection pool with auto-reconnect
 
+## Multi-Language Content Architecture
+
+### Language Partitioning Strategy
+
+All content entities (Lesson, Exercise, Scenario, etc.) implement language partitioning via non-nullable `language_id` foreign key. This ensures each content row belongs to exactly one language, enabling:
+
+1. **Request-Scoped Language Context:** Every authenticated request includes `X-Learning-Language: <code>` header specifying user's active learning language
+2. **Automatic Content Filtering:** Service methods automatically scope queries by the active language context
+3. **Cache-Efficient Resolution:** Language code → Language.id resolved once per request and cached (LRU, 60s TTL)
+4. **Isolation by Design:** No global/NULL language rows; content is never ambiguous
+
+### Language Context Resolution Flow
+
+```
+HTTP Request
+    ↓
+[LanguageContextGuard]
+    ↓
+Extract X-Learning-Language header
+    ↓
+Check LRU cache for language_code → {id, code}
+    ↓
+Cache hit? Return cached context
+    ↓
+Cache miss? Query Language table, cache result
+    ↓
+Store {id, code} in req.activeLanguage
+    ↓
+@ActiveLanguage() decorator injects language context into controller methods
+    ↓
+Service methods filter results by language_id
+```
+
+### Content Visibility with Language Partitioning
+
+When user requests lessons/scenarios with active language = "es":
+
+```
+1. Service receives @ActiveLanguage() context: {id: "lang-uuid-es", code: "es"}
+2. Query builder filters: WHERE language_id = "lang-uuid-es"
+3. Only Spanish-language content returned
+4. No cross-language data exposure
+5. User content filtered consistently across all endpoints
+```
+
+### @SkipLanguageContext() Routes
+
+Routes that bypass language context requirement (don't return partitioned content):
+
+| Endpoint | Reason |
+|----------|--------|
+| POST /auth/* | Authentication, no content |
+| GET /users/me | User profile, global |
+| PATCH /users/me | User profile update, global |
+| GET /languages | Language catalog, global |
+| POST /languages/user | User preferences, global |
+| GET /subscriptions/me | User subscription, global |
+| POST /admin/content/* | Admin operations, cross-language |
+| GET /admin/content | Admin operations, cross-language |
+| POST /onboarding/chat | Anonymous sessions, no auth context |
+
+### Admin Content Module Integration
+
+Admin endpoints allow admins to:
+1. Generate content for specific languages via `language_id` parameter
+2. List content across languages with language filter
+3. Publish/archive content per language
+
+All generated content includes the specified `language_id`, ensuring proper partitioning.
+
 ## Security Architecture
 
-### Authentication Flow
-```
-1. User Login/Register
-   ↓
-2. Validate Credentials (bcrypt hash comparison)
-   ↓
-3. Generate JWT Token (HS256 signed, 7d expiry)
-   ↓
-4. Store Refresh Token (composite format, device info)
-   ↓
-5. Return Token Pair to Client
-   ↓
-6. Client Includes JWT in Authorization Header
-   ↓
-7. JwtAuthGuard Validates Token
-   ↓
-8. Extract User from Payload
-   ↓
-9. Attach User to Request Context
-   ↓
-10. Controller Access via @CurrentUser() Decorator
-```
+**Firebase Flow:** Client obtains token (Google/Apple) → POST /auth/firebase → verify token → extract email/profile → check exists → auto-link or create → return JWT + refresh token.
 
-### Google OAuth Flow (ID Token)
-```
-1. Client Obtains Google ID Token (via SDK)
-   ↓
-2. Client Sends POST /auth/google with idToken
-   ↓
-3. Backend Verifies ID Token (google-auth-library)
-   ↓
-4. Extract User Email & Profile from Token Payload
-   ↓
-5. Check if User Exists (by email)
-   ↓
-6. If Exists: Auto-link account (store googleProviderId)
-   ↓
-7. If Not Exists: Create new user
-   ↓
-8. Generate JWT Token
-   ↓
-9. Return Access Token to Client
-```
+**Role-Based Access Control (RBAC):** RolesGuard checks `user.roles` array (replaces AdminGuard). Decorator: `@Roles('admin')`. Default: ['user']. Admin users: ['user', 'admin'] seeded via ADMIN_EMAILS env var.
 
-### Apple OAuth Flow
-```
-1. Client Obtains Apple Identity Token (via SDK)
-   ↓
-2. Client Sends POST /auth/apple with identityToken
-   ↓
-3. Backend Verifies Token (apple-signin-auth library)
-   ↓
-4. Extract User Email & Profile from Token Payload
-   ↓
-5. Check if User Exists (by email)
-   ↓
-6. If Exists: Auto-link account (store appleProviderId)
-   ↓
-7. If Not Exists: Create new user
-   ↓
-8. Generate JWT Token
-   ↓
-9. Return Access Token to Client
-```
+**Password Reset (Disabled):** Endpoints return 410 Gone; code preserved for future migration.
 
-### Password Reset Flow
-```
-1. User requests password reset via /forgot-password
-   ↓
-2. Generate OTP (10-minute expiry)
-   ↓
-3. Send OTP via email (Nodemailer)
-   ↓
-4. User verifies OTP via /verify-otp
-   ↓
-5. Generate reset token (15-minute expiry)
-   ↓
-6. User resets password via /reset-password
-   ↓
-7. Update password hash, invalidate reset token
-```
-
-### Webhook Security (RevenueCat)
-```
-1. RevenueCat Sends Webhook with Bearer Token
-   ↓
-2. Extract Authorization Header
-   ↓
-3. Timing-Safe Comparison with Secret
-   ↓
-4. Reject if Invalid (UnauthorizedException)
-   ↓
-5. Validate Payload Schema (DTO validation)
-   ↓
-6. Respond Immediately (< 60s)
-   ↓
-7. Process Asynchronously (setImmediate)
-   ↓
-8. Update Database
-   ↓
-9. Log Errors (no retry)
-```
+**Webhook Security:** Bearer token (timing-safe) validation → DTO schema → respond <60s → async process via setImmediate → update DB → log errors.
 
 ### Database Security
 - Row-Level Security (RLS) on all tables
@@ -527,30 +798,12 @@ All responses wrapped in standard format:
 - Never exposes raw exceptions to frontend
 - Consistent error format with meaningful messages
 
-## Technology Decisions
+**Tech Stack Justification:**
+- **NestJS:** Enterprise DI + TypeScript
+- **TypeORM:** TS-first ORM, migrations, Repository pattern
+- **Supabase:** PostgreSQL + RLS + storage
+- **RevenueCat:** Cross-platform subs + webhook-based
+- **Firebase:** Industry FCM, reliable delivery
+- **LangChain:** Multi-provider AI abstraction
 
-**Why NestJS?** Enterprise architecture, TypeScript support, DI, extensive ecosystem
-
-**Why TypeORM?** TypeScript-first ORM, migration support, Active Record & Repository patterns
-
-**Why Supabase?** Managed PostgreSQL, RLS, real-time ready, generous free tier
-
-**Why RevenueCat?** Cross-platform subscriptions, handles App Store/Play Store, webhook-based
-
-**Why Firebase?** Industry-standard FCM, multi-platform, reliable delivery, free tier
-
-**Why LangChain?** Multi-provider AI abstraction, agent framework, production-ready
-
-## Constraints & Trade-offs
-
-**Current Limitations:**
-- No distributed caching (single instance)
-- No background job processing (all synchronous)
-- No GraphQL (REST only)
-- No real-time features (REST polling)
-
-**Trade-offs Made:**
-- **Simplicity vs. Performance:** Chose simpler architecture for faster development
-- **Cost vs. Features:** Using free tiers where possible
-- **Monolith vs. Microservices:** Monolithic for easier development
-- **SQL vs. NoSQL:** PostgreSQL for ACID compliance and relational data
+**Constraints:** No distributed cache, no async jobs, REST-only, no real-time. **Trade-offs:** Monolith for speed, free tiers for cost, PostgreSQL for ACID.

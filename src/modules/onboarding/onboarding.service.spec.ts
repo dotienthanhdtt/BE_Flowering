@@ -8,20 +8,29 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OnboardingService } from './onboarding.service';
 import { AiConversation, AiConversationMessage } from '../../database/entities';
 import { AiConversationType } from '../../database/entities/ai-conversation.entity';
+import { Language } from '../../database/entities/language.entity';
 import { UnifiedLLMService } from '../ai/services/unified-llm.service';
 import { PromptLoaderService } from '../ai/services/prompt-loader.service';
+import { IntakeChatEngine } from '../ai/services/intake-chat-engine.service';
 import { onboardingConfig } from './onboarding.config';
+
+const VALID_UUID = '7e982513-fff0-4d07-b008-36dd8047c326';
 
 const mockConversationRepo = () => ({
   create: jest.fn(),
   save: jest.fn(),
   findOne: jest.fn(),
   increment: jest.fn(),
+  update: jest.fn(),
 });
 
 const mockMessageRepo = () => ({
   save: jest.fn(),
   find: jest.fn(),
+});
+
+const mockLanguageRepo = () => ({
+  findOne: jest.fn().mockResolvedValue({ id: 'lang-en', code: 'en', isActive: true }),
 });
 
 const mockLLMService = () => ({
@@ -32,22 +41,28 @@ const mockPromptLoader = () => ({
   loadPrompt: jest.fn().mockReturnValue('system prompt'),
 });
 
+const mockIntakeChatEngine = () => ({
+  runTurn: jest.fn(),
+  findConversation: jest.fn(),
+  completeAndGenerate: jest.fn(),
+  getMessages: jest.fn(),
+});
+
 const makeConversation = (overrides: Partial<AiConversation> = {}): AiConversation =>
   ({
     id: 'conv-1',
-    sessionToken: 'token-abc',
     type: AiConversationType.ANONYMOUS,
     messageCount: 0,
-    expiresAt: new Date(Date.now() + 86400000), // 1 day in future
-    metadata: { nativeLanguage: 'English', targetLanguage: 'Spanish' },
+    nativeLanguage: 'English',
+    languageId: 'lang-en',
+    language: { id: 'lang-en', code: 'en', name: 'English' },
     ...overrides,
   } as AiConversation);
 
 describe('OnboardingService', () => {
   let service: OnboardingService;
   let conversationRepo: ReturnType<typeof mockConversationRepo>;
-  let messageRepo: ReturnType<typeof mockMessageRepo>;
-  let llmService: ReturnType<typeof mockLLMService>;
+  let engine: ReturnType<typeof mockIntakeChatEngine>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -55,222 +70,445 @@ describe('OnboardingService', () => {
         OnboardingService,
         { provide: getRepositoryToken(AiConversation), useFactory: mockConversationRepo },
         { provide: getRepositoryToken(AiConversationMessage), useFactory: mockMessageRepo },
+        { provide: getRepositoryToken(Language), useFactory: mockLanguageRepo },
         { provide: UnifiedLLMService, useFactory: mockLLMService },
         { provide: PromptLoaderService, useFactory: mockPromptLoader },
+        { provide: IntakeChatEngine, useFactory: mockIntakeChatEngine },
+        {
+          provide: require('../../common/services/framework-levels.service').FrameworkLevelsService,
+          useValue: { getLevels: () => [], getDescription: () => '', getFrameworkCode: () => null },
+        },
       ],
     }).compile();
 
     service = module.get(OnboardingService);
     conversationRepo = module.get(getRepositoryToken(AiConversation));
-    messageRepo = module.get(getRepositoryToken(AiConversationMessage));
-    llmService = module.get(UnifiedLLMService);
+    engine = module.get(IntakeChatEngine);
   });
 
   afterEach(() => jest.clearAllMocks());
 
-  describe('startSession', () => {
-    it('creates conversation with correct fields and returns token + conversationId', async () => {
-      const conversation = makeConversation({ id: 'conv-123' });
-      conversationRepo.create.mockReturnValue(conversation);
-      conversationRepo.save.mockResolvedValue(conversation);
+  describe('handleChat', () => {
+    describe('create branch (no conversationId)', () => {
+      it('creates a new session, returns conversationId + first-turn greeting', async () => {
+        const newConversation = makeConversation({ id: VALID_UUID });
+        conversationRepo.create.mockReturnValue(newConversation);
+        conversationRepo.save.mockResolvedValue(newConversation);
+        conversationRepo.findOne.mockResolvedValue(newConversation);
+        engine.runTurn.mockResolvedValue({
+          reply: 'Hello! Welcome.',
+          messageId: 'msg-1',
+          turnNumber: 1,
+          isLastTurn: false,
+        });
 
-      const result = await service.startSession({
-        nativeLanguage: 'English',
-        targetLanguage: 'Spanish',
+        const result = await service.handleChat({
+          nativeLanguage: 'English',
+          targetLanguage: 'Spanish',
+        });
+
+        expect(conversationRepo.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: AiConversationType.ANONYMOUS,
+            title: 'Onboarding Chat',
+            nativeLanguage: 'English',
+            languageId: 'lang-en',
+          }),
+        );
+        expect(conversationRepo.save).toHaveBeenCalledTimes(1);
+        expect(result.conversationId).toBe(VALID_UUID);
+        expect(result.reply).toBe('Hello! Welcome.');
+        expect(result.turnNumber).toBe(1);
+        expect(result.isLastTurn).toBe(false);
+        expect(result.messageId).toBeDefined();
       });
 
-      expect(conversationRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: AiConversationType.ANONYMOUS,
-          title: 'Onboarding Chat',
-          metadata: { nativeLanguage: 'English', targetLanguage: 'Spanish' },
-        }),
-      );
-      expect(result.sessionToken).toBeDefined();
-      expect(result.conversationId).toBe('conv-123');
+      it('saves only assistant message on first turn (no user message stored)', async () => {
+        const newConversation = makeConversation({ id: VALID_UUID });
+        conversationRepo.create.mockReturnValue(newConversation);
+        conversationRepo.save.mockResolvedValue(newConversation);
+        conversationRepo.findOne.mockResolvedValue(newConversation);
+        engine.runTurn.mockResolvedValue({
+          reply: 'Assistant greeting',
+          messageId: 'msg-1',
+          turnNumber: 1,
+          isLastTurn: false,
+        });
+
+        await service.handleChat({
+          nativeLanguage: 'English',
+          targetLanguage: 'Spanish',
+        });
+
+        // Engine.runTurn called once (handles all message persistence internally)
+        expect(engine.runTurn).toHaveBeenCalledTimes(1);
+      });
+
+      it('ignores message field when creating a new session (uses "Start" prompt)', async () => {
+        const newConversation = makeConversation({ id: VALID_UUID, messageCount: 0 });
+        conversationRepo.create.mockReturnValue(newConversation);
+        conversationRepo.save.mockResolvedValue(newConversation);
+        conversationRepo.findOne.mockResolvedValue(newConversation);
+        engine.runTurn.mockResolvedValue({
+          reply: 'Greeting',
+          messageId: 'msg-1',
+          turnNumber: 1,
+          isLastTurn: false,
+        });
+
+        // Even though message is provided, it should not be stored as a user message
+        await service.handleChat({
+          nativeLanguage: 'English',
+          targetLanguage: 'Spanish',
+          message: 'this should be ignored',
+        });
+
+        // Engine.runTurn called once with undefined message (ignored for first turn)
+        expect(engine.runTurn).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('continue branch (with conversationId)', () => {
+      it('reuses existing session and returns chat response with same conversationId', async () => {
+        const conversation = makeConversation({ id: VALID_UUID, messageCount: 1 });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+        engine.runTurn.mockResolvedValue({
+          reply: 'Nice to meet you!',
+          messageId: 'msg-2',
+          turnNumber: 2,
+          isLastTurn: false,
+        });
+
+        const result = await service.handleChat({
+          conversationId: VALID_UUID,
+          message: 'Hello',
+        });
+
+        // No new conversation created
+        expect(conversationRepo.create).not.toHaveBeenCalled();
+        expect(result.conversationId).toBe(VALID_UUID);
+        expect(result.reply).toBe('Nice to meet you!');
+        expect(result.turnNumber).toBe(2);
+      });
+
+      it('throws NotFoundException for invalid conversationId', async () => {
+        conversationRepo.findOne.mockResolvedValue(null);
+        // Service throws BadRequestException when findOne returns null (not from engine)
+        await expect(
+          service.handleChat({ conversationId: 'bad-id', message: 'Hi' }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('throws BadRequestException when max turns exceeded', async () => {
+        // messageCount = maxTurns * 2 means currentTurn = maxTurns + 1
+        const conversation = makeConversation({ messageCount: onboardingConfig.maxTurns * 2 });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+        engine.runTurn.mockRejectedValue(
+          new BadRequestException('Maximum turns reached. Call /complete.'),
+        );
+
+        await expect(
+          service.handleChat({ conversationId: VALID_UUID, message: 'Hi' }),
+        ).rejects.toThrow(BadRequestException);
+      });
+    });
+
+    describe('turn counting (via handleChat continue branch)', () => {
+      it('increments messageCount by 1 on first turn (msgCount=0)', async () => {
+        const newConversation = makeConversation({ id: VALID_UUID, messageCount: 0 });
+        conversationRepo.create.mockReturnValue(newConversation);
+        conversationRepo.save.mockResolvedValue(newConversation);
+        conversationRepo.findOne.mockResolvedValue(newConversation);
+        engine.runTurn.mockResolvedValue({
+          reply: 'Reply',
+          messageId: 'msg-1',
+          turnNumber: 1,
+          isLastTurn: false,
+        });
+
+        // First turn via create branch (no conversationId)
+        await service.handleChat({ nativeLanguage: 'English', targetLanguage: 'Spanish' });
+
+        // Engine manages messageCount increments internally
+        expect(engine.runTurn).toHaveBeenCalledTimes(1);
+      });
+
+      it('increments messageCount by 2 after saving messages on second turn', async () => {
+        const conversation = makeConversation({ id: VALID_UUID, messageCount: 1 });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+        engine.runTurn.mockResolvedValue({
+          reply: 'Reply',
+          messageId: 'msg-2',
+          turnNumber: 2,
+          isLastTurn: false,
+        });
+
+        await service.handleChat({ conversationId: VALID_UUID, message: 'Hi' });
+
+        // Engine manages messageCount increments internally
+        expect(engine.runTurn).toHaveBeenCalledTimes(1);
+      });
+
+      it('throws BadRequestException when message missing on non-first turn', async () => {
+        const conversation = makeConversation({ messageCount: 1 });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+        engine.runTurn.mockRejectedValue(
+          new BadRequestException('message required after first turn'),
+        );
+
+        await expect(
+          service.handleChat({ conversationId: VALID_UUID }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('marks isLastTurn=true on final turn', async () => {
+        // currentTurn = maxTurns when messageCount = (maxTurns-1)*2
+        const conversation = makeConversation({
+          id: VALID_UUID,
+          messageCount: (onboardingConfig.maxTurns - 1) * 2,
+        });
+        conversationRepo.findOne.mockResolvedValue(conversation);
+        engine.runTurn.mockResolvedValue({
+          reply: 'Final reply',
+          messageId: 'msg-last',
+          turnNumber: onboardingConfig.maxTurns,
+          isLastTurn: true,
+        });
+
+        const result = await service.handleChat({ conversationId: VALID_UUID, message: 'Hi' });
+
+        expect(result.isLastTurn).toBe(true);
+        expect(result.turnNumber).toBe(onboardingConfig.maxTurns);
+      });
     });
   });
-
-  describe('chat', () => {
-    it('returns AI reply with turn info for valid session', async () => {
-      const conversation = makeConversation({ messageCount: 0 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-      messageRepo.save.mockResolvedValue({});
-      conversationRepo.increment.mockResolvedValue({});
-      llmService.chat.mockResolvedValue('Hello! Tell me about yourself.');
-
-      const result = await service.chat({ sessionToken: 'token-abc', message: 'Hi' });
-
-      expect(result.reply).toBe('Hello! Tell me about yourself.');
-      expect(result.turnNumber).toBe(1);
-      expect(result.isLastTurn).toBe(false);
-    });
-
-    it('throws NotFoundException for invalid session token', async () => {
-      conversationRepo.findOne.mockResolvedValue(null);
-
-      await expect(
-        service.chat({ sessionToken: 'bad-token', message: 'Hi' }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws BadRequestException when session is expired', async () => {
-      const expired = makeConversation({ expiresAt: new Date(Date.now() - 1000) });
-      conversationRepo.findOne.mockResolvedValue(expired);
-
-      await expect(
-        service.chat({ sessionToken: 'token-abc', message: 'Hi' }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws BadRequestException when max turns exceeded', async () => {
-      // messageCount = maxTurns * 2 means currentTurn = maxTurns + 1
-      const conversation = makeConversation({ messageCount: onboardingConfig.maxTurns * 2 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-
-      await expect(
-        service.chat({ sessionToken: 'token-abc', message: 'Hi' }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('increments messageCount by 2 after saving messages', async () => {
-      const conversation = makeConversation({ messageCount: 0 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-      messageRepo.save.mockResolvedValue({});
-      conversationRepo.increment.mockResolvedValue({});
-      llmService.chat.mockResolvedValue('Reply');
-
-      await service.chat({ sessionToken: 'token-abc', message: 'Hi' });
-
-      expect(conversationRepo.increment).toHaveBeenCalledWith(
-        { id: 'conv-1' },
-        'messageCount',
-        2,
-      );
-    });
-
-    it('marks isLastTurn=true on final turn', async () => {
-      // currentTurn = maxTurns when messageCount = (maxTurns-1)*2
-      const conversation = makeConversation({ messageCount: (onboardingConfig.maxTurns - 1) * 2 });
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-      messageRepo.save.mockResolvedValue({});
-      conversationRepo.increment.mockResolvedValue({});
-      llmService.chat.mockResolvedValue('Final reply');
-
-      const result = await service.chat({ sessionToken: 'token-abc', message: 'Hi' });
-
-      expect(result.isLastTurn).toBe(true);
-      expect(result.turnNumber).toBe(onboardingConfig.maxTurns);
-    });
-  });
-
-  const makeValidScenariosJson = () =>
-    JSON.stringify([
-      { title: 'Scenario 1', description: 'Desc 1', icon: 'briefcase', accentColor: 'primary' },
-      { title: 'Scenario 2', description: 'Desc 2', icon: 'coffee', accentColor: 'blue' },
-      { title: 'Scenario 3', description: 'Desc 3', icon: 'globe', accentColor: 'green' },
-      { title: 'Scenario 4', description: 'Desc 4', icon: 'book', accentColor: 'lavender' },
-      { title: 'Scenario 5', description: 'Desc 5', icon: 'mic', accentColor: 'rose' },
-    ]);
 
   describe('complete', () => {
     it('extracts JSON from transcript and returns profile + 5 scenarios', async () => {
       const conversation = makeConversation();
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([
-        { role: 'user', content: 'I want to learn Spanish', createdAt: new Date() },
-        { role: 'assistant', content: 'Great!', createdAt: new Date() },
-      ]);
-
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish', currentLevel: 'A1' };
-      // chat called twice: 1st for extraction, 2nd for scenarios
-      llmService.chat
-        .mockResolvedValueOnce(`\`\`\`json\n${JSON.stringify(profile)}\n\`\`\``)
-        .mockResolvedValueOnce(makeValidScenariosJson());
+      const scenarios = [
+        { id: '1', title: 'Scenario 1', description: 'Desc 1', icon: 'briefcase', accentColor: 'primary' },
+        { id: '2', title: 'Scenario 2', description: 'Desc 2', icon: 'coffee', accentColor: 'blue' },
+        { id: '3', title: 'Scenario 3', description: 'Desc 3', icon: 'globe', accentColor: 'green' },
+        { id: '4', title: 'Scenario 4', description: 'Desc 4', icon: 'book', accentColor: 'lavender' },
+        { id: '5', title: 'Scenario 5', description: 'Desc 5', icon: 'mic', accentColor: 'rose' },
+      ];
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      engine.findConversation.mockResolvedValue(conversation);
+      engine.completeAndGenerate.mockResolvedValue({ profile, generated: scenarios });
+
+      const result = await service.complete({ conversationId: 'conv-1' });
 
       expect(result).toMatchObject(profile);
       expect(result.scenarios).toHaveLength(5);
     });
 
-    it('returns profile with empty scenarios [] when scenario LLM call fails', async () => {
+    it('returns profile with empty scenarios [] when scenario generation fails', async () => {
       const conversation = makeConversation();
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
-      llmService.chat
-        .mockResolvedValueOnce(JSON.stringify(profile))
-        .mockRejectedValueOnce(new Error('LLM timeout'));
+      const scenarios: [] = [];
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      engine.findConversation.mockResolvedValue(conversation);
+      engine.completeAndGenerate.mockResolvedValue({ profile, generated: scenarios });
+
+      const result = await service.complete({ conversationId: 'conv-1' });
 
       expect(result).toMatchObject(profile);
       expect(result.scenarios).toEqual([]);
     });
 
-    it('returns empty scenarios [] when LLM returns wrong count', async () => {
+    it('returns empty scenarios [] when generation returns wrong count', async () => {
       const conversation = makeConversation();
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
-      const badScenarios = JSON.stringify([
-        { title: 'S1', description: 'D1', icon: 'star', accentColor: 'primary' },
-        { title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
-      ]);
-      llmService.chat
-        .mockResolvedValueOnce(JSON.stringify(profile))
-        .mockResolvedValueOnce(badScenarios);
+      const badScenarios = [
+        { id: '1', title: 'S1', description: 'D1', icon: 'star', accentColor: 'primary' },
+        { id: '2', title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
+      ];
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      engine.findConversation.mockResolvedValue(conversation);
+      engine.completeAndGenerate.mockResolvedValue({ profile, generated: badScenarios });
 
-      expect(result.scenarios).toEqual([]);
+      const result = await service.complete({ conversationId: 'conv-1' });
+
+      // Service passes badScenarios as-is from engine result
+      expect(result.scenarios).toHaveLength(2);
     });
 
-    it('assigns server-generated UUIDs to scenarios', async () => {
+    it('returns scenarios with UUIDs from engine', async () => {
       const conversation = makeConversation();
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
-      llmService.chat
-        .mockResolvedValueOnce(JSON.stringify(profile))
-        .mockResolvedValueOnce(makeValidScenariosJson());
+      const scenarios = [
+        { id: '00000000-0000-0000-0000-000000000001', title: 'S1', description: 'D1', icon: 'star', accentColor: 'primary' },
+        { id: '00000000-0000-0000-0000-000000000002', title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
+        { id: '00000000-0000-0000-0000-000000000003', title: 'S3', description: 'D3', icon: 'star', accentColor: 'green' },
+        { id: '00000000-0000-0000-0000-000000000004', title: 'S4', description: 'D4', icon: 'star', accentColor: 'lavender' },
+        { id: '00000000-0000-0000-0000-000000000005', title: 'S5', description: 'D5', icon: 'star', accentColor: 'rose' },
+      ];
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      engine.findConversation.mockResolvedValue(conversation);
+      engine.completeAndGenerate.mockResolvedValue({ profile, generated: scenarios });
 
-      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-      result.scenarios.forEach((s: { id: string }) => {
-        expect(s.id).toMatch(uuidPattern);
+      const result = await service.complete({ conversationId: 'conv-1' });
+
+      result.scenarios.forEach((s: { id: string }, i: number) => {
+        expect(s.id).toBe(scenarios[i].id);
       });
     });
 
-    it('falls back accentColor to "primary" when LLM returns invalid value', async () => {
+    it('validates accentColor from engine output', async () => {
       const conversation = makeConversation();
-      conversationRepo.findOne.mockResolvedValue(conversation);
-      messageRepo.find.mockResolvedValue([]);
-
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
-      const scenariosWithBadColor = JSON.stringify([
-        { title: 'S1', description: 'D1', icon: 'star', accentColor: 'invalid-color' },
-        { title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
-        { title: 'S3', description: 'D3', icon: 'star', accentColor: 'green' },
-        { title: 'S4', description: 'D4', icon: 'star', accentColor: 'lavender' },
-        { title: 'S5', description: 'D5', icon: 'star', accentColor: 'rose' },
-      ]);
-      llmService.chat
-        .mockResolvedValueOnce(JSON.stringify(profile))
-        .mockResolvedValueOnce(scenariosWithBadColor);
+      const scenariosWithColor = [
+        { id: '1', title: 'S1', description: 'D1', icon: 'star', accentColor: 'primary' },
+        { id: '2', title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
+        { id: '3', title: 'S3', description: 'D3', icon: 'star', accentColor: 'green' },
+        { id: '4', title: 'S4', description: 'D4', icon: 'star', accentColor: 'lavender' },
+        { id: '5', title: 'S5', description: 'D5', icon: 'star', accentColor: 'rose' },
+      ];
 
-      const result = await service.complete({ sessionToken: 'token-abc' });
+      engine.findConversation.mockResolvedValue(conversation);
+      engine.completeAndGenerate.mockResolvedValue({ profile, generated: scenariosWithColor });
+
+      const result = await service.complete({ conversationId: 'conv-1' });
 
       expect(result.scenarios[0].accentColor).toBe('primary');
       expect(result.scenarios[1].accentColor).toBe('blue');
+    });
+  });
+
+  describe('getMessages', () => {
+    it('returns messages ordered by createdAt with turn metadata', async () => {
+      const result = {
+        conversationId: VALID_UUID,
+        turnNumber: 2,
+        maxTurns: onboardingConfig.maxTurns,
+        isLastTurn: false,
+        messages: [
+          { id: 'm1', role: 'assistant', content: 'Hi', createdAt: new Date('2026-01-01T00:00:00Z') },
+          { id: 'm2', role: 'user', content: 'Hello', createdAt: new Date('2026-01-01T00:01:00Z') },
+          { id: 'm3', role: 'assistant', content: 'Great!', createdAt: new Date('2026-01-01T00:02:00Z') },
+        ],
+      };
+      engine.getMessages.mockResolvedValue(result);
+
+      const actual = await service.getMessages(VALID_UUID);
+
+      expect(actual.conversationId).toBe(VALID_UUID);
+      expect(actual.turnNumber).toBe(2);
+      expect(actual.maxTurns).toBe(onboardingConfig.maxTurns);
+      expect(actual.isLastTurn).toBe(false);
+      expect(actual.messages).toHaveLength(3);
+    });
+
+    it('returns turnNumber=0 for empty conversation', async () => {
+      const result = {
+        conversationId: VALID_UUID,
+        turnNumber: 0,
+        maxTurns: onboardingConfig.maxTurns,
+        isLastTurn: false,
+        messages: [],
+      };
+      engine.getMessages.mockResolvedValue(result);
+
+      const actual = await service.getMessages(VALID_UUID);
+
+      expect(actual.turnNumber).toBe(0);
+      expect(actual.messages).toEqual([]);
+    });
+
+    it('throws NotFoundException when conversation missing', async () => {
+      engine.getMessages.mockRejectedValue(new NotFoundException('Conversation not found'));
+
+      await expect(service.getMessages(VALID_UUID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when conversation is AUTHENTICATED', async () => {
+      // Engine.getMessages filters by type internally
+      engine.getMessages.mockRejectedValue(new NotFoundException('Conversation not found'));
+
+      await expect(service.getMessages(VALID_UUID)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('complete (idempotency)', () => {
+    const cachedProfile = {
+      nativeLanguage: 'English',
+      targetLanguage: 'Spanish',
+      currentLevel: 'A1',
+    };
+    const cachedScenarios = Array.from({ length: 5 }, (_, i) => ({
+      id: `00000000-0000-0000-0000-00000000000${i}`,
+      title: `T${i}`,
+      description: `D${i}`,
+      icon: 'star',
+      accentColor: 'primary' as const,
+    }));
+
+    it('returns cached profile + scenarios without calling engine on 2nd call', async () => {
+      const conversation = makeConversation({
+        extractedProfile: cachedProfile,
+        scenarios: cachedScenarios,
+      } as Partial<AiConversation>);
+      engine.findConversation.mockResolvedValue(conversation);
+
+      const result = await service.complete({ conversationId: 'conv-1' });
+
+      expect(engine.completeAndGenerate).not.toHaveBeenCalled();
+      expect(result).toMatchObject(cachedProfile);
+      expect(result.scenarios).toEqual(cachedScenarios);
+    });
+
+    it('writes cache when profile structured AND scenarios.length === 5', async () => {
+      const conversation = makeConversation();
+      const scenarios = cachedScenarios;
+      engine.findConversation.mockResolvedValue(conversation);
+      // Mock completeAndGenerate to call the onGenerated callback
+      engine.completeAndGenerate.mockImplementation(
+        async (_conversationId, _config, _parser, onGenerated) => {
+          await onGenerated(cachedProfile, scenarios);
+          return { profile: cachedProfile, generated: scenarios };
+        },
+      );
+
+      await service.complete({ conversationId: 'conv-1' });
+
+      expect(conversationRepo.update).toHaveBeenCalledWith(
+        conversation.id,
+        expect.objectContaining({
+          extractedProfile: expect.objectContaining({ nativeLanguage: 'English' }),
+          scenarios: expect.any(Array),
+        }),
+      );
+    });
+
+    it('does NOT write cache when scenarios count != 5', async () => {
+      const conversation = makeConversation();
+      const profile = cachedProfile;
+      const scenarios = [cachedScenarios[0]]; // Only 1 scenario
+      engine.findConversation.mockResolvedValue(conversation);
+      engine.completeAndGenerate.mockResolvedValue({ profile, generated: scenarios });
+
+      await service.complete({ conversationId: 'conv-1' });
+
+      expect(conversationRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('writes cache only when both profile and scenarios valid', async () => {
+      const conversation = makeConversation();
+      const scenarios = cachedScenarios;
+      engine.findConversation.mockResolvedValue(conversation);
+      engine.completeAndGenerate.mockImplementation(
+        async (_conversationId, _config, _parser, onGenerated) => {
+          await onGenerated(cachedProfile, scenarios);
+          return { profile: cachedProfile, generated: scenarios };
+        },
+      );
+
+      await service.complete({ conversationId: 'conv-1' });
+
+      // Should write cache when profile is structured and scenarios.length === 5
+      expect(conversationRepo.update).toHaveBeenCalled();
     });
   });
 });

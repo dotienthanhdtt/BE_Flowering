@@ -1,13 +1,23 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage } from '@langchain/core/messages';
 import { Vocabulary } from '../../../database/entities/vocabulary.entity';
 import { AiConversationMessage } from '../../../database/entities/ai-conversation-message.entity';
-import { AiConversation, AiConversationType } from '../../../database/entities/ai-conversation.entity';
+import {
+  AiConversation,
+  AiConversationType,
+} from '../../../database/entities/ai-conversation.entity';
 import { UnifiedLLMService } from './unified-llm.service';
 import { PromptLoaderService } from './prompt-loader.service';
 import { LLMModel } from '../providers/llm-models.enum';
+import { LangfuseFeature } from '../langfuse-feature.enum';
 
 export interface WordTranslationResult {
   original: string;
@@ -24,6 +34,29 @@ export interface SentenceTranslationResult {
   original: string;
   translation: string;
 }
+
+export interface ChunkTranslationResult {
+  text: string;
+  type: string;
+  from: number;
+  to: number;
+  translation: string;
+  pronunciation?: string;
+  definition?: string;
+  examples?: string[];
+  vocabularyId?: string;
+}
+
+const ALLOWED_CHUNK_TYPES = new Set([
+  'word',
+  'phrase',
+  'idiom',
+  'phrasal_verb',
+  'compound_noun',
+  'particle',
+  'article',
+  'fixed_expression',
+]);
 
 @Injectable()
 export class TranslationService {
@@ -43,20 +76,28 @@ export class TranslationService {
     sourceLang: string,
     targetLang: string,
     userId: string | null,
-    sessionToken?: string,
+    conversationId?: string,
   ): Promise<WordTranslationResult> {
-    if (!userId && !sessionToken) {
-      throw new BadRequestException('Authentication or sessionToken required');
+    if (!userId && !conversationId) {
+      throw new BadRequestException('Authentication or conversationId required');
     }
 
-    const prompt = this.promptLoader.loadPrompt('translate-word', {
-      word: text, sourceLang, targetLang,
+    const prompt = this.promptLoader.loadPrompt('translate_phase.md', {
+      word: text,
+      sourceLang,
+      targetLang,
     });
 
     const response = await this.llmService.chat([new HumanMessage(prompt)], {
       model: LLMModel.OPENAI_GPT4_1_NANO,
-      temperature: 0.1,
-      metadata: { feature: 'translate-word', userId: userId ?? sessionToken, sourceLang, targetLang },
+      temperature: 0,
+      metadata: {
+        feature: LangfuseFeature.TRANSLATE_WORD,
+        userId: userId ?? conversationId,
+        conversationId,
+        sourceLang,
+        targetLang,
+      },
     });
 
     const parsed = this.parseWordResponse(response);
@@ -72,19 +113,26 @@ export class TranslationService {
       .insert()
       .into(Vocabulary)
       .values({
-        userId, word: text, translation: parsed.translation,
-        sourceLang, targetLang, partOfSpeech: parsed.partOfSpeech,
-        pronunciation: parsed.pronunciation, definition: parsed.definition,
+        userId,
+        word: text,
+        translation: parsed.translation,
+        sourceLang,
+        targetLang,
+        partOfSpeech: parsed.partOfSpeech,
+        pronunciation: parsed.pronunciation,
+        definition: parsed.definition,
         examples: parsed.examples,
       })
-      .orUpdate(['translation', 'part_of_speech', 'pronunciation', 'definition', 'examples'], [
-        'user_id', 'word', 'source_lang', 'target_lang',
-      ])
+      .orUpdate(
+        ['translation', 'part_of_speech', 'pronunciation', 'definition', 'examples'],
+        ['user_id', 'word', 'source_lang', 'target_lang'],
+      )
       .returning('id')
       .execute();
 
     return {
-      original: text, ...parsed,
+      original: text,
+      ...parsed,
       vocabularyId: result.generatedMaps[0]?.id ?? result.raw[0]?.id,
     };
   }
@@ -94,10 +142,10 @@ export class TranslationService {
     sourceLang: string,
     targetLang: string,
     userId: string | null,
-    sessionToken?: string,
+    conversationId?: string,
   ): Promise<SentenceTranslationResult> {
-    if (!userId && !sessionToken) {
-      throw new BadRequestException('Authentication or sessionToken required');
+    if (!userId && !conversationId) {
+      throw new BadRequestException('Authentication or conversationId required');
     }
 
     const message = await this.messageRepo.findOne({
@@ -109,7 +157,7 @@ export class TranslationService {
       throw new NotFoundException('Message not found');
     }
 
-    this.verifyMessageOwnership(message, userId, sessionToken);
+    this.verifyMessageOwnership(message, userId, conversationId);
 
     // Return cached translation if available
     if (message.translatedContent && message.translatedLang === targetLang) {
@@ -120,14 +168,23 @@ export class TranslationService {
       };
     }
 
-    const prompt = this.promptLoader.loadPrompt('translate-sentence', {
-      sentence: message.content, sourceLang, targetLang,
+    const prompt = this.promptLoader.loadPrompt('translate-sentence.md', {
+      sentence: message.content,
+      sourceLang,
+      targetLang,
     });
 
     const translation = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: LLMModel.OPENAI_GPT4_1_NANO,
-      temperature: 0.1,
-      metadata: { feature: 'translate-sentence', userId: userId ?? sessionToken, messageId, sourceLang, targetLang },
+      model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
+      temperature: 0,
+      metadata: {
+        feature: LangfuseFeature.TRANSLATE_SENTENCE,
+        userId: userId ?? conversationId,
+        conversationId: message.conversationId,
+        messageId,
+        sourceLang,
+        targetLang,
+      },
     });
 
     // Cache translation on message
@@ -142,19 +199,158 @@ export class TranslationService {
     };
   }
 
-  /** Verify the caller owns the message's conversation via userId or sessionToken */
+  async translateChunk(
+    messageId: string,
+    word: string,
+    sourceLang: string,
+    targetLang: string,
+    tapFrom: number,
+    tapTo: number,
+    userId: string,
+  ): Promise<ChunkTranslationResult> {
+    if (tapFrom < 0 || tapTo <= tapFrom) {
+      throw new BadRequestException('Invalid tap range');
+    }
+    if (!word || !word.trim()) {
+      throw new BadRequestException('word is required');
+    }
+
+    const message = await this.messageRepo.findOne({
+      where: { id: messageId },
+      relations: ['conversation'],
+    });
+    if (!message) throw new NotFoundException('Message not found');
+    this.verifyMessageOwnership(message, userId);
+
+    if (tapTo > message.content.length) {
+      throw new BadRequestException('tapTo exceeds message length');
+    }
+
+    const prompt = this.promptLoader.loadPrompt('translate_word.md', {
+      sentence: message.content,
+      word,
+      source_lang: sourceLang,
+      target_lang: targetLang,
+      tap_from: String(tapFrom),
+      tap_to: String(tapTo),
+    });
+
+    const response = await this.llmService.chat([new HumanMessage(prompt)], {
+      model: LLMModel.OPENAI_GPT4_1_NANO,
+      temperature: 0,
+      metadata: {
+        feature: LangfuseFeature.TRANSLATE_CHUNK,
+        userId,
+        messageId,
+        conversationId: message.conversationId,
+        sourceLang,
+        targetLang,
+      },
+    });
+
+    const parsed = this.parseChunkResponse(response, message.content, tapFrom, tapTo);
+    const chunkText = this.capitalizeFirst(parsed.text.slice(0, 255));
+
+    const result = await this.vocabularyRepo
+      .createQueryBuilder()
+      .insert()
+      .into(Vocabulary)
+      .values({
+        userId,
+        word: chunkText,
+        translation: parsed.translation,
+        sourceLang,
+        targetLang,
+        partOfSpeech: parsed.type,
+        pronunciation: parsed.pronunciation,
+        definition: parsed.definition,
+        examples: parsed.examples,
+      })
+      .orUpdate(
+        ['translation', 'part_of_speech', 'pronunciation', 'definition', 'examples'],
+        ['user_id', 'word', 'source_lang', 'target_lang'],
+      )
+      .returning('id')
+      .execute();
+
+    return {
+      ...parsed,
+      text: this.capitalizeFirst(chunkText),
+      vocabularyId: result.generatedMaps[0]?.id ?? result.raw[0]?.id,
+    };
+  }
+
+  /** Uppercase the first character; safe for non-cased scripts (CJK) where it is a no-op. */
+  private capitalizeFirst(s: string): string {
+    if (!s) return s;
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  /** Verify the caller owns the message's conversation via userId or conversationId */
   private verifyMessageOwnership(
     message: AiConversationMessage & { conversation: AiConversation },
     userId: string | null,
-    sessionToken?: string,
+    conversationId?: string,
   ): void {
     if (userId && message.conversation.userId === userId) return;
     if (
-      sessionToken &&
-      message.conversation.sessionToken === sessionToken &&
+      conversationId &&
+      message.conversation.id === conversationId &&
       message.conversation.type === AiConversationType.ANONYMOUS
-    ) return;
+    )
+      return;
     throw new ForbiddenException('You do not own this conversation');
+  }
+
+  private parseChunkResponse(
+    raw: string,
+    sentence: string,
+    tapFrom: number,
+    tapTo: number,
+  ): Omit<ChunkTranslationResult, 'vocabularyId'> {
+    let obj: Record<string, unknown> = {};
+    try {
+      obj = JSON.parse(raw.trim());
+    } catch {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) {
+        try {
+          obj = JSON.parse(m[0]);
+        } catch {
+          /* fall through */
+        }
+      }
+    }
+    if (!obj.translation) {
+      this.logger.warn(`Chunk LLM response missing translation. Raw: ${raw.slice(0, 500)}`);
+    }
+
+    const text = String(obj.text ?? sentence.slice(tapFrom, tapTo));
+    const typeRaw = String(obj.type ?? 'word');
+    const type = ALLOWED_CHUNK_TYPES.has(typeRaw) ? typeRaw : 'word';
+    let from = Number.isInteger(obj.from) ? (obj.from as number) : tapFrom;
+    let to = Number.isInteger(obj.to) ? (obj.to as number) : tapTo;
+    if (from < 0 || to > sentence.length || from >= to) {
+      this.logger.warn(
+        `LLM returned invalid range [${from},${to}], clamping to [${tapFrom},${tapTo}]`,
+      );
+      from = tapFrom;
+      to = tapTo;
+    }
+    const translation = String(obj.translation ?? '').slice(0, 255);
+    const pronunciation =
+      typeof obj.pronunciation === 'string' && obj.pronunciation.trim()
+        ? obj.pronunciation.slice(0, 255)
+        : undefined;
+    const definition =
+      typeof obj.definition === 'string' && obj.definition.trim() ? obj.definition : undefined;
+    const examples = Array.isArray(obj.examples)
+      ? (obj.examples as unknown[])
+          .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
+          .slice(0, 2)
+      : undefined;
+
+    return { text, type, from, to, translation, pronunciation, definition, examples };
   }
 
   private parseWordResponse(response: string): ReturnType<typeof this.extractWordFields> {

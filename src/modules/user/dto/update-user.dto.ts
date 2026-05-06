@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
  * DTO for updating user profile fields
@@ -16,8 +16,9 @@ export class UpdateUserDto {
   @IsString()
   avatarUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Native language ID (UUID)' })
+  @ApiPropertyOptional({ description: 'Native language code (e.g., "vi", "en")', maxLength: 10 })
   @IsOptional()
-  @IsUUID()
-  nativeLanguageId?: string;
+  @IsString()
+  @MaxLength(10)
+  nativeLanguage?: string;
 }

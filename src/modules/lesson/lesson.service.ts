@@ -1,0 +1,132 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
+import { ContentStatus } from '../../database/entities/content-status.enum';
+import { AccessTier } from '../../database/entities/access-tier.enum';
+import { Scenario } from '../../database/entities/scenario.entity';
+import { UserScenarioAccess } from '../../database/entities/user-scenario-access.entity';
+import { Subscription, SubscriptionPlan } from '../../database/entities/subscription.entity';
+import { SubscriptionService } from '../subscription/subscription.service';
+import { GetLessonsQueryDto } from './dto/get-lessons-query.dto';
+import {
+  GetLessonsResponseDto,
+  CategoryWithScenariosDto,
+  ScenarioStatus,
+} from './dto/lesson-response.dto';
+
+@Injectable()
+export class LessonService {
+  constructor(
+    @InjectRepository(Scenario)
+    private readonly scenarioRepo: Repository<Scenario>,
+    @InjectRepository(Subscription)
+    private readonly subscriptionRepo: Repository<Subscription>,
+    private readonly subscriptionService: SubscriptionService,
+  ) {}
+
+  async getLessons(
+    userId: string,
+    languageId: string,
+    query: GetLessonsQueryDto,
+  ): Promise<GetLessonsResponseDto> {
+    const { level, search, page = 1, limit = 20 } = query;
+
+    // Build visibility query
+    const qb = this.buildVisibilityQuery(userId, languageId);
+
+    // Apply filters
+    if (level) {
+      qb.andWhere('scenario.difficulty = :level', { level });
+    }
+    if (search) {
+      qb.andWhere('scenario.title ILIKE :search', { search: `%${search}%` });
+    }
+
+    // Get total count before pagination
+    const total = await qb.getCount();
+
+    // Apply pagination and ordering — category already joined in visibility query
+    const scenarios = await qb
+      .addSelect(['cat.id', 'cat.name', 'cat.orderIndex'])
+      .addOrderBy('cat.orderIndex', 'ASC')
+      .addOrderBy('scenario.orderIndex', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    // Get subscription for status computation — checks status AND expiration date
+    const subscription = await this.subscriptionRepo.findOne({ where: { userId } });
+    const hasActivePremium =
+      subscription !== null &&
+      subscription !== undefined &&
+      subscription.plan !== SubscriptionPlan.FREE &&
+      this.subscriptionService.isSubscriptionActive(subscription);
+    const isFreeUser = !hasActivePremium;
+
+    // Group by category and compute status
+    const categories = this.groupByCategory(scenarios, isFreeUser);
+
+    return {
+      categories,
+      pagination: { page, limit, total },
+    };
+  }
+
+  /** Build query: language-specific + user-granted access. No global (IS NULL) scenarios. */
+  private buildVisibilityQuery(userId: string, languageId: string): SelectQueryBuilder<Scenario> {
+    const qb = this.scenarioRepo
+      .createQueryBuilder('scenario')
+      .innerJoin('scenario.category', 'cat', 'cat.is_active = true')
+      .where('scenario.status = :status', { status: ContentStatus.PUBLISHED });
+
+    // Subquery: scenarios user has been granted access to
+    const accessSubQuery = qb
+      .subQuery()
+      .select('access.scenario_id')
+      .from(UserScenarioAccess, 'access')
+      .where('access.user_id = :userId')
+      .getQuery();
+
+    qb.andWhere(`(scenario.language_id = :languageId OR scenario.id IN ${accessSubQuery})`, {
+      languageId,
+      userId,
+    });
+
+    return qb;
+  }
+
+  /** Group flat scenario list by category and compute per-scenario status */
+  private groupByCategory(scenarios: Scenario[], isFreeUser: boolean): CategoryWithScenariosDto[] {
+    const categoryMap = new Map<string, CategoryWithScenariosDto>();
+
+    for (const scenario of scenarios) {
+      const cat = scenario.category;
+      if (!cat) continue;
+      if (!categoryMap.has(cat.id)) {
+        categoryMap.set(cat.id, {
+          id: cat.id,
+          name: cat.name,
+          scenarios: [],
+        });
+      }
+
+      categoryMap.get(cat.id)!.scenarios.push({
+        id: scenario.id,
+        title: scenario.title,
+        imageUrl: scenario.imageUrl ?? null,
+        difficulty: scenario.difficulty,
+        status: this.computeStatus(scenario, isFreeUser),
+      });
+    }
+
+    return Array.from(categoryMap.values());
+  }
+
+  /** Compute scenario status based on access tier and subscription */
+  private computeStatus(scenario: Scenario, isFreeUser: boolean): ScenarioStatus {
+    if (scenario.accessTier === AccessTier.PREMIUM && isFreeUser) {
+      return ScenarioStatus.LOCKED;
+    }
+    return ScenarioStatus.AVAILABLE;
+  }
+}

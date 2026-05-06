@@ -1,8 +1,8 @@
 # API Documentation
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-27
 **Base URL:** `http://localhost:3000` (development)
-**API Version:** 1.3.0
+**API Version:** 2.0.0
 
 ## Overview
 
@@ -30,7 +30,7 @@ RESTful API for AI-powered language learning application. All endpoints except w
 
 ### JSON Key Naming
 
-**All JSON keys (request body params and response data fields) use `snake_case`.**
+**All JSON keys (request body params and response data fields) use `snake_case`.** Internally DTOs use camelCase; a request middleware (`SnakeToCamelCaseMiddleware`) and response interceptor (`ResponseTransformInterceptor`) convert between the two transparently.
 
 ```json
 // Request
@@ -41,6 +41,11 @@ RESTful API for AI-powered language learning application. All endpoints except w
 ```
 
 The wrapper keys `code`, `message`, `data` are single-word and unchanged.
+
+URL path params use camelCase (e.g., `:scenarioId`, `:languageId`, `:sessionId`) — those bypass the body middleware. Query-string keys use snake_case (e.g., `?language_code=en`).
+
+#### Snake_case Exception: Scenario Chat
+`POST /scenario/chat`, `GET /scenario/conversations/:id`, and `GET /scenario/:scenarioId/conversations` emit snake_case keys in the response (`conversation_id`, `max_turns`, `turn`, `created_at`, etc.). All other endpoints remain camelCase in the response.
 
 ## Authentication
 
@@ -54,86 +59,103 @@ Authorization: Bearer <jwt_token>
 - Algorithm: HS256
 - Public routes: Use @Public() decorator
 
-## Endpoints
+### Language Context Header
 
-### Authentication (POST /auth/*)
+**Required for:** All content endpoints (lessons, scenarios, exercises, AI chat)
 
-#### POST /auth/register
-Register new user account.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "SecurePassword123!",
-  "name": "John Doe"
-}
+```
+X-Learning-Language: <language_code>
 ```
 
-**Response (201):** `{code: 1, message: "User registered", data: {access_token, user: {id, email, name}}}`
+**Purpose:** Specifies user's active learning language for request-scoped content partitioning.
 
-**Errors:** 400 (invalid input), 409 (email exists)
-
----
-
-#### POST /auth/login
-Login with email and password.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "SecurePassword123!"
-}
-```
-
-**Response (200):** `{code: 1, message: "Logged in", data: {access_token, user: {...}}}`
-
-**Errors:** 401 (invalid credentials)
-
----
-
-#### POST /auth/google
-Google ID token authentication.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "id_token": "google_id_token",
-  "display_name": "John Doe",
-  "session_token": "optional_session_id"
-}
-```
-
-**Response (200):** `{code: 1, message: "Authenticated", data: {access_token, user: {...}}}`
+**Valid values:** ISO 639-1 language codes (e.g., `en`, `es`, `fr`, `ja`, `vi`). Must match a language code in the Language catalog.
 
 **Behavior:**
-- Verifies ID token via Google Auth Library
-- Auto-links to existing email
-- Creates new account if email not found
-- Stores googleProviderId
+- Header is validated and resolved to Language.id on every request
+- Resolved language context is cached (LRU, 60s TTL)
+- User must be enrolled in the language (have a `user_languages` row)
+- Returns 400 if header missing or language code invalid
+- Returns 403 (Forbidden) if user not enrolled in the language — **unless the route supports auto-enroll** (see below)
+- Cached per language code for performance
 
-**Errors:** 401 (invalid token), 400 (missing id_token)
+**Auto-Enroll Behavior (Opt-in per route):**
+Some routes (e.g., `GET /lessons`) support automatic enrollment when accessing a language the user is not yet enrolled in:
+- If user sends `X-Learning-Language: <new-code>` but has no `user_languages` row for that language:
+  - Guard auto-creates an inactive `user_languages` row (does not affect user's active language)
+  - Content is filtered by the new language
+  - User can later explicitly activate the language via `PATCH /languages/user/:id`
+- Auto-enroll only succeeds if Language is active and `isLearningAvailable=true`
+- Idempotent: multiple concurrent requests auto-enrolling the same language are race-safe
+- If auto-enroll fails (DB error), request logs a warning but still proceeds (failure-tolerant)
 
----
+**Routes with Auto-Enroll:**
+- `GET /lessons` — auto-enroll on header language (opt-in via `@AutoEnrollLanguage()` decorator)
 
-#### POST /auth/apple
-Apple Sign-In authentication.
+**Routes without Auto-Enroll:**
+- `POST /scenario/chat`, `POST /ai/chat`, POST `/ai/chat/stream` — strict 403 if not enrolled
 
-**Auth:** Not required | **Request:**
+**cURL Example:**
+```bash
+curl http://localhost:3000/lessons \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "X-Learning-Language: es"
+```
+
+**Note:** Onboarding endpoints, user profile, subscriptions, and admin endpoints do NOT require this header.
+
+## Endpoints
+
+### Health Check
+
+#### GET /
+Liveness/health probe. Used by load balancers and Railway deploy checks.
+
+**Auth:** Not required | **Response (200):**
 ```json
 {
-  "identity_token": "apple_identity_token",
-  "user": {
-    "email": "user@privaterelay.appleid.com",
-    "name": "John Doe"
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "status": "ok",
+    "timestamp": "2026-04-14T09:00:00.000Z"
   }
 }
 ```
 
-**Response (200):** `{code: 1, message: "Authenticated", data: {access_token, user: {...}}}`
+---
 
-**Errors:** 401 (invalid token)
+### Authentication (POST /auth/*)
+
+#### POST /auth/register | POST /auth/login
+> **DISABLED — returns 410 Gone.** Email/password auth is no longer supported. Use `POST /auth/firebase`.
+
+**Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
+
+---
+
+#### POST /auth/firebase
+Firebase sign-in (Google or Apple).
+
+**Auth:** Not required | **Request:**
+```json
+{
+  "id_token": "firebase_id_token",
+  "display_name": "John Doe",
+  "conversation_id": "optional_conversation_id"
+}
+```
+
+**Response (200):** `{code: 1, message: "Authenticated", data: {access_token, refresh_token, user: {...}}}`
+
+**Behavior:**
+- Accepts Firebase ID token from either Google or Apple sign-in
+- Auto-detects provider based on token claims
+- Auto-links to existing email or creates new account
+- Stores provider-specific ID (google_provider_id or apple_provider_id)
+- Optionally links existing onboarding conversation
+
+**Errors:** 401 (invalid token), 400 (missing id_token)
 
 ---
 
@@ -156,56 +178,14 @@ Refresh access token.
 #### POST /auth/logout
 Invalidate refresh token.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "Logged out", data: null}`
+**Auth:** Required | **Response (204):** No content
 
 ---
 
-#### POST /auth/forgot-password
-Request password reset via OTP.
+#### POST /auth/forgot-password | /verify-otp | /reset-password
+> **DISABLED — returns 410 Gone.** Use `POST /auth/firebase`.
 
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-**Response (200):** `{code: 1, message: "OTP sent to email", data: null}`
-
----
-
-#### POST /auth/verify-otp
-Verify OTP code.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com",
-  "otp": "123456"
-}
-```
-
-**Response (200):** `{code: 1, message: "OTP verified", data: {reset_token}}`
-
-**Errors:** 400 (invalid/expired OTP), 429 (too many attempts)
-
----
-
-#### POST /auth/reset-password
-Reset password with reset token.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "email": "user@example.com",
-  "reset_token": "token_from_verify_otp",
-  "new_password": "NewPassword123!"
-}
-```
-
-**Response (200):** `{code: 1, message: "Password reset", data: null}`
-
-**Errors:** 400 (invalid token/password)
+**Auth:** Not required | **Response (410):** `{code: 0, message: "Email/password authentication is no longer supported", data: null}`
 
 ---
 
@@ -214,7 +194,29 @@ Reset password with reset token.
 #### GET /users/me
 Get current user profile.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "User found", data: {id, email, name, profile_picture, email_verified, created_at, updated_at}}`
+**Auth:** Required | **Response (200):**
+```json
+{
+  "code": 1,
+  "message": "User found",
+  "data": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "display_name": "John Doe",
+    "avatar_url": "https://example.com/avatar.jpg",
+    "email_verified": true,
+    "native_language_id": "uuid",
+    "native_language_code": "en",
+    "native_language_name": "English",
+    "active_language": "es",
+    "created_at": "2026-03-01T10:00:00.000Z",
+    "onboarding_required": false,
+    "missing_fields": []
+  }
+}
+```
+
+`onboarding_required` is `true` when any of `native_language`, `user_languages` row, or onboarding chat profile extraction is missing. Mobile MUST gate the post-login route on this flag — do not reimplement the rule client-side. `missing_fields` lists which artifacts are absent: `nativeLanguage`, `userLanguage`, `onboardingProfile`.
 
 ---
 
@@ -224,12 +226,13 @@ Update user profile.
 **Auth:** Required | **Request:**
 ```json
 {
-  "name": "Jane Doe",
-  "profile_picture": "https://example.com/avatar.jpg"
+  "display_name": "Jane Doe",
+  "avatar_url": "https://example.com/avatar.jpg",
+  "native_language_id": "uuid"
 }
 ```
 
-**Response (200):** `{code: 1, message: "Profile updated", data: {...}}`
+All fields optional. Response mirrors `GET /users/me`.
 
 ---
 
@@ -238,7 +241,21 @@ Update user profile.
 #### GET /subscriptions/me
 Get subscription status.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "Subscription found", data: {id, plan, status, is_active, current_period_start, current_period_end, cancel_at_period_end}}`
+**Auth:** Required | **Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Subscription found",
+  "data": {
+    "id": "uuid",
+    "plan": "monthly",
+    "status": "active",
+    "is_active": true,
+    "expires_at": "2026-05-14T00:00:00.000Z",
+    "cancel_at_period_end": false
+  }
+}
+```
 
 **Plan types:** free, monthly, yearly, lifetime
 **Status types:** active, trial, expired, cancelled
@@ -248,18 +265,23 @@ Get subscription status.
 #### POST /webhooks/revenuecat
 RevenueCat webhook endpoint (idempotency via WebhookEvent table).
 
-**Auth:** Bearer token (REVENUECAT_WEBHOOK_SECRET) | **Request:**
+**Auth:** Bearer token (REVENUECAT_WEBHOOK_SECRET; not a JWT) | **Request:**
 ```json
 {
   "event": {
+    "id": "event_uuid",
     "type": "INITIAL_PURCHASE|RENEWAL|CANCELLATION|EXPIRATION|PRODUCT_CHANGE",
     "app_user_id": "user_uuid",
+    "original_app_user_id": "user_uuid",
+    "environment": "PRODUCTION",
     "product_id": "monthly_subscription",
     "purchased_at_ms": 1706976000000,
     "expiration_at_ms": 1709654400000
   }
 }
 ```
+
+> **Note:** RevenueCat delivers webhook payloads with `snake_case` event fields — vendor contract, consistent with our API's snake_case wire format.
 
 **Response (200):** `{code: 1, message: "Webhook received", data: {status: "received"}}`
 
@@ -272,29 +294,33 @@ RevenueCat webhook endpoint (idempotency via WebhookEvent table).
 #### GET /languages
 List available languages (public).
 
-**Auth:** Not required | **Query params:** type=native|learning
+**Auth:** Not required | **Query params:** `type=native|learning`
 
 **Response (200):** `{code: 1, message: "Languages found", data: [{id, code, name, native_name, flag_url, is_active}]}`
 
 ---
 
 #### GET /languages/user
-Get user's learning languages.
+Get the caller's learning languages.
 
-**Auth:** Required | **Response (200):** `{code: 1, message: "User languages found", data: [...]}`
+**Auth:** Required | **Response (200):** `{code: 1, message: "User languages found", data: [{id, language: {...}, proficiency_level, level_framework, is_active}]}`
+
+**Note:** `proficiency_level` is now language-specific (e.g., CEFR: A1–C2, JLPT: N5–N1, HSK: HSK1–HSK6, TOPIK: TOPIK1–TOPIK6). `level_framework` indicates the framework (CEFR/JLPT/HSK/TOPIK) or null for native-only languages.
 
 ---
 
 #### POST /languages/user
-Add language to learning list.
+Add language to the caller's learning list.
 
 **Auth:** Required | **Request:**
 ```json
 {
   "language_id": "uuid",
-  "proficiency_level": "beginner|intermediate|advanced|native"
+  "proficiency_level": "A1"
 }
 ```
+
+**Note:** `proficiency_level` must be valid for the language's framework. Framework-specific examples: CEFR (A1–C2), JLPT (N5–N1), HSK (HSK1–HSK6), TOPIK (TOPIK1–TOPIK6). Omit field to auto-default to lowest level.
 
 **Response (201):** `{code: 1, message: "Language added", data: {...}}`
 
@@ -306,9 +332,11 @@ Update language proficiency.
 **Auth:** Required | **Request:**
 ```json
 {
-  "proficiency_level": "intermediate"
+  "proficiency_level": "B1"
 }
 ```
+
+**Note:** `proficiency_level` must be valid for the language's framework.
 
 **Response (200):** `{code: 1, message: "Language updated", data: {...}}`
 
@@ -335,146 +363,306 @@ Remove language.
 
 ---
 
+### Lessons
+
+#### GET /lessons
+Get lessons grouped by category. **Auth:** Required | **Query:** language (uuid), level (beginner|intermediate|advanced), search (string), page (1+), limit (1-50, default 20).
+
+**Response:** `{data: {categories: [{id, name, scenarios: [{id, title, image_url, difficulty, status}]}], pagination}}`
+
+**Status:** available | locked (premium, free user) | learned. **Visibility:** published + (global OR matching language OR user_scenario_access). **Errors:** 400, 401
+
+---
+
+### Scenarios
+
+#### GET /scenarios/default
+List default scenarios for active language (paginated). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page` (1+, default 1), `limit` (1-50, default 20) | **Response (200):** `{code: 1, message: "Scenarios found", data: {items: [{id, title, description, image_url, difficulty, type: "default", status}], total, page, limit}}`
+
+**Type:** Only returns scenarios with `type='default'`. Automatically enrolls user in language if not yet enrolled. **Errors:** 400 (missing header), 401 (unauthorized), 403 (inactive language)
+
+---
+
+#### GET /scenarios/personal
+List user's AI-generated + KOL-granted scenarios (merged). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page`, `limit` | **Response (200):** `{code: 1, message: "Personal scenarios found", data: {items: [{id, title, source: "ai_generated"|"kol_granted", granted_at?, status}], total, page, limit}}`
+
+**Merges:** UserAiScenario rows (AI-generated) + KolBundleScenario grant rows (KOL-granted). Sorted by granted_at descending. **Errors:** 400, 401, 403
+
+---
+
+#### POST /scenarios/redeem
+Redeem a KOL gift code to grant access to scenarios. **Auth:** Required | **Rate Limit:** 5 req/min | **Request:** `{gift_code: "string"}` | **Response (200):** `{code: 1, message: "Scenarios redeemed", data: {redeemed_count: int, scenarios: [{id, title}]}}`
+
+**Behavior:** Validates gift code exists + is active in KolBundle. For each bundle scenario, creates UserAiScenario row if user doesn't already have access. Idempotent (duplicate codes succeed without double-grants). **Errors:** 404 (code not found), 400 (invalid), 429 (throttled)
+
+---
+
+#### GET /scenarios/:id
+Get full scenario detail including access state. **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Path:** `id` (uuid)
+
+**Response (200):** `{code: 1, message: "...", data: {id, title, description?, imageUrl?, difficulty, languageId, orderIndex, category: {id, name}, accessTier, isLocked, lockReason?}}`
+
+**Soft-lock behavior:** Premium scenarios return `isLocked=true, lockReason="premium_required"` instead of 403, enabling mobile upgrade CTA in a single round-trip. **Errors:** 401, 404 (not found / wrong language / unpublished)
+
+Sample responses:
+```json
+// FREE tier — 200
+{"code":1,"data":{"id":"uuid","title":"Ordering Food","description":"Learn how to order at a restaurant","difficulty":"beginner","languageId":"uuid","orderIndex":1,"category":{"id":"uuid","name":"Restaurant"},"accessTier":"free","isLocked":false}}
+
+// PREMIUM, no subscription — 200
+{"code":1,"data":{"id":"uuid","title":"Luxury Hotel","description":"Practice checking into a 5-star hotel","difficulty":"intermediate","languageId":"uuid","orderIndex":5,"category":{"id":"uuid","name":"Hotel"},"accessTier":"premium","isLocked":true,"lockReason":"premium_required"}}
+
+// PREMIUM, active subscription — 200
+{"code":1,"data":{"id":"uuid","title":"Luxury Hotel","description":"Practice checking into a 5-star hotel","difficulty":"intermediate","languageId":"uuid","orderIndex":5,"category":{"id":"uuid","name":"Hotel"},"accessTier":"premium","isLocked":false}}
+
+// Not found / language mismatch — 404
+{"code":0,"message":"Scenario not found"}
+```
+
+---
+
 ### AI Features
 
 Chat endpoint requires active premium subscription. Translation and correction endpoints are public but support optional premium. Use `@RequirePremium()` decorator with PremiumGuard for enforcement.
 
 #### POST /ai/chat
-Chat with AI tutor.
-
-**Auth:** Required (Premium) | **Rate Limit:** 20 req/min, 100 req/hr | **Request:**
-```json
-{
-  "message": "How do I use the past tense in Spanish?",
-  "conversation_id": "uuid",
-  "language": "spanish",
-  "level": "beginner",
-  "model": "gpt-4o"
-}
-```
-
-**Response (200):** `{code: 1, message: "Response generated", data: {conversation_id, response, ai_provider, tokens_used}}`
-
----
+Chat with AI tutor. **Auth:** Required (Premium) | **Request:** `{message, context: {conversation_id, target_language, native_language, proficiency_level, lesson_topic?, model?}}` | **Response:** `{data: {message, conversation_id}}`
 
 #### SSE /ai/chat/stream
-Stream chat response (Server-Sent Events).
-
-**Auth:** Required | **Request:** Same as POST /ai/chat
-
-**Response:** Streaming text chunks
+Stream chat (Server-Sent Events). **Auth:** Required (Premium) | **Response:** `text/event-stream` with chunks in `{data: {content: "..."}}` format.
 
 ---
 
 #### POST /ai/chat/correct
-Check grammar/vocabulary of user's chat reply in context of previous AI message.
-
-**Auth:** Public (optional premium) | **Request:**
-```json
-{
-  "previous_ai_message": "How was your weekend?",
-  "user_message": "I go to park yesterday",
-  "target_language": "en"
-}
-```
-
-| Field | Type | Required | Limit | Description |
-|-------|------|----------|-------|-------------|
-| previous_ai_message | string | Yes | 4000 chars | AI tutor's previous message (context) |
-| user_message | string | Yes | 4000 chars | User's reply to check |
-| target_language | string | Yes | 10 chars | Target language code (e.g., "en", "ja", "vi") |
-
-**Response (200) — errors found:** `{code: 1, message: "Success", data: {corrected_text: "I went to the park yesterday."}}`
-
-**Response (200) — no errors:** `{code: 1, message: "Success", data: {corrected_text: null}}`
-
-**Errors:** 400 (missing/empty fields), 429 (rate limit)
+Check grammar/vocabulary. **Auth:** Optional (Public) | **Rate Limit:** 5 req/min | **Request:** `{previous_ai_message, user_message, target_language, conversation_id?}` | **Response:** `{data: {corrected_text: "..." or null}}`
 
 ---
 
 #### POST /ai/translate
-Translate words or sentences with vocabulary persistence for words.
+Translate WORD or SENTENCE. **Auth:** Optional | **Rate Limit:** 5 req/min | **Request (WORD):** `{type: "WORD", text, source_lang, target_lang}` → **Response:** `{data: {translation, word, pronunciation}}` | **Request (SENTENCE):** `{type: "SENTENCE", message_id, source_lang, target_lang, conversation_id?}` → **Response:** `{data: {translated_content}}`
 
-**Auth:** Public (optional premium) | **Request:**
+---
+
+#### POST /ai/translate/word
+Resolve and translate the smallest meaning-bearing chunk at a tapped position in a chat message. **Auth:** Required | **Rate Limit:** 5 req/60s | **Request:**
 ```json
 {
-  "type": "WORD",
-  "text": "beautiful",
-  "source_lang": "en",
-  "target_lang": "es"
-}
-```
-
-**OR (sentence translation by messageId):**
-```json
-{
-  "type": "SENTENCE",
   "message_id": "uuid",
   "source_lang": "en",
-  "target_lang": "es",
-  "session_token": "optional_session_id"
+  "target_lang": "vi",
+  "tap_from": 4,
+  "tap_to": 9
 }
 ```
 
-| Field | Type | Required | Limit | Description |
-|-------|------|----------|-------|-------------|
-| type | enum | Yes | - | WORD or SENTENCE |
-| text | string | No | 255 chars | Word/phrase to translate (WORD only) |
-| message_id | UUID | No | - | Conversation message ID (SENTENCE only) |
-| source_lang | string | Yes | 10 chars | Source language code (e.g., "en", "ja") |
-| target_lang | string | Yes | 10 chars | Target language code (e.g., "es", "vi") |
-| session_token | string | No | - | Optional session token for anonymous users |
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "text": "going",
+    "type": "word|phrase|idiom|phrasal_verb|compound_noun|particle|article|fixed_expression",
+    "from": 4,
+    "to": 9,
+    "translation": "đi",
+    "pronunciation": "ɡoʊ.ɪŋ",
+    "vocabulary_id": "uuid"
+  }
+}
+```
 
-**Response (200) — word translation:** `{code: 1, message: "Success", data: {translation: "hermoso", word: "beautiful", pronunciation: "er-MO-so"}}`
+**Behavior:**
+- Resolves the exact chunk at character positions [tap_from, tap_to) in the message
+- LLM identifies the smallest grammatically complete unit (word, phrase, idiom, etc.)
+- Translates the resolved chunk
+- Upserts to Vocabulary table with chunk type for future reference
+- Anonymous users (no auth) return 401
 
-**Response (200) — sentence translation:** `{code: 1, message: "Success", data: {translated_content: "Eso es hermoso."}}`
+**Error Cases:**
+- **400** (Bad Request): Invalid tap range (tap_from < 0, tap_to <= tap_from, or tap_to > message length)
+- **401** (Unauthorized): Missing or invalid JWT token
+- **403** (Forbidden): Caller does not own the message's conversation
+- **404** (Not Found): Message ID not found
 
-**Errors:** 400 (invalid type/missing fields), 404 (message not found), 429 (rate limit)
+**Chunk Type Values:**
+- `word` — single morpheme unit (e.g., "run", "going")
+- `phrase` — multi-word collocation (e.g., "take care of")
+- `idiom` — fixed expression (e.g., "piece of cake")
+- `phrasal_verb` — verb + particle(s) (e.g., "look up")
+- `compound_noun` — noun compound (e.g., "coffee table")
+- `particle` — grammatical particle (e.g., "to" in infinitive)
+- `article` — article (e.g., "a", "the")
+- `fixed_expression` — formulaic sequence (e.g., "nice to meet you")
+
+---
+
+#### POST /ai/transcribe
+Transcribe audio (M4A/MP4/MPEG/WAV, max 10MB). **Auth:** Required (Premium) | **Request:** multipart/form-data with `audio` field | **Response:** `{data: {text: "..."}}` | **Providers:** OpenAI Whisper → Gemini (fallback)
+
+---
+
+### Scenario Chat
+
+Engage in roleplay conversations within scenario-based learning activities. Uses snake_case in response fields (see **Snake_case exception** note below).
+
+#### POST /scenario/chat
+Roleplay in scenario. **Auth:** Required (Premium) | **Rate Limit:** 20 req/min, 100 req/hr per user | **Request:** `{scenario_id, message?, conversation_id?, force_new?}` | **Response (200):** `{code: 1, message: "Success", data: {scenario: {conversation_id, max_turns, turn, status}, messages: [{id, role, content, created_at}]}}` | **First turn:** omit message. **Resume:** provide conversation_id. **Re-practice:** force_new=true. **Errors:** 400, 401, 403, 404
+
+**Response Details:**
+- `scenario.status`: enum `"CHATTING"` (in progress) or `"DONE"` (completed)
+- Status is `"DONE"` when: max_turns reached (hard-end) OR LLM emits `is_end: true` in JSON reply (soft-end)
+- `messages`: sorted chronologically (oldest first), includes both user and assistant messages
+- All timestamps in ISO 8601 format
+
+**Example Response:**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "scenario": {
+      "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+      "max_turns": 12,
+      "turn": 1,
+      "status": "CHATTING"
+    },
+    "messages": [
+      {
+        "id": "660e8400-e29b-41d4-a716-446655440001",
+        "role": "assistant",
+        "content": "Welcome to the restaurant scenario!",
+        "created_at": "2026-04-25T10:00:00.000Z"
+      },
+      {
+        "id": "660e8400-e29b-41d4-a716-446655440002",
+        "role": "user",
+        "content": "Hello, I'd like a table for two",
+        "created_at": "2026-04-25T10:00:01.000Z"
+      }
+    ]
+  }
+}
+```
+
+#### GET /scenario/:scenarioId/conversations
+List user's past conversations for a scenario (newest first). **Auth:** Required | **Response (200):** `{code: 1, message: "...", data: {items: [{id, startedAt, lastTurnAt, turnCount, status, maxTurns}]}}` | Owner-filter only. No premium gate. **Errors:** 401, 404
+
+**Response Details:**
+- `status`: enum `"CHATTING"` or `"DONE"`
+- `turnCount`: number of completed user/assistant turn pairs
+
+#### GET /scenario/conversations/:id
+Fetch conversation transcript (owner only, chronological). **Auth:** Required | **Response (200):** `{code: 1, message: "...", data: {scenario: {conversation_id, max_turns, turn, status}, messages: [{id, role, content, created_at}]}}` | **Errors:** 401, 403 (not owner), 404
+
+**Response Details:**
+- Same response shape as `POST /scenario/chat`
+- Messages ordered chronologically (oldest first)
+
+---
+
+### Vocabulary (Spaced Repetition & CRUD)
+
+**Auth:** Required | **Rate Limit:** None (non-AI endpoint)
+
+#### GET /vocabulary
+List user's vocabulary for the active learning language. **Auth:** Required | **Header:** `X-Learning-Language: <code>` (preferred, determines `target_lang`) | **Query:** box (1-5), search, page (default 1), limit (default 20, max 100), `language_code` (legacy fallback only) | **Response:** `{data: {items: [{id, word, translation, source_lang, target_lang, part_of_speech, pronunciation, definition, examples, box, due_at, last_reviewed_at, review_count, correct_count, created_at}], total, page, limit}}`
+
+---
+
+#### GET /vocabulary/:id
+Get a single vocabulary item. Same response shape as GET /vocabulary list items. **Errors:** 401, 404
+
+---
+
+#### DELETE /vocabulary/:id
+Delete a vocabulary item.
+
+**Response (204):** No content
+
+**Errors:** 401 (unauthorized), 404 (not found or not owned)
+
+---
+
+#### POST /vocabulary/review/start
+Start Leitner review session. **Auth:** Required | **Request:** `{language_code?, limit?}` (limit max 100, default 20) | **Response (201):** `{data: {session_id, cards: [{vocab_id, word, translation, pronunciation, part_of_speech, definition, examples, box, source_lang, target_lang}], total}}` | Session TTL: 1h. Cards ordered by box priority where due_at <= NOW().
+
+---
+
+#### POST /vocabulary/review/:sessionId/rate
+Rate card (correct/incorrect). **Auth:** Required | **Request:** `{vocab_id, correct}` | **Response (201):** `{data: {updated: {box, due_at}, remaining}}` | **Leitner:** Box 1→2 (+3d), 2→3 (+7d), 3→4 (+14d), 4→5 (+30d), 5→5 (+30d). Wrong: any→1 (+1d). **Errors:** 400, 401, 403, 404
+
+---
+
+#### POST /vocabulary/review/:sessionId/complete
+Complete review session (returns stats). **Auth:** Required | **Response (201):** `{data: {total, correct, wrong, accuracy, box_distribution: [{box, count}]}}` | Session deleted after completion. **Errors:** 401, 404
+
+---
+
+### Admin Content Management
+
+All admin endpoints require `isAdmin` flag on user account (set via ADMIN_EMAILS env var bootstrap).
+
+#### POST /admin/content/generate
+Generate draft content via LLM. **Auth:** Required (Admin) | **Rate Limit:** 5 req/min | **Request:** `{language_id, type: SCENARIO|EXERCISE|LESSON, level: beginner|intermediate|advanced, count?: 1-10 default 5}` | **Response (201):** `{data: {generated: [{id, type, title, description, status: draft, language_id, level, created_at}], count}}` | **Errors:** 400, 401, 403, 429, 503
+
+---
+
+#### GET /admin/content
+List content with filters. **Auth:** Required (Admin) | **Query:** status (draft|published|archived), type, language_id, page (1+), limit (1-100, default 20) | **Response:** `{data: {items: [{id, type, title, description, status, language_id, language_code, level, created_at, updated_at}], pagination}}`
+
+---
+
+#### PATCH /admin/content/:id/publish
+Publish draft content. **Auth:** Required (Admin) | **Query:** type (LESSON|EXERCISE|SCENARIO) | **Response:** `{data: {id, status: published, updated_at}}` | Idempotent. **Errors:** 400, 401, 404
+
+---
+
+#### PATCH /admin/content/:id
+Edit content (title/description only). **Auth:** Required (Admin) | **Query:** type | **Request:** `{title?, description?}` (title max 255 chars, description max 5000) | **Response:** `{data: {id, status, updated_at}}` | **Errors:** 400, 401, 404
+
+---
+
+#### DELETE /admin/content/:id
+Archive content (soft delete). **Auth:** Required (Admin) | **Query:** type | **Response:** `{data: {id, status: archived, updated_at}}` | Idempotent. **Errors:** 400, 401, 404
+
+---
+
+### Admin KOL Bundle Management
+
+#### POST /admin/kol-bundles
+Create a new KOL bundle with gift code and scenarios. **Auth:** Required (Admin role) | **Request:** `{name: "string", description?: "string", gift_code: "string", scenario_ids: ["uuid1", "uuid2"]}` | **Response (201):** `{code: 1, message: "Bundle created", data: {id, name, gift_code, scenario_count, created_at}}`
+
+**Role:** Admin-only (checked via `@Roles('admin')` decorator on RolesGuard). Gift code must be unique. Scenarios must exist. **Errors:** 401, 403 (not admin), 400 (validation), 409 (duplicate code)
+
+---
+
+#### GET /admin/kol-bundles
+List all KOL bundles (paginated). **Auth:** Required (Admin role) | **Query:** `page` (1+, default 1), `limit` (1-100, default 20) | **Response (200):** `{code: 1, message: "Bundles found", data: {items: [{id, name, gift_code, scenario_count, created_at}], total, page, limit}}`
+
+**No filter logic.** Lists all bundles across all languages. **Errors:** 401, 403 (not admin)
+
+---
+
+#### POST /admin/kol-bundles/:id/scenarios
+Attach scenarios to an existing bundle. **Auth:** Required (Admin role) | **Request:** `{scenario_ids: ["uuid1", "uuid2"]}` | **Response (200):** `{code: 1, message: "Scenarios attached", data: {bundle_id, attached_count, total_scenarios}}`
+
+**Idempotent:** Re-attaching same scenarios succeeds without duplicates (database unique constraint on (bundle_id, scenario_id)). **Errors:** 401, 403 (not admin), 404 (bundle not found), 400 (scenario not found)
 
 ---
 
 ### Onboarding (No Auth Required)
 
-#### POST /onboarding/start
-Start anonymous onboarding session.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "native_language": "english"
-}
-```
-
-**Response (200):** `{code: 1, message: "Session started", data: {session_id, expires_at}}`
-
----
-
 #### POST /onboarding/chat
-Chat in onboarding session.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "session_id": "session_token",
-  "message": "I want to learn Spanish"
-}
-```
-
-**Response (200):** `{code: 1, message: "Response generated", data: {response, turn_count, max_turns}}`
+Start new or resume session. **Auth:** Not required | **Rate Limit:** 5 req/hr (new), 30 req/hr (continue) | **New:** `{native_language, target_language}` → Response: `{data: {conversation_id, reply, message_id, turn_number, is_last_turn}}` | **Resume:** `{conversation_id, message?}` → Same response. Max 10 turns/session. **Errors:** 400, 429, 404, 503
 
 ---
+
+#### GET /onboarding/conversations/:conversationId/messages
+Fetch transcript for mobile rehydration. **Auth:** Not required | **Rate Limit:** 30 req/hr per IP | **Response:** `{data: {conversation_id, turn_number, max_turns, is_last_turn, messages: [{id, role, content, created_at}]}}` | **Errors:** 404
 
 #### POST /onboarding/complete
-Complete onboarding and extract profile.
-
-**Auth:** Not required | **Request:**
-```json
-{
-  "session_id": "session_token"
-}
-```
-
-**Response (200):** `{code: 1, message: "Onboarding completed", data: {extracted_profile: {languages, interests, level}}}`
+Extract onboarding profile (idempotent, caches on first success). **Auth:** Not required | **Request:** `{conversation_id}` | **Response:** `{data: {extracted_profile: {languages, interests, level}}}`
 
 ---
 
@@ -513,25 +701,28 @@ Complete onboarding and extract profile.
 
 ## Example Requests
 
-**cURL - Login:**
+**cURL - Firebase sign-in:**
 ```bash
-curl -X POST http://localhost:3000/auth/login \
+curl -X POST http://localhost:3000/auth/firebase \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
+  -d '{"id_token":"<firebase_id_token>","display_name":"Jane"}'
 ```
 
-**cURL - Get Profile:**
+**cURL Examples (see Swagger at `/api/docs` for more):**
 ```bash
-curl http://localhost:3000/users/me \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
+# Get profile
+curl http://localhost:3000/users/me -H "Authorization: Bearer YOUR_JWT_TOKEN"
 
-**cURL - AI Chat:**
-```bash
+# AI chat
 curl -X POST http://localhost:3000/ai/chat \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message":"Hello!","language":"spanish"}'
+  -d '{"message":"Hello!","context":{"conversation_id":"uuid","target_language":"Spanish"}}'
+
+# Scenario chat (first turn)
+curl -X POST http://localhost:3000/scenario/chat \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"scenario_id":"550e8400-e29b-41d4-a716-446655440000"}'
 ```
 
 ## Interactive Documentation
@@ -546,25 +737,10 @@ Access: `http://localhost:3000/api/docs`
 
 ## Troubleshooting
 
-**401 Unauthorized:**
-- Verify JWT token is valid and not expired
-- Check Authorization header format: `Bearer <token>`
-- Ensure token from login/signup endpoint
+| Issue | Solution |
+|-------|----------|
+| 401 Unauthorized | Verify JWT token valid/not expired; check `Authorization: Bearer <token>` format |
+| 400 Bad Request | Verify body schema, required fields, data types |
+| 503 Service Unavailable | Check AI provider API keys; review Langfuse logs |
 
-**400 Bad Request:**
-- Verify request body matches schema
-- Check all required fields present
-- Validate data types and formats
-
-**503 Service Unavailable:**
-- AI providers may be temporarily down
-- Check API keys in environment variables
-- Review Langfuse logs for provider errors
-
-## Support
-
-For API issues:
-- Check Swagger documentation at `/api/docs`
-- Review error messages and status codes
-- Check application logs
-- Contact development team via GitHub Issues
+**More:** Swagger at `/api/docs` for interactive testing.

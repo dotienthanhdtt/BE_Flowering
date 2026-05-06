@@ -20,41 +20,35 @@ All responses follow this format:
 
 ## Auth
 
-### POST /auth/register
+### POST /auth/register — DISABLED (410 Gone)
+Email/password authentication is no longer supported. Use Firebase sign-in instead.
+
+### POST /auth/login — DISABLED (410 Gone)
+Email/password authentication is no longer supported. Use Firebase sign-in instead.
+
+### POST /auth/firebase — UNIFIED OAuth
+Accepts Firebase ID token from either Google or Apple. Backend auto-detects provider.
+
 ```json
 // Request
-{ "email": "user@example.com", "password": "Pass123!", "name": "John" }
+{ "id_token": "firebase_id_token" }
 
 // Response data
-{ "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
+{
+  "access_token": "jwt_token",
+  "refresh_token": "uuid:hex",
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "name": "John Doe",
+    "profile_picture": "url"
+  }
+}
 ```
 
-### POST /auth/login
-```json
-// Request
-{ "email": "user@example.com", "password": "Pass123!" }
-
-// Response data
-{ "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
-```
-
-### POST /auth/google
-```json
-// Request
-{ "id_token": "google_id_token", "display_name": "John", "session_token": "optional" }
-
-// Response data
-{ "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
-```
-
-### POST /auth/apple
-```json
-// Request
-{ "identity_token": "apple_token", "user": { "email": "...", "name": "..." } }
-
-// Response data
-{ "access_token": "jwt", "user": { "id": "uuid", "email": "...", "name": "..." } }
-```
+**Provider Detection:**
+- Google ID tokens: `aud` claim matches Google client ID
+- Apple ID tokens: `iss` claim contains `appleid.apple.com`
 
 ### POST /auth/refresh
 ```json
@@ -67,31 +61,6 @@ All responses follow this format:
 
 ### POST /auth/logout *(auth required)*
 ```json
-// Response data: null
-```
-
-### POST /auth/forgot-password
-```json
-// Request
-{ "email": "user@example.com" }
-
-// Response data: null
-```
-
-### POST /auth/verify-otp
-```json
-// Request
-{ "email": "user@example.com", "otp": "123456" }
-
-// Response data
-{ "reset_token": "token" }
-```
-
-### POST /auth/reset-password
-```json
-// Request
-{ "email": "user@example.com", "reset_token": "...", "new_password": "NewPass123!" }
-
 // Response data: null
 ```
 
@@ -187,27 +156,188 @@ Query: `?type=native|learning`
 }
 ```
 
-### POST /subscriptions/sync *(auth required)*
-Call after purchase and on app open. Empty body.
+---
+
+## Lessons
+
+### GET /lessons *(auth required)*
+Query: `?language=<language_uuid>&level=beginner|intermediate|advanced&search=<term>&page=1&limit=10`
 ```json
-// Response data: same shape as GET /subscriptions/me
+// Response data
+{
+  "total": 45,
+  "page": 1,
+  "limit": 10,
+  "categories": [
+    {
+      "id": "uuid",
+      "name": "Greetings",
+      "icon": "url",
+      "scenarios": [
+        {
+          "id": "uuid",
+          "title": "Meet & Greet",
+          "difficulty": "beginner",
+          "status": "available|locked|learned",
+          "access_tier": "free|premium"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Status Values:**
+- `available` — accessible to user (free scenario or premium with active subscription)
+- `locked` — premium scenario but user lacks active subscription
+- `learned` — user has completed scenario
+
+---
+
+## Scenarios
+
+### POST /scenario/chat *(premium)*
+Turn-based roleplay conversation. Language context via header `X-Learning-Language: <code>`.
+
+**First turn** (omit message to get AI greeting):
+```json
+// Request
+{ "scenario_id": "uuid" }
+// Header: X-Learning-Language: es
+
+// Response data
+{
+  "conversation_id": "uuid",
+  "turn_number": 1,
+  "max_turns": 12,
+  "message": "Hola! Bienvenido al café. Qué deseas?",
+  "completed": false
+}
+```
+
+**Continue turn**:
+```json
+// Request
+{ "conversation_id": "uuid", "scenario_id": "uuid", "message": "Quisiera un café, por favor" }
+// Header: X-Learning-Language: es
+
+// Response data
+{
+  "conversation_id": "uuid",
+  "turn_number": 2,
+  "max_turns": 12,
+  "message": "Excelente! Un café para ti. Algo más?",
+  "completed": false
+}
+```
+
+### GET /scenarios/:id *(auth required)*
+Scenario detail with access state (soft-lock, no 403).
+```json
+// Response data
+{
+  "id": "uuid",
+  "title": "Café Conversation",
+  "description": "...",
+  "access_tier": "premium",
+  "is_locked": true,
+  "lock_reason": "premium_required"
+}
+```
+
+### GET /scenario/conversations/:conversation_id *(auth required)*
+Fetch conversation transcript.
+```json
+// Response data
+{
+  "id": "uuid",
+  "scenario_id": "uuid",
+  "turn_number": 5,
+  "messages": [
+    { "role": "user", "text": "..." },
+    { "role": "ai", "text": "..." }
+  ]
+}
 ```
 
 ---
 
-## Notifications
+## Vocabulary *(auth required)*
 
-### POST /notifications/devices *(auth required)*
+### GET /vocabulary
+Header: `X-Learning-Language: <language_code>` (preferred; filters `target_lang`)
+Query: `?box=1-5&search=<term>&page=1&limit=20&language_code=<language_code>` (`language_code` is legacy fallback)
 ```json
-// Request
-{ "token": "fcm_token", "platform": "ios|android|web", "device_name": "iPhone 15" }
-
-// Response data: null
+// Response data
+{
+  "total": 150,
+  "page": 1,
+  "limit": 20,
+  "items": [
+    {
+      "id": "uuid",
+      "word": "beautiful",
+      "translation": "hermoso",
+      "source_lang": "en",
+      "target_lang": "es",
+      "pronunciation": "er-MO-so",
+      "box": 1,
+      "due_at": "2026-04-21T00:00:00Z",
+      "review_count": 5,
+      "correct_count": 4
+    }
+  ]
+}
 ```
 
-### DELETE /notifications/devices/:token *(auth required)*
+### GET /vocabulary/:id
 ```json
-// Response data: null
+// Response data: single vocabulary item (same shape as GET /vocabulary item)
+```
+
+### DELETE /vocabulary/:id
+```json
+// Response: null
+```
+
+### POST /vocabulary/review/start *(auth required)*
+Language context via header `X-Learning-Language: <code>`.
+```json
+// Request: (empty body)
+// Header: X-Learning-Language: es
+
+// Response data
+{
+  "session_id": "uuid",
+  "cards": [
+    { "id": "vocab-uuid", "word": "hermoso", "translation": "beautiful" }
+  ]
+}
+```
+
+### POST /vocabulary/review/:sessionId/rate *(auth required)*
+```json
+// Request
+{ "vocab_id": "uuid", "correct": true }
+
+// Response data
+{
+  "session_id": "uuid",
+  "next_card": { "id": "vocab-uuid", "word": "..." }
+}
+```
+
+### POST /vocabulary/review/:sessionId/complete *(auth required)*
+```json
+// Request: (empty body)
+
+// Response data
+{
+  "accuracy": 0.85,
+  "total_cards": 20,
+  "correct": 17,
+  "box_distribution": { "1": 10, "2": 5, "3": 3, "4": 2, "5": 0 }
+}
 ```
 
 ---
@@ -260,69 +390,56 @@ Call after purchase and on app open. Empty body.
 { "translation": "hermoso", "word": "beautiful", "pronunciation": "er-MO-so" }
 
 // Sentence translation
-{ "type": "SENTENCE", "message_id": "uuid", "source_lang": "en", "target_lang": "es", "session_token": "optional" }
+{ "type": "SENTENCE", "message_id": "uuid", "source_lang": "en", "target_lang": "es", "conversation_id": "optional" }
 // Response data
 { "translated_content": "Eso es hermoso." }
-```
-
-### POST /ai/exercises/generate *(premium)*
-```json
-// Request
-{ "language": "spanish", "level": "beginner", "type": "vocabulary|grammar|conversation" }
-
-// Response data
-[{ "type": "...", "prompt": "...", "expected_answer": "...", "difficulty": "..." }]
-```
-
-### POST /ai/conversations *(premium)*
-```json
-// Request
-{ "language": "spanish", "topic": "daily_life" }
-
-// Response data
-{ "conversation_id": "uuid" }
-```
-
-### GET /ai/conversations/:id/messages *(premium)*
-```json
-// Response data
-[
-  {
-    "role": "user|assistant",
-    "content": "...",
-    "model": "gpt-4o",
-    "tokens_used": 123,
-    "created_at": "2026-03-28T00:00:00Z"
-  }
-]
 ```
 
 ---
 
 ## Onboarding — no auth required
 
-### POST /onboarding/start
+### POST /onboarding/chat
+
+Single endpoint. Omit `conversation_id` on first call to create a session; the response always includes the `conversation_id`.
+
+**Create (first call)** — 5 req/hour/IP
 ```json
 // Request
-{ "native_language": "english" }
+{ "native_language": "vi", "target_language": "en" }
 
 // Response data
-{ "session_id": "token", "expires_at": "2026-03-28T01:00:00Z" }
+{
+  "conversation_id": "uuid",
+  "reply": "Hi! What's your current level?",
+  "message_id": "uuid",
+  "turn_number": 1,
+  "is_last_turn": false
+}
 ```
 
-### POST /onboarding/chat
+**Continue** — 30 req/hour/IP
 ```json
 // Request
-{ "session_id": "token", "message": "I want to learn Spanish" }
+{ "conversation_id": "uuid", "message": "I want to learn Spanish" }
 
 // Response data
-{ "response": "...", "turn_count": 2, "max_turns": 10 }
+{
+  "conversation_id": "uuid",
+  "reply": "...",
+  "message_id": "uuid",
+  "turn_number": 2,
+  "is_last_turn": false
+}
 ```
 
 ### POST /onboarding/complete
+
+**Idempotent.** First call extracts and caches profile + 5 scenarios. Subsequent calls return same data (with same scenario UUIDs) without re-invoking LLM.
+
 ```json
 // Request
-{ "session_id": "token" }
+{ "conversation_id": "uuid" }
 
 // Response data
 {
@@ -333,6 +450,42 @@ Call after purchase and on app open. Empty body.
   }
 }
 ```
+
+### GET /onboarding/conversations/:conversationId/messages
+
+Fetch full transcript for an anonymous onboarding conversation (used by mobile on resume to rehydrate chat UI).
+
+**Parameters:**
+- `conversationId` (path, required) — UUID v4
+
+**Throttling:** 30 req/hour/IP
+
+```json
+// Response data
+{
+  "conversation_id": "uuid",
+  "turn_number": 3,
+  "max_turns": 10,
+  "is_last_turn": false,
+  "messages": [
+    {
+      "id": "msg-uuid-1",
+      "role": "assistant",
+      "content": "Hi! What's your current level?",
+      "created_at": "2026-04-15T10:00:00Z"
+    },
+    {
+      "id": "msg-uuid-2",
+      "role": "user",
+      "content": "I'm a beginner",
+      "created_at": "2026-04-15T10:01:00Z"
+    }
+  ]
+}
+```
+
+**Errors:**
+- 404 — conversation not found or not an anonymous onboarding session
 
 ---
 

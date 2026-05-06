@@ -19,16 +19,6 @@ export interface AppConfiguration {
     secret: string;
     expiresIn: string;
   };
-  oauth: {
-    google: {
-      clientId: string;
-      clientSecret: string;
-      callbackUrl: string;
-    };
-    apple: {
-      clientId: string;
-    };
-  };
   ai: {
     openaiApiKey?: string;
     anthropicApiKey?: string;
@@ -36,6 +26,7 @@ export interface AppConfiguration {
     langfusePublicKey?: string;
     langfuseSecretKey?: string;
     langfuseHost: string;
+    sttProvider: string;
   };
   sentry: {
     dsn?: string;
@@ -43,6 +34,8 @@ export interface AppConfiguration {
   revenuecat: {
     apiKey?: string;
     webhookSecret?: string;
+    /** Secret key for RC REST API v1 subscriber lookups (fallback + reconciliation). */
+    restApiKey?: string;
   };
   firebase: {
     projectId?: string;
@@ -72,16 +65,6 @@ export default (): AppConfiguration => ({
     secret: process.env.JWT_SECRET || '',
     expiresIn: process.env.JWT_EXPIRES_IN || '30d',
   },
-  oauth: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      callbackUrl: process.env.GOOGLE_CALLBACK_URL || '',
-    },
-    apple: {
-      clientId: process.env.APPLE_CLIENT_ID || '',
-    },
-  },
   ai: {
     openaiApiKey: process.env.OPENAI_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
@@ -89,6 +72,7 @@ export default (): AppConfiguration => ({
     langfusePublicKey: process.env.LANGFUSE_PUBLIC_KEY,
     langfuseSecretKey: process.env.LANGFUSE_SECRET_KEY,
     langfuseHost: process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com',
+    sttProvider: process.env.STT_PROVIDER || 'openai',
   },
   sentry: {
     dsn: process.env.SENTRY_DSN,
@@ -96,6 +80,7 @@ export default (): AppConfiguration => ({
   revenuecat: {
     apiKey: process.env.REVENUECAT_API_KEY,
     webhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET,
+    restApiKey: process.env.REVENUECAT_REST_API_KEY,
   },
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID,
