@@ -111,7 +111,6 @@ export class ScenarioChatService {
       langCtx.targetLangCode,
     );
 
-    // 6c. Resolve learner display name (fallback to 'Learner' if unset)
     const learnerName = await this.resolveLearnerName(userId);
 
     // 7. Build system prompt
@@ -456,7 +455,7 @@ export class ScenarioChatService {
       where: { id: userId },
       select: ['id', 'displayName'],
     });
-    return user?.displayName?.trim() || 'Learner';
+    return user?.displayName?.trim() || '';
   }
 
   private formatVocabList(vocab: Vocabulary[]): string {
