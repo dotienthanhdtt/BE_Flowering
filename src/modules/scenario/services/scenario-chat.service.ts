@@ -76,14 +76,31 @@ export class ScenarioChatService {
     //    against unified `scenarios` table covers system, kol, and personal.
     const scenario = await this.resolveChatScenario(userId, dto.scenarioId, languageId);
 
-    // 2. Resolve or create conversation. Status is not gated here — both
-    //    CHATTING and DONE conversations continue through the normal chat flow.
+    // 2. Resolve or create conversation.
+    //    - With conversationId: load that specific row.
+    //    - Without conversationId: pick the latest for (user, scenario) regardless
+    //      of status; create only if none exists.
     let conversation: AiConversation;
     if (dto.conversationId) {
       conversation = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
     } else {
-      const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
-      conversation = result.conversation;
+      const latest = await this.convoRepo.findOne({
+        where: { userId, scenarioId: scenario.id },
+        order: { createdAt: 'DESC' },
+      });
+      if (latest) {
+        conversation = latest;
+      } else {
+        const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
+        conversation = result.conversation;
+      }
+    }
+
+    // 2b. DONE short-circuit: do not run LLM, do not mutate state. Return the
+    //     existing transcript with the conversation's actual status (DONE) so
+    //     the client gets the final state without spawning a new conversation.
+    if (conversation.status === ScenarioChatStatus.DONE) {
+      return this.buildDoneResponse(conversation);
     }
 
     // 4. Load language context for the request's active learning language
@@ -356,6 +373,32 @@ export class ScenarioChatService {
         max_turns: maxTurns,
         turn: Math.floor(c.messageCount / 2),
         status: c.status,
+      },
+      messages: rows
+        .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
+        .map((r) => ({
+          id: r.id,
+          role: r.role as 'user' | 'assistant',
+          content: r.content,
+          created_at: r.createdAt.toISOString(),
+        })),
+    };
+  }
+
+  private async buildDoneResponse(
+    conversation: AiConversation,
+  ): Promise<ScenarioChatResponseDto> {
+    const rows = await this.msgRepo.find({
+      where: { conversationId: conversation.id },
+      order: { createdAt: 'ASC' },
+    });
+    const maxTurns = conversation.maxTurns ?? MAX_TURNS;
+    return {
+      scenario: {
+        conversation_id: conversation.id,
+        max_turns: maxTurns,
+        turn: Math.floor(conversation.messageCount / 2),
+        status: conversation.status,
       },
       messages: rows
         .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
