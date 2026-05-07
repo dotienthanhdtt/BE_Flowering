@@ -77,17 +77,16 @@ export class ScenarioChatService {
     const scenario = await this.resolveChatScenario(userId, dto.scenarioId, languageId);
 
     // 2. Resolve or create conversation.
-    //    - Provided conversationId: load it; if DONE, start a fresh one instead.
+    //    - Provided conversationId: load it; if DONE, short-circuit and return
+    //      the existing transcript without invoking the LLM or mutating state.
     //    - No conversationId: find active or create.
     let conversation: AiConversation;
     if (dto.conversationId) {
       const existing = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
       if (existing.status === ScenarioChatStatus.DONE) {
-        const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
-        conversation = result.conversation;
-      } else {
-        conversation = existing;
+        return this.buildResponseFromConversation(existing);
       }
+      conversation = existing;
     } else {
       const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
       conversation = result.conversation;
@@ -363,6 +362,32 @@ export class ScenarioChatService {
         max_turns: maxTurns,
         turn: Math.floor(c.messageCount / 2),
         status: c.status,
+      },
+      messages: rows
+        .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
+        .map((r) => ({
+          id: r.id,
+          role: r.role as 'user' | 'assistant',
+          content: r.content,
+          created_at: r.createdAt.toISOString(),
+        })),
+    };
+  }
+
+  private async buildResponseFromConversation(
+    conversation: AiConversation,
+  ): Promise<ScenarioChatResponseDto> {
+    const rows = await this.msgRepo.find({
+      where: { conversationId: conversation.id },
+      order: { createdAt: 'ASC' },
+    });
+    const maxTurns = conversation.maxTurns ?? MAX_TURNS;
+    return {
+      scenario: {
+        conversation_id: conversation.id,
+        max_turns: maxTurns,
+        turn: Math.floor(conversation.messageCount / 2),
+        status: conversation.status,
       },
       messages: rows
         .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
