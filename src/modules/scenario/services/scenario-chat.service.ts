@@ -193,8 +193,7 @@ export class ScenarioChatService {
     conversation.messageCount += (userContent ? 1 : 0) + (trimmedReply ? 1 : 0);
     const turnAfter = Math.floor(conversation.messageCount / 2);
     const hardEnd = turnAfter >= maxTurns;
-    conversation.status =
-      isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
+    conversation.status = isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
     await this.convoRepo.save(conversation);
 
     // 12. Fire-and-forget vocab usage tracking
@@ -385,9 +384,7 @@ export class ScenarioChatService {
     };
   }
 
-  private async buildDoneResponse(
-    conversation: AiConversation,
-  ): Promise<ScenarioChatResponseDto> {
+  private async buildDoneResponse(conversation: AiConversation): Promise<ScenarioChatResponseDto> {
     const rows = await this.msgRepo.find({
       where: { conversationId: conversation.id },
       order: { createdAt: 'ASC' },
