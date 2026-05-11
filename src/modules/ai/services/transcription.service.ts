@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { OpenAiSttProvider } from '../providers/openai-stt.provider';
 import { GeminiSttProvider } from '../providers/gemini-stt.provider';
 import { SttProvider, SttResult } from '../providers/stt-provider.interface';
-import { SupabaseStorageService } from '../../../database/supabase-storage.service';
+import { ObjectStorageService } from '../../../database/object-storage.service';
 import { AppConfiguration } from '@config/app-configuration';
 
 @Injectable()
@@ -27,7 +27,7 @@ export class TranscriptionService {
     private configService: ConfigService<AppConfiguration>,
     private openaiStt: OpenAiSttProvider,
     private geminiStt: GeminiSttProvider,
-    private storageService: SupabaseStorageService,
+    private storageService: ObjectStorageService,
   ) {}
 
   private getProvider(): SttProvider {
