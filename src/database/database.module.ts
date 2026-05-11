@@ -54,21 +54,25 @@ const entities = [
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        url: configService.get<string>('database.url'),
-        ssl: {
-          rejectUnauthorized: false,
-        },
-        extra: {
-          max: 10,
-          min: 2,
-          idleTimeoutMillis: 30000,
-        },
-        entities,
-        synchronize: false,
-        logging: false,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const url = configService.get<string>('database.url');
+        // Railway-managed Postgres (internal network or TCP proxy) does not serve
+        // TLS; only enable SSL for externally hosted databases.
+        const requiresSsl = !!url && !/\.railway\.internal|\.rlwy\.net/.test(url);
+        return {
+          type: 'postgres' as const,
+          url,
+          ssl: requiresSsl ? { rejectUnauthorized: false } : false,
+          extra: {
+            max: 10,
+            min: 2,
+            idleTimeoutMillis: 30000,
+          },
+          entities,
+          synchronize: false,
+          logging: false,
+        };
+      },
     }),
   ],
   exports: [TypeOrmModule],

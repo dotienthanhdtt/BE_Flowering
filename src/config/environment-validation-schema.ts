@@ -15,13 +15,6 @@ export const environmentValidationSchema = Joi.object({
 
   // Database
   DATABASE_URL: Joi.string().required().description('PostgreSQL connection string'),
-  // Legacy Supabase keys (optional — only needed if any Supabase service is still wired)
-  SUPABASE_URL: Joi.string().allow('').optional().description('Supabase project URL'),
-  SUPABASE_ANON_KEY: Joi.string().allow('').optional().description('Supabase anonymous key'),
-  SUPABASE_SERVICE_ROLE_KEY: Joi.string()
-    .allow('')
-    .optional()
-    .description('Supabase service role key'),
 
   // Object storage (S3-compatible — Railway bucket)
   STORAGE_ENDPOINT: Joi.string().allow('').optional().description('S3-compatible endpoint URL'),

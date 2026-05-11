@@ -11,10 +11,9 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 /**
- * S3-compatible object storage (Railway bucket). Replaces the former
- * Supabase Storage integration. Bucket MUST be private — reads go through
- * short-lived presigned URLs. Degrades gracefully if not configured: the app
- * still boots, but storage operations throw ServiceUnavailable.
+ * S3-compatible object storage (Railway bucket). Bucket MUST be private — reads
+ * go through short-lived presigned URLs. Degrades gracefully if not configured:
+ * the app still boots, but storage operations throw ServiceUnavailable.
  */
 @Injectable()
 export class ObjectStorageService {

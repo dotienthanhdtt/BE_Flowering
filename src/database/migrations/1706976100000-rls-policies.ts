@@ -4,6 +4,16 @@ export class RlsPolicies1706976100000 implements MigrationInterface {
   name = 'RlsPolicies1706976100000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // These policies rely on Supabase's `auth.uid()`. On a plain Postgres
+    // (e.g. Railway-managed) there is no `auth` schema — skip; the later
+    // `DropSupabaseRls` migration is then also a no-op.
+    const rows: Array<{ exists: boolean }> = await queryRunner.query(
+      `SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'auth') AS "exists"`,
+    );
+    if (!rows[0]?.exists) {
+      return;
+    }
+
     // Enable RLS on user-facing tables
     await queryRunner.query(`
       ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
