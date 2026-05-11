@@ -70,7 +70,6 @@
     "typeorm": "^0.3.28"
   },
   "devDependencies": {
-    "@cloudflare/containers": "^0.3.3",
     "@eslint/js": "^9.39.2",
     "@nestjs/cli": "^11.0.16",
     "@nestjs/schematics": "^11.0.0",
@@ -97,8 +96,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.54.0",
-    "wrangler": "^4.90.0"
+    "typescript-eslint": "^8.54.0"
   },
   "jest": {
     "moduleFileExtensions": [
