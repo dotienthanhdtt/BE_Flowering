@@ -1,9 +1,77 @@
 # Project Changelog
 
-**Last Updated:** 2026-05-04
+**Last Updated:** 2026-05-11
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-05-11 — Supabase → Railway Migration (Database + Storage)
+
+### Added
+
+- **Migration `1781000000000-drop-supabase-rls.ts`** — Drops RLS policies (inert on app layer; auth enforced via global JWT guard)
+- **Migration `1781100000000-rewrite-asset-urls-to-railway.ts`** — Rewrites flag_url (×8) and image_url (×25) from Supabase Storage public URLs to `${APP_PUBLIC_URL}/assets/...`
+- **ObjectStorageService** (`src/database/object-storage.service.ts`) — Replaces SupabaseStorageService
+  - Public API: `uploadAudio()`, `getSignedUrl()`, `deleteFile()`, `listUserFiles()`, plus new `getObject()`
+  - AWS SDK v3 client for S3-compatible Railway bucket
+  - Presigned URL generation (1h expiry, SigV4)
+  - Boot-tolerant: logs warning if bucket not configured, doesn't crash app
+- **AssetsController** (`src/assets.controller.ts`) — New `@Public() GET /assets/*path` endpoint
+  - Streams objects from private bucket
+  - Cache headers (immutable, 1-year max-age, strong ETag)
+  - Path traversal protection (rejects `..`, empty paths)
+  - Registered in AppModule
+
+### Changed
+
+- **Database Provider:** Supabase PostgreSQL → Railway PostgreSQL 18
+  - Schema migrated via `pg_dump` (schema-only) + data copy via Supabase MCP execute_sql
+  - All sequences fixed, RLS disabled (now inert)
+  - Row counts verified: 1,840 rows across 23 tables
+- **Object Storage Provider:** Supabase Storage → Railway S3-compatible bucket
+  - Audio transcriptions uploaded to private bucket
+  - Presigned URLs (1h expiry) returned to mobile clients
+  - Static images (flags, scenario art) rehosted and served via `/assets/*` passthrough endpoint
+- **Dependencies Removed:** `@supabase/supabase-js`
+- **Dependencies Added:** `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`
+- **Environment Variables (New):**
+  - `STORAGE_ENDPOINT` — Railway S3 endpoint (e.g., `https://t3.storageapi.dev`)
+  - `STORAGE_BUCKET` — Bucket name
+  - `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` — AWS-compatible credentials
+  - `STORAGE_REGION` — e.g., `auto`
+  - `APP_PUBLIC_URL` — Base URL for `/assets/*` links (default: `http://localhost:3000`)
+- **Environment Variables (Deprecated but Kept for Transition):**
+  - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` — Now optional, unused
+
+### Database
+
+- 2 new migrations (drop RLS, rewrite asset URLs)
+- Supabase-specific `extensions.uuid_generate_v4()` calls now use PostgreSQL 18 built-in `gen_random_uuid()`
+- Zero data loss; all existing data migrated to Railway
+
+### Testing
+
+- All existing tests pass (no changes to API contracts)
+- Smoke test: `/assets/language_flag/de.png` → 200 with PNG content-type
+
+### Documentation Impact
+
+- `system-architecture.md` — External integrations: Railway PostgreSQL + S3, removed Supabase
+- `codebase-summary.md` — Database/storage tech stack, new env vars, dependency list updated
+- `project-overview-pdr.md` — Updated DB provider line (if present)
+- `project-changelog.md` — This entry
+
+### Known Debt
+
+- Credentials exposed in chat (Railway DB password, bucket keys) — **rotate after cutover**
+- Supabase project can be paused once parity confirmed
+
+### Scope
+
+- **Completed:** Dev environment cutover (schema, data, RLS removal, asset migration)
+- **Deferred:** Prod migration (scheduled separately)
+
+---
 
 ## 2026-05-04 — Auto-Generate Personalized Scenarios (Tier-Gated)
 

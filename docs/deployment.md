@@ -1,6 +1,6 @@
 # Deployment
 
-The backend ships as a Docker image hosted on Docker Hub and runs on **Cloudflare Containers**, fronted by a Worker (`worker/index.ts`) that proxies all requests to a single Container Durable Object instance.
+The backend runs on **Railway** with managed PostgreSQL 18 and S3-compatible object storage. Deployments are CI/CD-driven via GitHub Actions to Docker Hub + Cloudflare (or Railway directly, depending on active strategy).
 
 ## Branch → Environment
 
@@ -42,59 +42,118 @@ Set these in **Repo → Settings → Secrets and variables → Actions**:
      npm install --save-dev @cloudflare/containers wrangler
      ```
 
-5. **Runtime secrets (per env)**
-   - `wrangler.toml` only declares the container; **runtime env vars** (DB URL, JWT, API keys, etc.) must be set as Worker secrets so they reach the container:
+5. **Runtime secrets (Railway env)**
+   - Set Railway environment variables in the project dashboard or via `railway link`:
      ```bash
-     # staging
-     npx wrangler secret put DATABASE_URL --env staging
-     npx wrangler secret put JWT_SECRET   --env staging
-     # …repeat for every var in .env.example
+     # Database
+     DATABASE_URL
 
-     # production
-     npx wrangler secret put DATABASE_URL --env production
+     # Object Storage (S3-compatible)
+     STORAGE_ENDPOINT
+     STORAGE_BUCKET
+     STORAGE_ACCESS_KEY_ID
+     STORAGE_SECRET_ACCESS_KEY
+     STORAGE_REGION
+
+     # App config
+     APP_PUBLIC_URL (default: https://your-railway-domain.com)
+
+     # Auth, AI, external services
+     JWT_SECRET
+     OPENAI_API_KEY
+     ANTHROPIC_API_KEY
+     GOOGLE_AI_API_KEY
+     LANGFUSE_PUBLIC_KEY
+     LANGFUSE_SECRET_KEY
+     FIREBASE_PROJECT_ID
+     FIREBASE_CLIENT_EMAIL
+     FIREBASE_PRIVATE_KEY
+     REVENUECAT_API_KEY
+     REVENUECAT_WEBHOOK_SECRET
+     SENTRY_DSN
+     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
      ```
-   - The Worker forwards these into the container's process env automatically via the Container binding.
+   - Use Railway's variable editor or `railway set VAR=value` to configure
 
 ## Deployment Flow
 
 ```
-push to dev    →  CI passes  →  build & push docker.io/<ns>/be-flowering:staging
-                                wrangler deploy --env staging
-                                → https://be-flowering-staging.<account>.workers.dev
+push to dev    →  CI passes  →  npm run migration:run (staging DB)
+                                npm run build & npm run start:prod
+                                → Railway staging environment
 
-push to main   →  CI passes  →  build & push docker.io/<ns>/be-flowering:production
-                                wrangler deploy --env production
-                                → custom domain (configure routes in wrangler.toml)
+push to main   →  CI passes  →  npm run migration:run (prod DB)
+                                npm run build & npm run start:prod
+                                → Railway production environment
+```
+
+Or with Docker (legacy):
+```
+push to dev    →  build & push docker.io/<ns>/be-flowering:staging
+                  wrangler deploy --env staging (if using Cloudflare)
+
+push to main   →  build & push docker.io/<ns>/be-flowering:production
+                  wrangler deploy --env production (if using Cloudflare)
 ```
 
 ## Local verification
 
 ```bash
-# Build the image locally
-docker build -t be-flowering:local .
-docker run -p 3000:3000 --env-file .env be-flowering:local
+# Create .env from .env.example and set Railway variables
+cp .env.example .env
+# Edit .env with your Railway DATABASE_URL, STORAGE_* vars, etc.
 
-# Worker dev (proxies to container locally)
-npx wrangler dev --env staging
+# Run migrations locally (against staging DB, if available)
+npm run migration:run
+
+# Start dev server with hot reload
+npm run start:dev
+
+# Or build and run production binary
+npm run build
+npm run start:prod
 ```
 
-## Rollback
-
-Re-deploy a previous image tag:
+## Rollback (Railway)
 
 ```bash
-# Re-tag a known-good SHA as production and redeploy
-docker pull docker.io/<ns>/be-flowering:<good-sha>
-docker tag  docker.io/<ns>/be-flowering:<good-sha> docker.io/<ns>/be-flowering:production
-docker push docker.io/<ns>/be-flowering:production
-npx wrangler deploy --env production
+# Deploy a previous commit to staging first for verification
+git checkout <previous-commit-sha>
+npm run build
+git push -f origin staging  # or deploy via Railway UI
+npm run migration:run       # Run migrations on staging DB first
+npm run start:prod
+
+# If verified, merge to main and deploy to production
+# Or use Railway's UI to rollback to a previous deployment
 ```
 
-Or revert the merge commit on `main` and let CI redeploy.
+## Database Migrations
+
+**Always run migrations before startup in new environments:**
+
+```bash
+npm run migration:run  # Applies pending migrations from src/database/migrations/
+```
+
+Run during:
+1. Local dev after pulling new migration files
+2. CI/CD pipeline before container startup (in Procfile or deployment script)
+3. Railway prerelease phase (before app scales up)
+
+## Object Storage Migration (from Supabase)
+
+**If migrating an existing Supabase project:**
+
+1. Copy all objects from Supabase Storage public buckets to Railway bucket
+2. Update asset URLs in database via migration `1781100000000-rewrite-asset-urls-to-railway.ts`
+3. Set `APP_PUBLIC_URL` to your Railway domain before migration runs
+4. Verify `/assets/*path` endpoint returns correct objects before deploying to mobile
 
 ## Notes / Caveats
 
-- Cloudflare does **not** cache Docker Hub images — every cold start pulls from Docker Hub. For high traffic, consider pushing to the Cloudflare managed registry (`registry.cloudflare.com`) instead; the deploy workflow can be switched to `wrangler containers push`.
-- Keep the image lean (multi-stage build is already configured) — cold start scales with image size.
-- Container `instance_type` and `max_instances` are set conservatively in `wrangler.toml`; tune per traffic.
-- `Procfile` is no longer used (was Heroku/Railway). Safe to delete after the first successful CF deploy.
+- **Credentials Exposed:** If you exposed Railway credentials in git/chat, rotate immediately after deploying
+- **Bucket Privacy:** Railway bucket should be private; presigned URLs provide time-limited read access
+- **Migration Retries:** Migrations are idempotent; safe to retry if a deploy fails mid-migration
+- **Database Backups:** Railway handles automated backups; configure backup retention in project settings
+- **Storage Retention:** Object storage has no auto-cleanup; monitor costs and delete old objects (e.g., old audio transcriptions)

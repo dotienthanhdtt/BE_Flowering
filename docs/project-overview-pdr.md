@@ -1,7 +1,7 @@
 # Project Overview & PDR
 
-**Last Updated:** 2026-05-04
-**Version:** 1.9.0
+**Last Updated:** 2026-05-11
+**Version:** 1.10.0
 **Status:** Active Development
 
 ## Executive Summary
@@ -48,9 +48,9 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - **Node.js 20+** - Runtime environment
 
 ### Database
-- **PostgreSQL 14+** (Supabase)
+- **PostgreSQL 18** (Railway)
 - **TypeORM** - ORM with migrations
-- **Row-Level Security** - Data isolation
+- **S3-compatible Object Storage** (Railway) for audio & static assets
 
 ### Authentication
 - **JWT** - Token-based auth
@@ -59,10 +59,12 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - **Apple Sign-In** - OAuth verification
 
 ### External Integrations
+- **Railway** - PostgreSQL database + S3-compatible object storage
 - **RevenueCat** - Subscriptions
 - **OpenAI/Anthropic/Google AI** - LLM providers
 - **Langfuse** - AI observability
 - **Sentry** - Error tracking (5xx exceptions)
+- **Firebase Admin** - Push notifications (FCM)
 
 ## API Modules (14 Total)
 
@@ -93,8 +95,13 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 **Enums:** AccessTier (free|premium|premium_plus), ContentStatus (draft|published|archived), ScenarioType, UserRole, AiConversationType (learn_chat|personalize_intake|onboard)
 
 **Recent Updates (May 2026):**
-- **Personalization module:** Tier-gated scenario generation with quota enforcement, de-dup gate, advisory lock, soft-cap pruning
-- **User schema:** Added personalizedTrialUsedAt, lastPersonalizationAt, personalizationProfileSnapshot columns
+- **Supabase → Railway Migration (2026-05-11):** Database (PostgreSQL 14→18), object storage (Supabase Storage→S3-compatible), RLS removed (auth via app layer)
+  - New migrations: drop RLS, rewrite asset URLs to `/assets/*` endpoint
+  - New ObjectStorageService (AWS SDK v3), AssetsController for bucket passthrough
+  - New env vars: STORAGE_*, APP_PUBLIC_URL
+  - Credentials exposed in chat — rotate after cutover
+- **Personalization module (2026-05-04):** Tier-gated scenario generation with quota enforcement, de-dup gate, advisory lock, soft-cap pruning
+- **User schema updates:** Added personalizedTrialUsedAt, lastPersonalizationAt, personalizationProfileSnapshot columns
 - **Scenario schema:** Added triggersPersonalization flag for intake-triggered generation
 - **AccessTier enum:** Added premium_plus value
 - **AiConversationType enum:** Added personalize_intake value

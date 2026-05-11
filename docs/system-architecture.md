@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-05-11
 
 ## Architecture Overview
 
@@ -72,7 +72,7 @@ AI-powered language learning backend following Clean Architecture principles wit
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │           Database Layer                             │
-│  UserRepository → PostgreSQL (Supabase)             │
+│  UserRepository → PostgreSQL (Railway)              │
 │  PasswordResetRepository → PostgreSQL               │
 └──────────────────────────────────────────────────────┘
 ```
@@ -110,7 +110,7 @@ AI-powered language learning backend following Clean Architecture principles wit
         ↓                             ├─ OpenAI Whisper (primary)
 ┌──────────────────────────────┐      └─ Gemini Multimodal (fallback)
 │   Langfuse Tracing           │             ↓
-│ (per-invocation handlers)    │      Supabase Private Bucket
+│ (per-invocation handlers)    │      Railway Private Bucket
 │   await handler.flushAsync() │      (Presigned URLs for mobile)
 └──────────────────────────────┘
         ↓
@@ -548,9 +548,10 @@ AiConversation (1) ──< (N) AiConversationMessage
 - Created by: TranslationService on word translation endpoint
 
 ### Technology Stack
-- **Database:** PostgreSQL 14+ (Supabase)
-- **Features:** Row-Level Security (RLS), timestamptz columns, UUID PKs, CASCADE deletion, indexed columns
+- **Database:** PostgreSQL 18 (Railway)
+- **Features:** timestamptz columns, UUID PKs, CASCADE deletion, indexed columns
 - **Connection:** TypeORM connection pool with auto-reconnect
+- **Object Storage:** S3-compatible bucket (Railway) via AWS SDK
 
 ## Multi-Language Content Architecture
 
@@ -642,7 +643,7 @@ All generated content includes the specified `language_id`, ensuring proper part
 
 | Service | Purpose | Auth | Features |
 |---------|---------|------|----------|
-| **Supabase** | PostgreSQL + Storage | Service role key | Database, RLS, file storage |
+| **Railway** | PostgreSQL + S3-compatible storage | DATABASE_URL, AWS keys | Database (PG18), object storage (signed URLs) |
 | **RevenueCat** | Subscription management | Bearer token | Webhook events, status checks |
 | **Firebase** | Push notifications | Service account JSON | FCM, multi-device support |
 | **OpenAI** | GPT models | API key | GPT-4o, GPT-4o-mini |
@@ -759,9 +760,14 @@ const apiKey = this.configService.get<string>('openai.apiKey');
 - **Environment:** Production environment variables
 
 ### Database Deployment
-- **Provider:** Supabase (managed PostgreSQL)
+- **Provider:** Railway (managed PostgreSQL 18)
 - **Migrations:** Automated via TypeORM CLI
-- **Backups:** Automated daily backups
+- **Backups:** Automated daily backups (Railway-managed)
+
+### Object Storage
+- **Provider:** Railway S3-compatible bucket
+- **Access:** AWS SDK v3 with presigned URLs (1h expiry)
+- **Assets:** Static images (language flags, scenario art) served via `GET /assets/*path` endpoint
 
 ### CI/CD Pipeline (Future)
 ```
@@ -801,7 +807,8 @@ All responses wrapped in standard format:
 **Tech Stack Justification:**
 - **NestJS:** Enterprise DI + TypeScript
 - **TypeORM:** TS-first ORM, migrations, Repository pattern
-- **Supabase:** PostgreSQL + RLS + storage
+- **Railway PostgreSQL:** Managed DB + easy scaling
+- **Railway Storage:** S3-compatible, cost-effective, presigned URLs for security
 - **RevenueCat:** Cross-platform subs + webhook-based
 - **Firebase:** Industry FCM, reliable delivery
 - **LangChain:** Multi-provider AI abstraction
