@@ -1,0 +1,30 @@
+node_modules
+dist
+coverage
+.git
+.github
+.idea
+.vscode
+.claude
+.opencode
+.gemini
+.code-review-graph
+plans
+docs
+test
+**/*.spec.ts
+**/*.test.ts
+.env
+.env.*
+!.env.example
+*.log
+*.md
+!README.md
+repomix-output.xml
+release-manifest.json
+*\ 2.*
+*\ 3.*
+firebase-service-account*.json
+service-account*.json
+*-credentials.json
+client_secret*.json

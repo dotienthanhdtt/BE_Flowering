@@ -1,0 +1,62 @@
+# Cloudflare Worker + Container binding for the NestJS backend.
+# The container image is pulled from Docker Hub (built and pushed by CI).
+# Per-env image tags are injected by the deploy workflow via `--var IMAGE_TAG:<sha>`.
+
+name = "be-flowering"
+main = "worker/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BackendContainer"]
+
+[durable_objects]
+bindings = [
+  { name = "BACKEND", class_name = "BackendContainer" }
+]
+
+# ---------- Staging (dev branch) ----------
+[env.staging]
+name = "be-flowering-staging"
+workers_dev = true
+
+[[env.staging.containers]]
+class_name = "BackendContainer"
+image = "docker.io/thanhdtt/be-flowering:staging"
+instance_type = "basic"
+max_instances = 2
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["BackendContainer"]
+
+[env.staging.durable_objects]
+bindings = [
+  { name = "BACKEND", class_name = "BackendContainer" }
+]
+
+# ---------- Production (main branch) ----------
+[env.production]
+name = "be-flowering-production"
+workers_dev = false
+
+[[env.production.containers]]
+class_name = "BackendContainer"
+image = "docker.io/thanhdtt/be-flowering:production"
+instance_type = "standard"
+max_instances = 5
+
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = ["BackendContainer"]
+
+[env.production.durable_objects]
+bindings = [
+  { name = "BACKEND", class_name = "BackendContainer" }
+]
+
+# Routes / custom domain (uncomment + configure once DNS is ready):
+# [[env.production.routes]]
+# pattern = "api.example.com/*"
+# zone_name = "example.com"
