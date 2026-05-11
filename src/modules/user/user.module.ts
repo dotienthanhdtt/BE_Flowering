@@ -16,5 +16,4 @@ import { Language } from '../../database/entities/language.entity';
   providers: [UserService],
   exports: [UserService],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class UserModule {}

@@ -9,5 +9,4 @@ import { ProgressService } from './progress.service';
   providers: [ProgressService],
   exports: [ProgressService],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class ProgressModule {}

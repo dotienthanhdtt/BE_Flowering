@@ -15,7 +15,7 @@ function IsTapRangeValid(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'isTapRangeValid',
-      target: (object as { constructor: Function }).constructor,
+      target: (object as { constructor: new (...args: unknown[]) => object }).constructor,
       propertyName,
       options: { message: 'tapTo must be greater than tapFrom', ...validationOptions },
       validator: {

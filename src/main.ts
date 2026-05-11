@@ -60,7 +60,7 @@ async function bootstrap(): Promise<void> {
   if (langfuseSdk) {
     app.enableShutdownHooks();
     const sdk = langfuseSdk;
-    process.on('SIGTERM', () => sdk.shutdown());
+    process.on('SIGTERM', () => void sdk.shutdown());
   }
 
   // Bind to 0.0.0.0 explicitly for Railway/Docker compatibility (IPv4)

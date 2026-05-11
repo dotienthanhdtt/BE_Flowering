@@ -9,5 +9,4 @@ import { FrameworkLevelsService } from './services/framework-levels.service';
   providers: [FrameworkLevelsService],
   exports: [FrameworkLevelsService],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class FrameworkLevelsModule {}

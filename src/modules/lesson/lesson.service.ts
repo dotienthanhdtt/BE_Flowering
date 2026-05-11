@@ -102,15 +102,13 @@ export class LessonService {
     for (const scenario of scenarios) {
       const cat = scenario.category;
       if (!cat) continue;
-      if (!categoryMap.has(cat.id)) {
-        categoryMap.set(cat.id, {
-          id: cat.id,
-          name: cat.name,
-          scenarios: [],
-        });
+      let group = categoryMap.get(cat.id);
+      if (!group) {
+        group = { id: cat.id, name: cat.name, scenarios: [] };
+        categoryMap.set(cat.id, group);
       }
 
-      categoryMap.get(cat.id)!.scenarios.push({
+      group.scenarios.push({
         id: scenario.id,
         title: scenario.title,
         imageUrl: scenario.imageUrl ?? null,

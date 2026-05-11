@@ -33,7 +33,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   // Allow null user when optional auth is active
-  handleRequest<TUser = any>(err: any, user: any, _info: any, context: ExecutionContext): TUser {
+  handleRequest<TUser = unknown>(
+    err: unknown,
+    user: unknown,
+    _info: unknown,
+    context: ExecutionContext,
+  ): TUser {
     const isOptionalAuth = this.reflector.getAllAndOverride<boolean>(IS_OPTIONAL_AUTH_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -46,6 +51,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if (err || !user) {
       throw err || new UnauthorizedException();
     }
-    return user;
+    return user as TUser;
   }
 }

@@ -6,7 +6,8 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ObjectLiteral, Repository } from 'typeorm';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { ConfigService } from '@nestjs/config';
 import { HumanMessage } from '@langchain/core/messages';
 import { existsSync, readFileSync } from 'fs';
@@ -106,7 +107,7 @@ export class AdminContentService implements OnModuleInit {
     const rows = items.map((item) => this.whitelistFields(item, dto.contentType, language.id));
 
     const repo = this.repoFor(dto.contentType);
-    const saved = await repo.save(rows as any[]);
+    const saved = await repo.save(rows as ObjectLiteral[]);
     return { ids: (saved as ContentRow[]).map((r) => r.id), items: saved };
   }
 
@@ -114,7 +115,7 @@ export class AdminContentService implements OnModuleInit {
     const { status, type, languageCode, page = 1, limit = 20 } = query;
     const skip = (page - 1) * limit;
 
-    const buildQb = async (repo: Repository<any>) => {
+    const buildQb = async (repo: Repository<ObjectLiteral>) => {
       const qb = repo.createQueryBuilder('c').leftJoin('c.language', 'lang');
       if (status) qb.andWhere('c.status = :status', { status });
       if (languageCode) qb.andWhere('lang.code = :code', { code: languageCode });
@@ -151,7 +152,7 @@ export class AdminContentService implements OnModuleInit {
     const repo = this.repoFor(type);
     const row = await repo.findOne({ where: { id } });
     if (!row) throw new NotFoundException('Content not found');
-    await repo.update(id, dto as any);
+    await repo.update(id, dto as QueryDeepPartialEntity<ObjectLiteral>);
   }
 
   async archiveContent(id: string, type: ContentType): Promise<void> {
@@ -165,7 +166,7 @@ export class AdminContentService implements OnModuleInit {
     await repo.update(id, { status });
   }
 
-  private repoFor(type: ContentType): Repository<any> {
+  private repoFor(type: ContentType): Repository<ObjectLiteral> {
     switch (type) {
       case ContentType.LESSON:
         return this.lessonRepo;

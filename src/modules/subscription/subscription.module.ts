@@ -22,5 +22,4 @@ import { WebhookEvent } from '../../database/entities/webhook-event.entity';
   providers: [SubscriptionService, RevenueCatRestClient, SubscriptionReconciliationCron],
   exports: [SubscriptionService, RevenueCatRestClient],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class SubscriptionModule {}
