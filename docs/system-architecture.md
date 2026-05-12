@@ -719,7 +719,7 @@ All generated content includes the specified `language_id`, ensuring proper part
 | **OpenAI** | GPT models | API key | GPT-4o, GPT-4o-mini |
 | **Anthropic** | Claude models | API key | Claude 3.5 Sonnet, Haiku |
 | **Google AI** | Gemini models | API key | Gemini 2.5 Flash, 1.5 Pro |
-| **9router** | OpenAI-compatible AI gateway ("one key, many providers") | Bearer token (`NINEROUTER_KEY`) + `NINEROUTER_URL` | Server-side model aliases (e.g. `flowering_chat`); used by scenario roleplay chat with Gemini fallback |
+| **9router** | OpenAI-compatible AI gateway ("one key, many providers") | Bearer token (`NINEROUTER_KEY`) + `NINEROUTER_URL` | Server-side model aliases (e.g. `flowering_chat`); used by scenario roleplay chat, anonymous onboarding chat turns, and sentence translation — each with a Gemini fallback if 9router is unavailable |
 | **Langfuse** | AI observability | Public/secret keys | Request tracing, analytics |
 | **Sentry** | Error tracking | DSN | 5xx exception tracking, traces |
 

@@ -21,4 +21,8 @@ export const onboardingEngineConfig: IntakeChatEngineConfig = {
   chatFeature: LangfuseFeature.ONBOARDING_CHAT,
   extractionFeature: LangfuseFeature.ONBOARDING_EXTRACTION,
   scenariosFeature: LangfuseFeature.ONBOARDING_SCENARIOS,
+  // Route the per-turn onboarding chat through the 9router gateway; fall back to
+  // Gemini if 9router is unavailable so onboarding still works.
+  chatModel: LLMModel.NINEROUTER_FLOWERING_CHAT,
+  chatFallbackModel: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
 };

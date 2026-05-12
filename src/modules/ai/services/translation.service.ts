@@ -4,10 +4,11 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { HumanMessage } from '@langchain/core/messages';
+import { BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { Vocabulary } from '../../../database/entities/vocabulary.entity';
 import { AiConversationMessage } from '../../../database/entities/ai-conversation-message.entity';
 import {
@@ -174,17 +175,13 @@ export class TranslationService {
       targetLang,
     });
 
-    const translation = await this.llmService.chat([new HumanMessage(prompt)], {
-      model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
-      temperature: 0,
-      metadata: {
-        feature: LangfuseFeature.TRANSLATE_SENTENCE,
-        userId: userId ?? conversationId,
-        conversationId: message.conversationId,
-        messageId,
-        sourceLang,
-        targetLang,
-      },
+    const translation = await this.chatWithNineRouterFallback([new HumanMessage(prompt)], {
+      feature: LangfuseFeature.TRANSLATE_SENTENCE,
+      userId: userId ?? conversationId,
+      conversationId: message.conversationId,
+      messageId,
+      sourceLang,
+      targetLang,
     });
 
     // Cache translation on message
@@ -278,6 +275,36 @@ export class TranslationService {
       text: this.capitalizeFirst(chunkText),
       vocabularyId: result.generatedMaps[0]?.id ?? result.raw[0]?.id,
     };
+  }
+
+  /**
+   * Run a translation chat call through the 9router gateway. If 9router is
+   * unavailable, retry once against Gemini so translation still works. Any other
+   * error propagates unchanged.
+   */
+  private async chatWithNineRouterFallback(
+    messages: BaseMessage[],
+    metadata: Record<string, unknown>,
+  ): Promise<string> {
+    try {
+      return await this.llmService.chat(messages, {
+        model: LLMModel.NINEROUTER_FLOWERING_CHAT,
+        temperature: 0,
+        metadata,
+      });
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) {
+        this.logger.warn(
+          `9router unavailable for translation; falling back to Gemini. ${String(err.message)}`,
+        );
+        return this.llmService.chat(messages, {
+          model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
+          temperature: 0,
+          metadata: { ...metadata, fallback: 'ninerouter->gemini' },
+        });
+      }
+      throw err;
+    }
   }
 
   /** Uppercase the first character; safe for non-cased scripts (CJK) where it is a no-op. */

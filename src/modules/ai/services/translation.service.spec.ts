@@ -1,5 +1,11 @@
-import { BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { AiConversationType } from '../../../database/entities/ai-conversation.entity';
+import { LLMModel } from '../providers/llm-models.enum';
 
 // Mock ESM-dependent modules to prevent dynamic import errors in LLM providers
 jest.mock('../providers/openai-llm.provider', () => ({}));
@@ -243,6 +249,41 @@ describe('TranslationService', () => {
 
       expect(result.translation).toBe('¿Cómo estás?');
       expect(messageRepo.save).toHaveBeenCalled();
+    });
+
+    it('routes the sentence translation through the 9router model', async () => {
+      messageRepo.findOne.mockResolvedValue(mockMessage());
+      llmService.chat.mockResolvedValue('¿Cómo estás?');
+      messageRepo.save.mockImplementation((m: any) => Promise.resolve(m));
+
+      await service.translateSentence('msg-1', 'en', 'es', 'user-1');
+
+      expect(llmService.chat).toHaveBeenCalledTimes(1);
+      expect(llmService.chat.mock.calls[0][1].model).toBe(LLMModel.NINEROUTER_FLOWERING_CHAT);
+    });
+
+    it('falls back to Gemini when 9router is unavailable', async () => {
+      messageRepo.findOne.mockResolvedValue(mockMessage());
+      llmService.chat
+        .mockRejectedValueOnce(new ServiceUnavailableException('9router down'))
+        .mockResolvedValueOnce('¿Cómo estás?');
+      messageRepo.save.mockImplementation((m: any) => Promise.resolve(m));
+
+      const result = await service.translateSentence('msg-1', 'en', 'es', 'user-1');
+
+      expect(result.translation).toBe('¿Cómo estás?');
+      expect(llmService.chat).toHaveBeenCalledTimes(2);
+      expect(llmService.chat.mock.calls[0][1].model).toBe(LLMModel.NINEROUTER_FLOWERING_CHAT);
+      expect(llmService.chat.mock.calls[1][1].model).toBe(LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW);
+      expect(llmService.chat.mock.calls[1][1].metadata.fallback).toBe('ninerouter->gemini');
+    });
+
+    it('propagates non-availability errors without falling back', async () => {
+      messageRepo.findOne.mockResolvedValue(mockMessage());
+      llmService.chat.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(service.translateSentence('msg-1', 'en', 'es', 'user-1')).rejects.toThrow('boom');
+      expect(llmService.chat).toHaveBeenCalledTimes(1);
     });
 
     it('should return cached translation if available', async () => {

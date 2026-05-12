@@ -1,4 +1,10 @@
-import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
@@ -61,15 +67,10 @@ export class IntakeChatEngine {
       new HumanMessage(isFirstTurn ? 'Start' : turnMessage),
     ];
 
-    const rawReply = await this.llmService.chat(messages, {
-      model: DEFAULT_MODEL,
-      temperature: 0,
-      maxTokens: 1024,
-      metadata: {
-        feature: config.chatFeature,
-        conversationId,
-        turn: currentTurn,
-      },
+    const rawReply = await this.invokeChatTurnWithFallback(messages, config, {
+      feature: config.chatFeature,
+      conversationId,
+      turn: currentTurn,
     });
 
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn, config.maxTurns);
@@ -85,6 +86,37 @@ export class IntakeChatEngine {
     );
 
     return { reply, messageId, turnNumber: currentTurn, isLastTurn };
+  }
+
+  /**
+   * Run the per-turn chat call against {@link IntakeChatEngineConfig.chatModel}
+   * (defaults to {@link DEFAULT_MODEL}). If that model is unavailable — e.g. the
+   * 9router gateway is down — retry once against the configured fallback model so
+   * the turn still completes. Any other error propagates unchanged.
+   */
+  private async invokeChatTurnWithFallback(
+    messages: BaseMessage[],
+    config: IntakeChatEngineConfig,
+    metadata: Record<string, unknown>,
+  ): Promise<string> {
+    const primary = config.chatModel ?? DEFAULT_MODEL;
+    const fallback = config.chatFallbackModel ?? DEFAULT_MODEL;
+    const opts = { temperature: 0, maxTokens: 1024 };
+    try {
+      return await this.llmService.chat(messages, { model: primary, ...opts, metadata });
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException && primary !== fallback) {
+        this.logger.warn(
+          `Chat model ${primary} unavailable; falling back to ${fallback}. ${String(err.message)}`,
+        );
+        return this.llmService.chat(messages, {
+          model: fallback,
+          ...opts,
+          metadata: { ...metadata, fallback: `${primary}->${fallback}` },
+        });
+      }
+      throw err;
+    }
   }
 
   async extractProfile(

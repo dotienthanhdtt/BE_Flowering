@@ -505,7 +505,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 - JWT_SECRET, JWT_EXPIRES_IN (default: 7d)
 - OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY
-- NINEROUTER_URL (default: https://9router-dev.up.railway.app), NINEROUTER_KEY (9router gateway; scenario chat falls back to Gemini if unset)
+- NINEROUTER_URL (default: https://9router-dev.up.railway.app), NINEROUTER_KEY (9router gateway; scenario chat, onboarding chat turns, and sentence translation fall back to Gemini if unset)
 - LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
 - SENTRY_DSN
 - REVENUECAT_API_KEY, REVENUECAT_WEBHOOK_SECRET

@@ -1,9 +1,24 @@
 # Project Changelog
 
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-05-13
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-05-13 — Route onboarding chat & sentence translation through 9router
+
+### Changed
+
+- **Anonymous onboarding chat turns** (`IntakeChatEngine.runTurn` via `onboardingEngineConfig`) now run through 9router's `flowering_chat` alias. On a `ServiceUnavailableException` the turn retries once against `gemini-3.1-flash-lite` (logged; Langfuse metadata tagged `fallback: flowering_chat->gemini-3.1-flash-lite`). Profile extraction / scenario generation and the personalization intake chat are unchanged (still Gemini).
+- **Sentence translation** (`TranslationService.translateSentence`) now calls `flowering_chat` (via 9router) instead of Gemini, with the same Gemini fallback on 9router unavailability (`fallback: ninerouter->gemini`). Word and chunk translation are unchanged (still GPT-4.1-nano).
+
+### Added
+
+- `IntakeChatEngineConfig.chatModel` / `chatFallbackModel` — optional per-feature model overrides for the per-turn chat call; default to the engine's built-in Gemini model when unset.
+
+### Notes
+
+- No new env vars or model aliases — reuses the existing `flowering_chat` alias and `NINEROUTER_KEY`/`NINEROUTER_URL`. Without `NINEROUTER_KEY`, these features fall back to Gemini on every request.
 
 ## 2026-05-12 — 9router LLM Provider
 
