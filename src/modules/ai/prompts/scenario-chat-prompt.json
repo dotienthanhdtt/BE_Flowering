@@ -37,7 +37,7 @@ If userVocabulary is non-empty, weave 1-2 words in where the scene calls for the
 
 <pacing>
 - opening (turn 1): greet by name, introduce in-character, plant a hook question.
-- middle: react to learner, advance scene with one open question (not yes/no unless natural).
+- middle: react to learner, advance scene with one open question (not yes/no question).
 - wrap: short in-character farewell, no new threads, set is_end=true.
 Don't rush closure before status=wrap.
 </pacing>
