@@ -32,7 +32,9 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ 14 database entities with RLS
 - ✅ 12 AI models supported
 - ✅ Global auth guard + response wrapper
-- ✅ Sentry + Langfuse integration
+- ✅ Langfuse integration
+
+**Note:** Sentry was later removed in May 2026 (5xx errors now logged to console/stdout instead).
 
 ---
 
@@ -45,7 +47,7 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 
 **Completed:**
 - ✅ HTTP logger middleware (2026-03-07)
-- ✅ Sentry error tracking for 5xx (2026-02-25)
+- ✅ Error logging for 5xx (2026-02-25; Sentry later removed 2026-05-13)
 - ✅ Language native/learning flags (2026-02-28)
 - ✅ Prompt .md files copy to dist (2026-03-04)
 - ✅ Onboarding config updates (2026-03-07)

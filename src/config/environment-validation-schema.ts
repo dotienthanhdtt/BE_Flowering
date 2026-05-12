@@ -51,9 +51,6 @@ export const environmentValidationSchema = Joi.object({
   LANGFUSE_HOST: Joi.string().allow('').optional().default('https://cloud.langfuse.com'),
   LANGFUSE_BASE_URL: Joi.string().allow('').optional(),
 
-  // Monitoring
-  SENTRY_DSN: Joi.string().allow('').optional().description('Sentry DSN for error tracking'),
-
   // RevenueCat
   REVENUECAT_API_KEY: Joi.string().allow('').optional().description('RevenueCat API key'),
   REVENUECAT_WEBHOOK_SECRET: Joi.string()

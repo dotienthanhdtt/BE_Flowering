@@ -5,6 +5,29 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-05-13 — Remove Sentry Error Tracking
+
+### Removed
+
+- **`@sentry/node` dependency** from package.json
+- **Sentry initialization** from `src/instrument.ts` — now only sets up Langfuse OTel SpanProcessor
+- **`Sentry.captureException()` call** in `src/common/filters/all-exceptions.filter.ts` — 5xx errors now logged to console.error() instead
+- **`sentry: { dsn }` config block** from `src/config/app-configuration.ts`
+- **`SENTRY_DSN` environment variable** from `src/config/environment-validation-schema.ts` and `.env.example`
+
+### Changed
+
+- **Error handling:** 5xx exceptions logged to stdout/console instead of Sentry; Railway captures these logs automatically via log streaming
+- **Documentation:** Updated `codebase-summary.md`, `project-overview-pdr.md`, `system-architecture.md`, `deployment.md` to remove Sentry references; added notes to `project-roadmap.md`
+
+### Notes
+
+- **No impact to functionality.** Error logging continues via NestJS logger and console output (captured by Railway).
+- **No breaking changes.** Migration simply removes external error tracking in favor of platform-native log aggregation.
+- **Langfuse tracing** for AI requests remains unchanged and operational.
+
+---
+
 ## 2026-05-13 — Route onboarding chat & sentence translation through 9router
 
 ### Changed

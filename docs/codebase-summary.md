@@ -15,7 +15,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - **Database Entities:** 21 TypeORM entities + 5 enums (AccessTier, ContentStatus, ScenarioType, UserRole, AiConversationType)
 - **Migrations:** 37 versioned migrations (1615238400000–1781100000000)
 - **API Endpoints:** 55+ REST endpoints + 1 SSE stream across all modules
-- **External Integrations:** 8 (Railway PostgreSQL + S3, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry, Firebase)
+- **External Integrations:** 7 (Railway PostgreSQL + S3, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Firebase)
 
 ## Tech Stack
 
@@ -30,7 +30,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 | Auth | JWT, Passport.js, bcrypt, Firebase Admin |
 | AI | LangChain, multi-provider LLM |
 | Subscriptions | RevenueCat |
-| Observability | Langfuse, Sentry |
+| Observability | Langfuse |
 | Validation | class-validator, class-transformer, Joi |
 | Monitoring | HTTP logger middleware |
 
@@ -507,7 +507,6 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY
 - NINEROUTER_URL (default: https://9router-dev.up.railway.app), NINEROUTER_KEY (9router gateway; scenario chat, onboarding chat turns, and sentence translation fall back to Gemini if unset)
 - LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
-- SENTRY_DSN
 - REVENUECAT_API_KEY, REVENUECAT_WEBHOOK_SECRET
 - FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
 - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
@@ -517,7 +516,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 ### Middleware & Interceptors
 - **ValidationPipe:** Auto-transform DTOs, whitelist unknown properties
 - **ResponseTransformInterceptor:** Wraps all responses in `{code: 1, message, data}` format
-- **AllExceptionsFilter:** Global exception handler with Sentry integration for 5xx
+- **AllExceptionsFilter:** Global exception handler that logs errors to console/stdout
 - **HttpLoggerMiddleware:** Logs incoming requests and responses
 - **JwtAuthGuard:** Global auth (bypass with @Public(), optional with @OptionalAuth())
 - **PremiumGuard:** Checks active premium subscription (used with @RequirePremium() on AI endpoints)
@@ -631,11 +630,8 @@ npm run build
 
 **Validation:** class-validator, class-transformer, joi
 
-**Observability:** @sentry/node
 
 ## Monitoring & Observability
-
-**Sentry:** Captures 5xx exceptions, error tracking in production (configurable trace sample)
 
 **Langfuse:** All AI requests traced with prompt, response, model, tokens, latency. Fresh CallbackHandler per invocation with explicit await handler.flushAsync() in finally blocks to ensure output flushing across all 3 LLM providers (OpenAI, Anthropic, Gemini).
 

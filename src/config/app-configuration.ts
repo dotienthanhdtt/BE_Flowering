@@ -35,9 +35,6 @@ export interface AppConfiguration {
     langfuseHost: string;
     sttProvider: string;
   };
-  sentry: {
-    dsn?: string;
-  };
   revenuecat: {
     apiKey?: string;
     webhookSecret?: string;
@@ -87,9 +84,6 @@ export default (): AppConfiguration => ({
     langfuseSecretKey: process.env.LANGFUSE_SECRET_KEY,
     langfuseHost: process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com',
     sttProvider: process.env.STT_PROVIDER || 'openai',
-  },
-  sentry: {
-    dsn: process.env.SENTRY_DSN,
   },
   revenuecat: {
     apiKey: process.env.REVENUECAT_API_KEY,

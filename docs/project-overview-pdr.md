@@ -63,7 +63,6 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - **RevenueCat** - Subscriptions
 - **OpenAI/Anthropic/Google AI** - LLM providers
 - **Langfuse** - AI observability
-- **Sentry** - Error tracking (5xx exceptions)
 - **Firebase Admin** - Push notifications (FCM)
 
 ## API Modules (14 Total)
@@ -160,9 +159,9 @@ Create a scalable, secure backend infrastructure that powers personalized AI-dri
 - Connection pooling
 
 **NFR-3: Observability** (Medium)
-- Sentry error tracking for 5xx
 - Langfuse AI request tracing
 - HTTP logger middleware
+- Console/stdout logging for errors and exceptions
 - Health check endpoints (future)
 
 ## Success Metrics

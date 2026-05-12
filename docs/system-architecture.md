@@ -721,14 +721,13 @@ All generated content includes the specified `language_id`, ensuring proper part
 | **Google AI** | Gemini models | API key | Gemini 2.5 Flash, 1.5 Pro |
 | **9router** | OpenAI-compatible AI gateway ("one key, many providers") | Bearer token (`NINEROUTER_KEY`) + `NINEROUTER_URL` | Server-side model aliases (e.g. `flowering_chat`); used by scenario roleplay chat, anonymous onboarding chat turns, and sentence translation — each with a Gemini fallback if 9router is unavailable |
 | **Langfuse** | AI observability | Public/secret keys | Request tracing, analytics |
-| **Sentry** | Error tracking | DSN | 5xx exception tracking, traces |
 
 ## Global Infrastructure
 
 ### Middleware & Guard Stack
 1. **ValidationPipe:** Auto-transform DTOs, whitelist unknown properties
 2. **ResponseTransformInterceptor:** Wrap all responses in `{code: 1, message, data}` format
-3. **AllExceptionsFilter:** Global exception handler, Sentry integration for 5xx
+3. **AllExceptionsFilter:** Global exception handler that logs 5xx and errors to console/stdout
 4. **HttpLoggerMiddleware:** Log incoming requests and outgoing responses
 5. **JwtAuthGuard:** Global protect endpoints (bypass with @Public())
 6. **PremiumGuard:** Feature-level check for active subscription (use with @RequirePremium() on AI endpoints)
@@ -786,7 +785,7 @@ This standardization ensures consistent mobile app development experience across
 ## Monitoring & Observability
 
 ### Application Monitoring
-- **Error Tracking:** Sentry for 5xx exceptions (configurable trace sample: 20% prod, 100% dev)
+- **Error Logging:** Console/stdout logging for all exceptions and errors (picked up by Railway logs)
 - **Logging:** NestJS Logger with contextual information
 - **Health Checks:** `/health` endpoint (future)
 

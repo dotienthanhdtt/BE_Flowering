@@ -1,7 +1,6 @@
 import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { QueryFailedError } from 'typeorm';
-import * as Sentry from '@sentry/node';
 import { BaseResponseDto } from '../dto/base-response.dto';
 
 interface ErrorResponse {
@@ -62,13 +61,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     // Log error for debugging
     console.error(`[${request.method}] ${request.url} - ${status}: ${message}`, exception);
-
-    // Report 5xx errors to Sentry
-    if (status >= 500) {
-      Sentry.captureException(exception, {
-        extra: { method: request.method, url: request.url, status },
-      });
-    }
 
     const errorResponse: BaseResponseDto<null> & { error_code?: string } =
       BaseResponseDto.error(message);
