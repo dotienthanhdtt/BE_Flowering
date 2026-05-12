@@ -1,7 +1,6 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage } from '@langchain/core/messages';
-import { trace } from '@opentelemetry/api';
 import { NineRouterLLMProvider } from './ninerouter-llm.provider';
 import { LLMModel } from './llm-models.enum';
 import { LangfuseFeature } from '../langfuse-feature.enum';
@@ -13,8 +12,6 @@ describe('NineRouterLLMProvider', () => {
   let configService: any;
   let langfuseService: any;
   let mockChatModel: any;
-  let mockSpan: any;
-  let mockTracer: any;
 
   const baseOptions = { model: LLMModel.NINEROUTER_FLOWERING_CHAT };
 
@@ -35,14 +32,6 @@ describe('NineRouterLLMProvider', () => {
       stream: jest.fn(),
     };
     (ChatOpenAI as unknown as jest.Mock).mockImplementation(() => mockChatModel);
-
-    // Capture OTel span creation so we can assert the feature-named span.
-    mockSpan = { setStatus: jest.fn(), end: jest.fn() };
-    mockTracer = {
-      startActiveSpan: jest.fn((_name: string, fn: (s: any) => unknown) => fn(mockSpan)),
-      startSpan: jest.fn(() => mockSpan),
-    };
-    jest.spyOn(trace, 'getTracer').mockReturnValue(mockTracer);
 
     provider = new NineRouterLLMProvider(configService, langfuseService);
   });
@@ -80,7 +69,7 @@ describe('NineRouterLLMProvider', () => {
     expect(result).toBe('bonjour');
   });
 
-  it('wraps the call in a span named after the feature (so Langfuse shows e.g. scenario-chat)', async () => {
+  it('tags the Langfuse run with the feature name (e.g. scenario-chat)', async () => {
     mockChatModel.invoke.mockResolvedValue({ content: 'hi' });
 
     await provider.chat([new HumanMessage('hi')], {
@@ -88,21 +77,10 @@ describe('NineRouterLLMProvider', () => {
       metadata: { feature: LangfuseFeature.SCENARIO_CHAT },
     });
 
-    expect(mockTracer.startActiveSpan).toHaveBeenCalledWith('scenario-chat', expect.any(Function));
-    // runName on the LangChain call should match the span name too
     expect(mockChatModel.invoke).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ runName: 'scenario-chat' }),
     );
-    expect(mockSpan.end).toHaveBeenCalled();
-  });
-
-  it('falls back to a generic span name when no feature is provided', async () => {
-    mockChatModel.invoke.mockResolvedValue({ content: 'hi' });
-
-    await provider.chat([new HumanMessage('hi')], baseOptions);
-
-    expect(mockTracer.startActiveSpan).toHaveBeenCalledWith('9router-chat', expect.any(Function));
   });
 
   it('wraps invoke failures as ServiceUnavailable', async () => {
