@@ -1,11 +1,20 @@
 ---
 title: Supabase → Railway migration (dev env)
-status: pending
+status: completed
 created: 2026-05-11
+completed: 2026-05-12
 mode: auto
 blockedBy: []
 blocks: []
 ---
+
+> **Status (2026-05-12):** Done. Dev backend live on Railway at https://dev.broduck.me —
+> `/languages` 200 with migrated data + working `/assets/*` flag/scenario images; auth guard
+> returns clean 401s; CI green. Earlier 502 on dev.broduck.me was a TLS-vs-internal-Postgres
+> issue, fixed in commit `b292e212` (SSL only for externally-hosted DBs). Docker `npm ci`
+> breakage fixed in `d79e1b8`. Remaining: rotate exposed credentials; prod env migration
+> (when ready, merge to `main` + set prod vars); replace/remove the dead Cloudflare step in
+> `.github/workflows/deploy.yml`.
 
 # Supabase → Railway Migration (dev)
 
