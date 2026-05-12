@@ -38,6 +38,11 @@ export const environmentValidationSchema = Joi.object({
   OPENAI_API_KEY: Joi.string().allow('').optional().description('OpenAI API key for AI features'),
   ANTHROPIC_API_KEY: Joi.string().allow('').optional().description('Anthropic API key for Claude'),
   GOOGLE_AI_API_KEY: Joi.string().allow('').optional().description('Google AI API key for Gemini'),
+  NINEROUTER_URL: Joi.string()
+    .uri()
+    .default('https://9router-dev.up.railway.app')
+    .description('9router OpenAI-compatible gateway base URL'),
+  NINEROUTER_KEY: Joi.string().allow('').optional().description('9router API key (Bearer token)'),
   LANGFUSE_PUBLIC_KEY: Joi.string()
     .allow('')
     .optional()

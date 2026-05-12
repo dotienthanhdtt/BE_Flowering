@@ -4,6 +4,7 @@ import { BaseMessage } from '@langchain/core/messages';
 import { OpenAILLMProvider } from '../providers/openai-llm.provider';
 import { AnthropicLLMProvider } from '../providers/anthropic-llm.provider';
 import { GeminiLLMProvider } from '../providers/gemini-llm.provider';
+import { NineRouterLLMProvider } from '../providers/ninerouter-llm.provider';
 import { LLMOptions, LLMProvider } from '../providers/llm-provider.interface';
 import { LLMModel, getProviderFromModel } from '../providers/llm-models.enum';
 import { LangfuseService } from './langfuse-tracing.service';
@@ -19,6 +20,7 @@ export class UnifiedLLMService {
     private openaiProvider: OpenAILLMProvider,
     private anthropicProvider: AnthropicLLMProvider,
     private geminiProvider: GeminiLLMProvider,
+    private nineRouterProvider: NineRouterLLMProvider,
     private langfuseService: LangfuseService,
   ) {}
 
@@ -34,6 +36,8 @@ export class UnifiedLLMService {
         return this.anthropicProvider;
       case 'gemini':
         return this.geminiProvider;
+      case 'ninerouter':
+        return this.nineRouterProvider;
     }
   }
 

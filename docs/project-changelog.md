@@ -1,9 +1,26 @@
 # Project Changelog
 
-**Last Updated:** 2026-05-11
+**Last Updated:** 2026-05-12
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-05-12 — 9router LLM Provider
+
+### Added
+
+- **`NineRouterLLMProvider`** (`src/modules/ai/providers/ninerouter-llm.provider.ts`) — OpenAI-compatible AI gateway provider. LangChain `ChatOpenAI` client pointed at `${NINEROUTER_URL}/v1` with `NINEROUTER_KEY` Bearer token; supports streaming; Langfuse-traced like the other LLM providers. Registered in `AiModule` and `UnifiedLLMService`.
+- **`LLMModel.NINEROUTER_FLOWERING_CHAT = 'flowering_chat'`** — server-side model alias on 9router. `getProviderFromModel()` routes `flowering_chat` (and any future 9router aliases) to the `ninerouter` provider via an explicit allowlist.
+- **Env vars** `NINEROUTER_URL` (default `https://9router-dev.up.railway.app`) and `NINEROUTER_KEY` (secret, no committed default) — added to Joi schema, `app-configuration.ts`, `.env.example`.
+
+### Changed
+
+- **Scenario roleplay chat** (`ScenarioChatService`) now uses `flowering_chat` (via 9router) instead of Gemini as its default model. On a 9router `ServiceUnavailableException`, it transparently retries once with `gemini-3.1-flash-lite-preview` so the turn still completes (logged; Langfuse metadata tagged `fallback: ninerouter->gemini`). `/ai/chat` tutor and onboarding intake chat are unchanged (still Gemini).
+
+### Notes
+
+- No existing provider was removed. 9router's STT/image/TTS/embeddings endpoints are out of scope.
+- Deploy: set `NINEROUTER_KEY` (and optionally `NINEROUTER_URL`) in Railway env vars. Without the key, scenario chat falls back to Gemini on every request.
 
 ## 2026-05-11 — Supabase → Railway Migration (Database + Storage)
 

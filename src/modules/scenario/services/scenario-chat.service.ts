@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -46,7 +47,10 @@ const MAX_HISTORY = MAX_TURNS * 2 + 2;
  */
 @Injectable()
 export class ScenarioChatService {
-  private readonly defaultModel = LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW;
+  /** Primary model for scenario roleplay: routed through the 9router gateway. */
+  private readonly defaultModel = LLMModel.NINEROUTER_FLOWERING_CHAT;
+  /** Used when 9router is unavailable so a chat turn still completes. */
+  private readonly fallbackModel = LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW;
   private readonly logger = new Logger(ScenarioChatService.name);
 
   constructor(
@@ -66,6 +70,31 @@ export class ScenarioChatService {
     private readonly vocabReview: VocabularyReviewService,
     private readonly personalizationTrigger: PersonalizationTriggerService,
   ) {}
+
+  /**
+   * Run a scenario-chat LLM call against 9router. If 9router is unavailable,
+   * retry once against Gemini so the turn still completes. Any other error
+   * propagates unchanged.
+   */
+  private async invokeLlmWithFallback(
+    messages: BaseMessage[],
+    metadata: Record<string, unknown>,
+  ): Promise<string> {
+    try {
+      return await this.llmService.chat(messages, { model: this.defaultModel, metadata });
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) {
+        this.logger.warn(
+          `9router unavailable for scenario chat; falling back to Gemini. ${String(err.message)}`,
+        );
+        return this.llmService.chat(messages, {
+          model: this.fallbackModel,
+          metadata: { ...metadata, fallback: 'ninerouter->gemini' },
+        });
+      }
+      throw err;
+    }
+  }
 
   async chat(
     userId: string,
@@ -151,16 +180,13 @@ export class ScenarioChatService {
       messages.push(new HumanMessage('Start'));
     }
 
-    // 9. Call LLM
-    const raw = await this.llmService.chat(messages, {
-      model: this.defaultModel,
-      metadata: {
-        feature: LangfuseFeature.SCENARIO_CHAT,
-        userId,
-        conversationId: conversation.id,
-        turn: currentTurn,
-        scenarioId: scenario.id,
-      },
+    // 9. Call LLM (9router primary, Gemini fallback if 9router is unavailable)
+    const raw = await this.invokeLlmWithFallback(messages, {
+      feature: LangfuseFeature.SCENARIO_CHAT,
+      userId,
+      conversationId: conversation.id,
+      turn: currentTurn,
+      scenarioId: scenario.id,
     });
 
     const { reply, isEnd } = parseScenarioReply(raw);

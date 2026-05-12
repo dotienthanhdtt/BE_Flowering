@@ -3,3 +3,4 @@ export * from './llm-provider.interface';
 export * from './openai-llm.provider';
 export * from './anthropic-llm.provider';
 export * from './gemini-llm.provider';
+export * from './ninerouter-llm.provider';

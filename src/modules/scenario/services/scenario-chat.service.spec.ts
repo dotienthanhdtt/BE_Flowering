@@ -3,7 +3,12 @@ jest.mock('../../ai/services/prompt-loader.service');
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ScenarioChatService } from './scenario-chat.service';
 import { ScenarioAccessService } from './scenario-access.service';
 import { AiConversation, AiConversationMessage, MessageRole, User, VocabularyInjectionEvent } from '../../../database/entities';
@@ -14,6 +19,7 @@ import { PromptLoaderService } from '../../ai/services/prompt-loader.service';
 import { LanguageService } from '../../language/language.service';
 import { VocabularyInjectionService } from './vocabulary-injection.service';
 import { VocabularyReviewService } from '../../vocabulary/services/vocabulary-review.service';
+import { LLMModel } from '../../ai/providers/llm-models.enum';
 
 const mockConvoRepo = () => {
   // Unified query-builder mock for `createQueryBuilder('c')` selects.
@@ -221,6 +227,65 @@ describe('ScenarioChatService', () => {
           learnerName: 'Alice',
         }),
       );
+    });
+  });
+
+  describe('chat - model selection & fallback', () => {
+    const setupNewConvo = () => {
+      scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
+      languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
+      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
+      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
+      convoRepo.save.mockResolvedValue(mockConversationEntity);
+      msgRepo.find.mockResolvedValue([]);
+      promptLoader.loadPrompt.mockReturnValue('system prompt');
+    };
+
+    it('routes scenario chat through the 9router flowering_chat model by default', async () => {
+      setupNewConvo();
+      llmService.chat.mockResolvedValue('{"reply":"hi","is_end":false}');
+
+      await service.chat(mockUserId, { scenarioId: mockScenarioId }, 'lang-en');
+
+      expect(llmService.chat).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ model: LLMModel.NINEROUTER_FLOWERING_CHAT }),
+      );
+    });
+
+    it('falls back to Gemini when 9router is unavailable', async () => {
+      setupNewConvo();
+      llmService.chat
+        .mockRejectedValueOnce(new ServiceUnavailableException('9router down'))
+        .mockResolvedValueOnce('{"reply":"fallback reply","is_end":false}');
+
+      const result = await service.chat(mockUserId, { scenarioId: mockScenarioId }, 'lang-en');
+
+      expect(llmService.chat).toHaveBeenCalledTimes(2);
+      expect(llmService.chat).toHaveBeenNthCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({ model: LLMModel.NINEROUTER_FLOWERING_CHAT }),
+      );
+      expect(llmService.chat).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        expect.objectContaining({
+          model: LLMModel.GEMINI_3_1_FLASH_LITE_PREVIEW,
+          metadata: expect.objectContaining({ fallback: 'ninerouter->gemini' }),
+        }),
+      );
+      expect(result.scenario).toBeDefined();
+    });
+
+    it('propagates non-ServiceUnavailable LLM errors without falling back', async () => {
+      setupNewConvo();
+      llmService.chat.mockRejectedValue(new Error('boom'));
+
+      await expect(
+        service.chat(mockUserId, { scenarioId: mockScenarioId }, 'lang-en'),
+      ).rejects.toThrow('boom');
+      expect(llmService.chat).toHaveBeenCalledTimes(1);
     });
   });
 

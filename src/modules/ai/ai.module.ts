@@ -12,6 +12,7 @@ import { SubscriptionModule } from '../subscription/subscription.module';
 import { OpenAILLMProvider } from './providers/openai-llm.provider';
 import { AnthropicLLMProvider } from './providers/anthropic-llm.provider';
 import { GeminiLLMProvider } from './providers/gemini-llm.provider';
+import { NineRouterLLMProvider } from './providers/ninerouter-llm.provider';
 import { OpenAiSttProvider } from './providers/openai-stt.provider';
 import { GeminiSttProvider } from './providers/gemini-stt.provider';
 
@@ -58,6 +59,7 @@ import { AiController } from './ai.controller';
     OpenAILLMProvider,
     AnthropicLLMProvider,
     GeminiLLMProvider,
+    NineRouterLLMProvider,
     // STT Providers
     OpenAiSttProvider,
     GeminiSttProvider,

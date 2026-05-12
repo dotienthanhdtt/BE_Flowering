@@ -28,6 +28,8 @@ export interface AppConfiguration {
     openaiApiKey?: string;
     anthropicApiKey?: string;
     googleAiApiKey?: string;
+    nineRouterUrl?: string;
+    nineRouterKey?: string;
     langfusePublicKey?: string;
     langfuseSecretKey?: string;
     langfuseHost: string;
@@ -79,6 +81,8 @@ export default (): AppConfiguration => ({
     openaiApiKey: process.env.OPENAI_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     googleAiApiKey: process.env.GOOGLE_AI_API_KEY,
+    nineRouterUrl: process.env.NINEROUTER_URL || 'https://9router-dev.up.railway.app',
+    nineRouterKey: process.env.NINEROUTER_KEY,
     langfusePublicKey: process.env.LANGFUSE_PUBLIC_KEY,
     langfuseSecretKey: process.env.LANGFUSE_SECRET_KEY,
     langfuseHost: process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com',

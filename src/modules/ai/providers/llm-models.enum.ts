@@ -15,8 +15,17 @@ export enum LLMModel {
   ANTHROPIC_CLAUDE_3_HAIKU = 'claude-3-haiku-20240307',
 
   // Gemini Models
-  GEMINI_3_1_FLASH_LITE_PREVIEW = 'gemini-3.1-flash-lite-preview',
+  GEMINI_3_1_FLASH_LITE_PREVIEW = 'gemini-3.1-flash-lite',
+
+  // 9router (OpenAI-compatible router gateway) Models
+  NINEROUTER_FLOWERING_CHAT = 'flowering_chat',
 }
+
+/**
+ * Model aliases served by the 9router gateway. These don't follow a provider
+ * prefix convention, so they're matched explicitly when routing.
+ */
+const NINEROUTER_MODELS = new Set<string>([LLMModel.NINEROUTER_FLOWERING_CHAT]);
 
 /** Gemini thinking levels for models that support extended thinking. */
 export enum ThinkingLevel {
@@ -25,14 +34,16 @@ export enum ThinkingLevel {
   HIGH = 'HIGH',
 }
 
-export type LLMProviderType = 'openai' | 'anthropic' | 'gemini';
+export type LLMProviderType = 'openai' | 'anthropic' | 'gemini' | 'ninerouter';
 
 /**
  * Determines the provider from the model enum value.
  */
 export function getProviderFromModel(model: LLMModel): LLMProviderType {
   const modelValue = model as string;
-  if (modelValue.startsWith('gpt-') || modelValue.startsWith('o1')) {
+  if (NINEROUTER_MODELS.has(modelValue)) {
+    return 'ninerouter';
+  } else if (modelValue.startsWith('gpt-') || modelValue.startsWith('o1')) {
     return 'openai';
   } else if (modelValue.startsWith('claude-')) {
     return 'anthropic';

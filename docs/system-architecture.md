@@ -719,6 +719,7 @@ All generated content includes the specified `language_id`, ensuring proper part
 | **OpenAI** | GPT models | API key | GPT-4o, GPT-4o-mini |
 | **Anthropic** | Claude models | API key | Claude 3.5 Sonnet, Haiku |
 | **Google AI** | Gemini models | API key | Gemini 2.5 Flash, 1.5 Pro |
+| **9router** | OpenAI-compatible AI gateway ("one key, many providers") | Bearer token (`NINEROUTER_KEY`) + `NINEROUTER_URL` | Server-side model aliases (e.g. `flowering_chat`); used by scenario roleplay chat with Gemini fallback |
 | **Langfuse** | AI observability | Public/secret keys | Request tracing, analytics |
 | **Sentry** | Error tracking | DSN | 5xx exception tracking, traces |
 
@@ -793,7 +794,7 @@ This standardization ensures consistent mobile app development experience across
 - **Request Tracing:** Langfuse for all AI provider requests with per-invocation handlers
   - Fresh CallbackHandler created per request (not shared)
   - Explicit await handler.flushAsync() in finally blocks ensures traces are sent
-  - Applied to OpenAI, Anthropic, and Gemini providers
+  - Applied to OpenAI, Anthropic, Gemini, and 9router providers
 - **Usage Tracking:** Token consumption and cost analysis
 - **Performance:** Response time and latency metrics
 
