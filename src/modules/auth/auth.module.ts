@@ -36,5 +36,4 @@ import { EmailModule } from '../email/email.module';
   providers: [AuthService, JwtStrategy, FirebaseAdminService, FirebaseTokenStrategy],
   exports: [AuthService, JwtStrategy],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class AuthModule {}

@@ -1,21 +1,21 @@
 # Codebase Summary
 
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-05-11
 **Generated from:** repomix-output.xml (auto-generated 2026-04-21)
 
 ## Overview
 
-AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Supabase). Implements modular monolith architecture with 13 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, language management, multi-language content partitioning, scenario management, KOL bundle distribution, and admin content management.
+AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and PostgreSQL (Railway). Implements modular monolith architecture with 13 feature modules supporting authentication, AI-driven learning, onboarding, subscriptions, language management, multi-language content partitioning, scenario management, KOL bundle distribution, and admin content management.
 
 ## Metrics
 
 - **Total TypeScript Files:** ~190 files in src/
 - **Code Lines:** ~11,500+ LOC in src/
 - **Modules:** 13 feature modules (admin-content, ai, auth, email, kol-bundle, language, lesson, onboarding, progress, scenario, subscription, user, vocabulary)
-- **Database Entities:** 21 TypeORM entities + 4 enums (AccessTier, ContentStatus, ScenarioType, UserRole)
-- **Migrations:** 35 versioned migrations (1615238400000–1778000500000)
+- **Database Entities:** 21 TypeORM entities + 5 enums (AccessTier, ContentStatus, ScenarioType, UserRole, AiConversationType)
+- **Migrations:** 37 versioned migrations (1615238400000–1781100000000)
 - **API Endpoints:** 55+ REST endpoints + 1 SSE stream across all modules
-- **External Integrations:** 8 (Supabase, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry, Firebase)
+- **External Integrations:** 8 (Railway PostgreSQL + S3, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Sentry, Firebase)
 
 ## Tech Stack
 
@@ -24,9 +24,10 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 | Framework | NestJS 11.0 |
 | Language | TypeScript 5.7 |
 | Runtime | Node.js 20+ |
-| Database | PostgreSQL 14+ (Supabase) |
+| Database | PostgreSQL 18 (Railway) |
 | ORM | TypeORM 0.3.28 |
-| Auth | JWT, Passport.js, bcrypt |
+| Object Storage | AWS S3 SDK v3 (Railway S3-compatible) |
+| Auth | JWT, Passport.js, bcrypt, Firebase Admin |
 | AI | LangChain, multi-provider LLM |
 | Subscriptions | RevenueCat |
 | Observability | Langfuse, Sentry |
@@ -82,8 +83,8 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Async processing for long-running tasks
 - Translation service (word/sentence) with vocabulary storage
 - Correction check endpoint with context awareness, ignores punctuation/capitalization
-- Transcription service with audio persistence (Supabase storage) and multi-provider fallback
-- **Signed URLs for private audio bucket:** STT outputs persisted to private bucket; presigned URLs (1h expiry) returned to mobile for secure access
+- Transcription service with audio persistence (Railway S3-compatible bucket) and multi-provider fallback
+- **Signed URLs for private audio bucket:** STT outputs persisted to object storage; presigned URLs (1h expiry) returned to mobile for secure access
 
 **STT Configuration:**
 - `STT_PROVIDER` env var: `openai` (default) or `gemini`
@@ -562,10 +563,9 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 5. Async processing via setImmediate()
 
 **Database Security:**
-- Row-Level Security (RLS) on all tables
-- Service role key for backend operations
 - User data isolation via user_id FK
 - CASCADE deletion on user removal
+- Database-level constraints and indexes
 
 ## API Documentation
 
@@ -618,7 +618,9 @@ npm run build
 
 **Framework:** @nestjs/core, @nestjs/common, @nestjs/config, @nestjs/jwt, @nestjs/passport, @nestjs/typeorm, @nestjs/swagger, @nestjs/throttler
 
-**Database:** typeorm, pg, @supabase/supabase-js
+**Database:** typeorm, pg
+
+**Object Storage:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 **Auth:** passport, passport-jwt, firebase-admin, bcrypt
 
@@ -640,13 +642,15 @@ npm run build
 
 **NestJS Logger:** Contextual logging with module names, log levels (log, error, warn, debug, verbose)
 
+**Object Storage Metrics:** Presigned URL generation, bucket access logs, cache efficiency
+
 ## Deployment Considerations
 
 - **Build:** `npm run build` compiles TypeScript to dist/
 - **Start:** `npm run start:prod` runs built code
 - **Migrations:** Run `npm run migration:run` before startup
 - **Scaling:** Stateless design, DB connection pooling, refresh tokens in DB (multi-instance safe)
-- **Files:** Use Supabase Storage for uploads (no local file storage)
+- **Files:** Use Railway S3-compatible bucket for uploads (no local file storage)
 
 ## Future Enhancements
 

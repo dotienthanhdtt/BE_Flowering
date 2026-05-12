@@ -102,7 +102,10 @@ export class LanguageService implements OnModuleInit {
       where: { id: saved.id },
       relations: ['language'],
     });
-    return this.mapToUserLanguageDto(result!);
+    if (!result) {
+      throw new NotFoundException('User language not found after save');
+    }
+    return this.mapToUserLanguageDto(result);
   }
 
   async updateUserLanguage(
@@ -157,6 +160,9 @@ export class LanguageService implements OnModuleInit {
   }
 
   private mapToUserLanguageDto(ul: UserLanguage): UserLanguageDto {
+    if (!ul.language) {
+      throw new NotFoundException('Language relation not loaded for user language');
+    }
     const level = ul.proficiencyLevel ?? '';
     return {
       id: ul.id,
@@ -165,7 +171,7 @@ export class LanguageService implements OnModuleInit {
       description: this.frameworkLevels.getDescription(ul.languageId, level),
       lastLearned: ul.lastLearned,
       createdAt: ul.createdAt,
-      language: this.mapToLanguageDto(ul.language!),
+      language: this.mapToLanguageDto(ul.language),
     };
   }
 }

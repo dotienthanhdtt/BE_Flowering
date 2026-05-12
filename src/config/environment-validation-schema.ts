@@ -4,16 +4,24 @@ export const environmentValidationSchema = Joi.object({
   // Application
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   PORT: Joi.number().default(3000),
+  APP_PUBLIC_URL: Joi.string()
+    .allow('')
+    .optional()
+    .description('Public base URL of this API (used for asset URLs)'),
   CORS_ALLOWED_ORIGINS: Joi.string()
     .allow('')
     .optional()
     .description('Comma-separated allowed origins'),
 
-  // Database (Supabase)
-  DATABASE_URL: Joi.string().required().description('Supabase PostgreSQL connection string'),
-  SUPABASE_URL: Joi.string().required().description('Supabase project URL'),
-  SUPABASE_ANON_KEY: Joi.string().required().description('Supabase anonymous key'),
-  SUPABASE_SERVICE_ROLE_KEY: Joi.string().required().description('Supabase service role key'),
+  // Database
+  DATABASE_URL: Joi.string().required().description('PostgreSQL connection string'),
+
+  // Object storage (S3-compatible — Railway bucket)
+  STORAGE_ENDPOINT: Joi.string().allow('').optional().description('S3-compatible endpoint URL'),
+  STORAGE_BUCKET: Joi.string().allow('').optional().description('Bucket name'),
+  STORAGE_ACCESS_KEY_ID: Joi.string().allow('').optional().description('S3 access key ID'),
+  STORAGE_SECRET_ACCESS_KEY: Joi.string().allow('').optional().description('S3 secret access key'),
+  STORAGE_REGION: Joi.string().allow('').optional().default('auto').description('S3 region'),
 
   // SMTP (Email)
   SMTP_HOST: Joi.string().allow('').optional().description('SMTP server hostname'),

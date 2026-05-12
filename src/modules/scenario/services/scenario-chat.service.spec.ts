@@ -270,31 +270,22 @@ describe('ScenarioChatService', () => {
   });
 
   describe('chat - completion and turn tracking', () => {
-    it('should transparently start a fresh conversation when supplied conversationId is DONE', async () => {
+    it('should return the existing transcript with status DONE when supplied conversationId is DONE', async () => {
       jest.clearAllMocks();
       scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
-      languageService.getUserLanguages.mockResolvedValue([mockUserLanguage]);
-      languageService.getNativeLanguage.mockResolvedValue(mockNativeLanguage);
 
       const completedConvo = { ...mockConversationEntity, status: ScenarioChatStatus.DONE };
       convoRepo.findOne.mockResolvedValue(completedConvo);
-      // findOrCreate: no active conversation, then insert a fresh row
-      convoRepo.createQueryBuilder().getOne.mockResolvedValue(null);
-      convoRepo.save.mockResolvedValue({
-        ...mockConversationEntity,
-        id: 'fresh-convo-uuid',
-        status: ScenarioChatStatus.CHATTING,
-        messageCount: 0,
-      });
       msgRepo.find.mockResolvedValue([]);
-      promptLoader.loadPrompt.mockReturnValue('system prompt');
-      llmService.chat.mockResolvedValue('{"reply":"Fresh opening","is_end":false}');
 
       const dto = { scenarioId: mockScenarioId, conversationId: mockConversationId };
       const result = await service.chat(mockUserId, dto, 'lang-en');
 
-      expect(result.scenario.conversation_id).toBe('fresh-convo-uuid');
-      expect(result.scenario.status).toBe(ScenarioChatStatus.CHATTING);
+      expect(result.scenario.conversation_id).toBe(mockConversationId);
+      expect(result.scenario.status).toBe(ScenarioChatStatus.DONE);
+      // DONE short-circuit: no LLM call, no state mutation
+      expect(llmService.chat).not.toHaveBeenCalled();
+      expect(convoRepo.save).not.toHaveBeenCalled();
     });
 
     it('should set status=DONE when turn reaches maxTurns (hard-end at turn 12)', async () => {

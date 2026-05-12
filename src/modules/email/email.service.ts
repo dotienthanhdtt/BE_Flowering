@@ -35,7 +35,7 @@ export class EmailService implements OnModuleInit {
       this.logger.warn('sendOtp called but email service is not initialized');
       throw new ServiceUnavailableException('Email service unavailable');
     }
-    const from = this.configService.get('smtp', { infer: true })!.from;
+    const from = this.configService.get('smtp', { infer: true })?.from;
     await this.transporter.sendMail({
       from,
       to,

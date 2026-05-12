@@ -6,8 +6,9 @@ import { APP_GUARD } from '@nestjs/core';
 import appConfiguration from './config/app-configuration';
 import { environmentValidationSchema } from './config/environment-validation-schema';
 import { DatabaseModule } from './database/database.module';
-import { SupabaseStorageService } from './database/supabase-storage.service';
+import { ObjectStorageService } from './database/object-storage.service';
 import { AppController } from './app.controller';
+import { AssetsController } from './assets.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { AiModule } from './modules/ai/ai.module';
@@ -61,10 +62,10 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
     AdminContentModule,
     PersonalizationModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, AssetsController],
   providers: [
     AppService,
-    SupabaseStorageService,
+    ObjectStorageService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
@@ -78,7 +79,7 @@ import { SnakeToCamelCaseMiddleware } from '@common/middleware/snake-to-camel-ca
       useClass: PremiumGuard,
     },
   ],
-  exports: [SupabaseStorageService],
+  exports: [ObjectStorageService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

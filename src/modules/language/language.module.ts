@@ -13,5 +13,4 @@ import { IsValidLevelForLanguageConstraint } from '../../common/validators/is-va
   providers: [LanguageService, IsValidLevelForLanguageConstraint],
   exports: [LanguageService],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class LanguageModule {}

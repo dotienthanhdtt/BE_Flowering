@@ -1,6 +1,6 @@
 w# Code Standards
 
-**Last Updated:** 2026-04-20
+**Last Updated:** 2026-05-11
 
 ## Project Structure
 
@@ -17,10 +17,10 @@ src/
 │   ├── app-configuration.ts  # Config interface & factory
 │   └── environment-validation-schema.ts  # Joi validation
 ├── database/                  # Database layer
-│   ├── entities/             # TypeORM entities (21 total + 4 enums)
-│   ├── migrations/           # Database migrations (35 total, timestamped)
+│   ├── entities/             # TypeORM entities (21 total + 5 enums)
+│   ├── migrations/           # Database migrations (37 total, timestamped)
 │   ├── database.module.ts    # TypeORM module configuration (21 entities registered)
-│   └── supabase-storage.service.ts   # Supabase Storage wrapper
+│   └── object-storage.service.ts     # AWS S3-compatible storage wrapper
 └── modules/                   # Feature modules (domain-driven) — 13 total
     ├── admin-content/        # Admin content generation & lifecycle
     ├── ai/                   # AI-powered learning features (LangChain, STT, Langfuse)
@@ -273,7 +273,7 @@ Use Test.createTestingModule to mock dependencies with getRepositoryToken. Mock 
 For non-critical external services (Firebase, SMTP), wrap onModuleInit in try-catch. Use `initialized` flag; endpoints return 503 if unavailable instead of crashing the app.
 
 ### Signed URLs (Private Files)
-Use Supabase storage.createSignedUrl() with expirySeconds. For audio/transcription: save to private bucket, return signed URL (1h expiry) to mobile. Supabase config: bucket private + RLS deny public.
+Use AWS SDK S3 `GetObjectCommand` with SigV4 presigner. For audio/transcription: save to private Railway bucket, return signed URL (1h expiry) to mobile. ObjectStorageService encapsulates this; call `getSignedUrl(key, expirySeconds)` before returning to client.
 
 ### Rate Limiting
 Use @Throttle decorator with limit/ttl. AI endpoints: 20/min or 100/hr. Onboarding: 5/hr (create) / 30/hr (chat). Admin: 5/min. Custom guards for IP-based (onboarding) vs user-based (AI).

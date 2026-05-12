@@ -14,7 +14,10 @@ export class VocabularyReviewController {
   @Post('start')
   @ApiOperation({ summary: 'Start a Leitner review session with due cards' })
   @ApiResponse({ status: 201, type: ReviewStartResponseDto })
-  start(@Req() req: any, @Body() dto: ReviewStartDto): Promise<ReviewStartResponseDto> {
+  start(
+    @Req() req: { user: { id: string } },
+    @Body() dto: ReviewStartDto,
+  ): Promise<ReviewStartResponseDto> {
     return this.service.start(req.user.id, dto);
   }
 
@@ -22,7 +25,7 @@ export class VocabularyReviewController {
   @ApiOperation({ summary: 'Rate a card; applies Leitner transition and persists vocabulary' })
   @ApiResponse({ status: 201, type: ReviewRateResponseDto })
   rate(
-    @Req() req: any,
+    @Req() req: { user: { id: string } },
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Body() dto: ReviewRateDto,
   ): Promise<ReviewRateResponseDto> {
@@ -33,7 +36,7 @@ export class VocabularyReviewController {
   @ApiOperation({ summary: 'Complete review session; returns stats and deletes session' })
   @ApiResponse({ status: 201, type: ReviewCompleteResponseDto })
   complete(
-    @Req() req: any,
+    @Req() req: { user: { id: string } },
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
   ): Promise<ReviewCompleteResponseDto> {
     return this.service.complete(req.user.id, sessionId);

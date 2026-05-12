@@ -3,6 +3,7 @@ import {
   Post,
   Sse,
   Body,
+  BadRequestException,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -75,7 +76,7 @@ export class AiController {
     const context = { ...dto.context, targetLanguage: lang.code };
 
     // Start streaming in background
-    (async () => {
+    void (async () => {
       try {
         const stream = this.learningAgent.streamChat(user.id, dto.message, context, dto.model);
 
@@ -120,16 +121,22 @@ export class AiController {
     const userId = user?.id ?? null;
 
     if (dto.type.toLowerCase() === TranslateType.WORD) {
+      if (!dto.text) {
+        throw new BadRequestException('text is required for word translation');
+      }
       return this.translationService.translateWord(
-        dto.text!,
+        dto.text,
         dto.sourceLang,
         dto.targetLang,
         userId,
         dto.conversationId,
       );
     }
+    if (!dto.messageId) {
+      throw new BadRequestException('messageId is required for sentence translation');
+    }
     return this.translationService.translateSentence(
-      dto.messageId!,
+      dto.messageId,
       dto.sourceLang,
       dto.targetLang,
       userId,

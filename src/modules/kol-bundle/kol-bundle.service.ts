@@ -82,7 +82,7 @@ export class KolBundleService {
         return { ...saved, scenarioIds: dto.scenarioIds } as KolBundleResponseDto;
       });
     } catch (err) {
-      if (err instanceof QueryFailedError && (err as any).code === '23505') {
+      if (err instanceof QueryFailedError && (err as { code?: string }).code === '23505') {
         throw new ConflictException('Duplicate gift code or scenario already attached to a bundle');
       }
       throw err;
@@ -148,7 +148,7 @@ export class KolBundleService {
         await mgr.save(KolBundleScenario, rows);
       });
     } catch (err) {
-      if (err instanceof QueryFailedError && (err as any).code === '23505') {
+      if (err instanceof QueryFailedError && (err as { code?: string }).code === '23505') {
         throw new ConflictException('One or more scenarios already attached to a bundle');
       }
       throw err;

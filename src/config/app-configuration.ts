@@ -1,6 +1,7 @@
 export interface AppConfiguration {
   nodeEnv: string;
   port: number;
+  publicUrl: string;
   corsOrigins: string;
   smtp: {
     host: string;
@@ -11,9 +12,13 @@ export interface AppConfiguration {
   };
   database: {
     url: string;
-    supabaseUrl: string;
-    supabaseAnonKey: string;
-    supabaseServiceRoleKey: string;
+  };
+  storage: {
+    endpoint: string;
+    bucket: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    region: string;
   };
   jwt: {
     secret: string;
@@ -47,6 +52,7 @@ export interface AppConfiguration {
 export default (): AppConfiguration => ({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
+  publicUrl: process.env.APP_PUBLIC_URL || 'http://localhost:3000',
   corsOrigins: process.env.CORS_ALLOWED_ORIGINS || '',
   smtp: {
     host: process.env.SMTP_HOST || '',
@@ -57,9 +63,13 @@ export default (): AppConfiguration => ({
   },
   database: {
     url: process.env.DATABASE_URL || '',
-    supabaseUrl: process.env.SUPABASE_URL || '',
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
-    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  },
+  storage: {
+    endpoint: process.env.STORAGE_ENDPOINT || '',
+    bucket: process.env.STORAGE_BUCKET || '',
+    accessKeyId: process.env.STORAGE_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.STORAGE_SECRET_ACCESS_KEY || '',
+    region: process.env.STORAGE_REGION || 'auto',
   },
   jwt: {
     secret: process.env.JWT_SECRET || '',

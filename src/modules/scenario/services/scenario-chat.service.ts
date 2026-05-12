@@ -77,20 +77,30 @@ export class ScenarioChatService {
     const scenario = await this.resolveChatScenario(userId, dto.scenarioId, languageId);
 
     // 2. Resolve or create conversation.
-    //    - Provided conversationId: load it; if DONE, start a fresh one instead.
-    //    - No conversationId: find active or create.
+    //    - With conversationId: load that specific row.
+    //    - Without conversationId: pick the latest for (user, scenario) regardless
+    //      of status; create only if none exists.
     let conversation: AiConversation;
     if (dto.conversationId) {
-      const existing = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
-      if (existing.status === ScenarioChatStatus.DONE) {
+      conversation = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
+    } else {
+      const latest = await this.convoRepo.findOne({
+        where: { userId, scenarioId: scenario.id },
+        order: { createdAt: 'DESC' },
+      });
+      if (latest) {
+        conversation = latest;
+      } else {
         const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
         conversation = result.conversation;
-      } else {
-        conversation = existing;
       }
-    } else {
-      const result = await this.findOrCreate(userId, scenario.id, scenario.languageId);
-      conversation = result.conversation;
+    }
+
+    // 2b. DONE short-circuit: do not run LLM, do not mutate state. Return the
+    //     existing transcript with the conversation's actual status (DONE) so
+    //     the client gets the final state without spawning a new conversation.
+    if (conversation.status === ScenarioChatStatus.DONE) {
+      return this.buildDoneResponse(conversation);
     }
 
     // 4. Load language context for the request's active learning language
@@ -111,7 +121,6 @@ export class ScenarioChatService {
       langCtx.targetLangCode,
     );
 
-    // 6c. Resolve learner display name (fallback to 'Learner' if unset)
     const learnerName = await this.resolveLearnerName(userId);
 
     // 7. Build system prompt
@@ -184,8 +193,7 @@ export class ScenarioChatService {
     conversation.messageCount += (userContent ? 1 : 0) + (trimmedReply ? 1 : 0);
     const turnAfter = Math.floor(conversation.messageCount / 2);
     const hardEnd = turnAfter >= maxTurns;
-    conversation.status =
-      isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
+    conversation.status = isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
     await this.convoRepo.save(conversation);
 
     // 12. Fire-and-forget vocab usage tracking
@@ -376,6 +384,30 @@ export class ScenarioChatService {
     };
   }
 
+  private async buildDoneResponse(conversation: AiConversation): Promise<ScenarioChatResponseDto> {
+    const rows = await this.msgRepo.find({
+      where: { conversationId: conversation.id },
+      order: { createdAt: 'ASC' },
+    });
+    const maxTurns = conversation.maxTurns ?? MAX_TURNS;
+    return {
+      scenario: {
+        conversation_id: conversation.id,
+        max_turns: maxTurns,
+        turn: Math.floor(conversation.messageCount / 2),
+        status: conversation.status,
+      },
+      messages: rows
+        .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
+        .map((r) => ({
+          id: r.id,
+          role: r.role as 'user' | 'assistant',
+          content: r.content,
+          created_at: r.createdAt.toISOString(),
+        })),
+    };
+  }
+
   private async loadHistory(conversationId: string): Promise<BaseMessage[]> {
     const rows = await this.msgRepo.find({
       where: { conversationId },
@@ -456,7 +488,7 @@ export class ScenarioChatService {
       where: { id: userId },
       select: ['id', 'displayName'],
     });
-    return user?.displayName?.trim() || 'Learner';
+    return user?.displayName?.trim() || '';
   }
 
   private formatVocabList(vocab: Vocabulary[]): string {

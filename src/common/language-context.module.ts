@@ -10,5 +10,4 @@ import { LanguageContextGuard } from './guards/language-context.guard';
   providers: [LanguageContextCacheService, LanguageContextGuard],
   exports: [LanguageContextCacheService, LanguageContextGuard, TypeOrmModule],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class LanguageContextModule {}

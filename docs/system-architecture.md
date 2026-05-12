@@ -1,6 +1,6 @@
 # System Architecture
 
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-05-11
 
 ## Architecture Overview
 
@@ -72,7 +72,7 @@ AI-powered language learning backend following Clean Architecture principles wit
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │           Database Layer                             │
-│  UserRepository → PostgreSQL (Supabase)             │
+│  UserRepository → PostgreSQL (Railway)              │
 │  PasswordResetRepository → PostgreSQL               │
 └──────────────────────────────────────────────────────┘
 ```
@@ -110,7 +110,7 @@ AI-powered language learning backend following Clean Architecture principles wit
         ↓                             ├─ OpenAI Whisper (primary)
 ┌──────────────────────────────┐      └─ Gemini Multimodal (fallback)
 │   Langfuse Tracing           │             ↓
-│ (per-invocation handlers)    │      Supabase Private Bucket
+│ (per-invocation handlers)    │      Railway Private Bucket
 │   await handler.flushAsync() │      (Presigned URLs for mobile)
 └──────────────────────────────┘
         ↓
@@ -548,9 +548,80 @@ AiConversation (1) ──< (N) AiConversationMessage
 - Created by: TranslationService on word translation endpoint
 
 ### Technology Stack
-- **Database:** PostgreSQL 14+ (Supabase)
-- **Features:** Row-Level Security (RLS), timestamptz columns, UUID PKs, CASCADE deletion, indexed columns
+- **Database:** PostgreSQL 18 (Railway)
+- **Features:** timestamptz columns, UUID PKs, CASCADE deletion, indexed columns
 - **Connection:** TypeORM connection pool with auto-reconnect
+- **Object Storage:** S3-compatible bucket (Railway) via AWS SDK
+
+## Multi-Language Content Architecture
+
+### Language Partitioning Strategy
+
+All content entities (Lesson, Exercise, Scenario, etc.) implement language partitioning via non-nullable `language_id` foreign key. This ensures each content row belongs to exactly one language, enabling:
+
+1. **Request-Scoped Language Context:** Every authenticated request includes `X-Learning-Language: <code>` header specifying user's active learning language
+2. **Automatic Content Filtering:** Service methods automatically scope queries by the active language context
+3. **Cache-Efficient Resolution:** Language code → Language.id resolved once per request and cached (LRU, 60s TTL)
+4. **Isolation by Design:** No global/NULL language rows; content is never ambiguous
+
+### Language Context Resolution Flow
+
+```
+HTTP Request
+    ↓
+[LanguageContextGuard]
+    ↓
+Extract X-Learning-Language header
+    ↓
+Check LRU cache for language_code → {id, code}
+    ↓
+Cache hit? Return cached context
+    ↓
+Cache miss? Query Language table, cache result
+    ↓
+Store {id, code} in req.activeLanguage
+    ↓
+@ActiveLanguage() decorator injects language context into controller methods
+    ↓
+Service methods filter results by language_id
+```
+
+### Content Visibility with Language Partitioning
+
+When user requests lessons/scenarios with active language = "es":
+
+```
+1. Service receives @ActiveLanguage() context: {id: "lang-uuid-es", code: "es"}
+2. Query builder filters: WHERE language_id = "lang-uuid-es"
+3. Only Spanish-language content returned
+4. No cross-language data exposure
+5. User content filtered consistently across all endpoints
+```
+
+### @SkipLanguageContext() Routes
+
+Routes that bypass language context requirement (don't return partitioned content):
+
+| Endpoint | Reason |
+|----------|--------|
+| POST /auth/* | Authentication, no content |
+| GET /users/me | User profile, global |
+| PATCH /users/me | User profile update, global |
+| GET /languages | Language catalog, global |
+| POST /languages/user | User preferences, global |
+| GET /subscriptions/me | User subscription, global |
+| POST /admin/content/* | Admin operations, cross-language |
+| GET /admin/content | Admin operations, cross-language |
+| POST /onboarding/chat | Anonymous sessions, no auth context |
+
+### Admin Content Module Integration
+
+Admin endpoints allow admins to:
+1. Generate content for specific languages via `language_id` parameter
+2. List content across languages with language filter
+3. Publish/archive content per language
+
+All generated content includes the specified `language_id`, ensuring proper partitioning.
 
 ## Multi-Language Content Architecture
 
@@ -642,7 +713,7 @@ All generated content includes the specified `language_id`, ensuring proper part
 
 | Service | Purpose | Auth | Features |
 |---------|---------|------|----------|
-| **Supabase** | PostgreSQL + Storage | Service role key | Database, RLS, file storage |
+| **Railway** | PostgreSQL + S3-compatible storage | DATABASE_URL, AWS keys | Database (PG18), object storage (signed URLs) |
 | **RevenueCat** | Subscription management | Bearer token | Webhook events, status checks |
 | **Firebase** | Push notifications | Service account JSON | FCM, multi-device support |
 | **OpenAI** | GPT models | API key | GPT-4o, GPT-4o-mini |
@@ -759,9 +830,14 @@ const apiKey = this.configService.get<string>('openai.apiKey');
 - **Environment:** Production environment variables
 
 ### Database Deployment
-- **Provider:** Supabase (managed PostgreSQL)
+- **Provider:** Railway (managed PostgreSQL 18)
 - **Migrations:** Automated via TypeORM CLI
-- **Backups:** Automated daily backups
+- **Backups:** Automated daily backups (Railway-managed)
+
+### Object Storage
+- **Provider:** Railway S3-compatible bucket
+- **Access:** AWS SDK v3 with presigned URLs (1h expiry)
+- **Assets:** Static images (language flags, scenario art) served via `GET /assets/*path` endpoint
 
 ### CI/CD Pipeline (Future)
 ```
@@ -801,7 +877,8 @@ All responses wrapped in standard format:
 **Tech Stack Justification:**
 - **NestJS:** Enterprise DI + TypeScript
 - **TypeORM:** TS-first ORM, migrations, Repository pattern
-- **Supabase:** PostgreSQL + RLS + storage
+- **Railway PostgreSQL:** Managed DB + easy scaling
+- **Railway Storage:** S3-compatible, cost-effective, presigned URLs for security
 - **RevenueCat:** Cross-platform subs + webhook-based
 - **Firebase:** Industry FCM, reliable delivery
 - **LangChain:** Multi-provider AI abstraction

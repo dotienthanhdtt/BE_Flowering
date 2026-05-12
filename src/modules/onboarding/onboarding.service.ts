@@ -32,14 +32,20 @@ export class OnboardingService {
     turnNumber: number;
     isLastTurn: boolean;
   }> {
-    const conversationId =
-      dto.conversationId ??
-      (
+    let conversationId = dto.conversationId;
+    if (!conversationId) {
+      if (!dto.nativeLanguage || !dto.targetLanguage) {
+        throw new BadRequestException(
+          'nativeLanguage and targetLanguage are required to start a new onboarding session',
+        );
+      }
+      conversationId = (
         await this.startSession({
-          nativeLanguage: dto.nativeLanguage!,
-          targetLanguage: dto.targetLanguage!,
+          nativeLanguage: dto.nativeLanguage,
+          targetLanguage: dto.targetLanguage,
         })
       ).conversationId;
+    }
 
     // Load conversation with language relation to derive prompt vars
     const conversation = await this.conversationRepo.findOne({

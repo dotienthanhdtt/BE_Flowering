@@ -4,7 +4,7 @@ import eslintPluginPrettier from 'eslint-plugin-prettier/recommended';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'test/**'],
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'test/**', '**/*.spec.ts'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
@@ -23,6 +23,8 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
+      // NestJS modules/decorated classes are legitimately "empty"
+      '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true }],
       'prettier/prettier': 'error',
     },
   },

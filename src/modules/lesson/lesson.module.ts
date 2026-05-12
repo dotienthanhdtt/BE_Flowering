@@ -17,5 +17,4 @@ import { SubscriptionModule } from '../subscription/subscription.module';
   providers: [LessonService],
   exports: [LessonService],
 })
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class LessonModule {}

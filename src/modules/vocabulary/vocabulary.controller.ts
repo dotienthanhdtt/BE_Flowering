@@ -32,7 +32,7 @@ export class VocabularyController {
   @ApiOperation({ summary: 'List my vocabulary with optional filters' })
   @ApiResponse({ status: 200, type: VocabularyListDto })
   list(
-    @Req() req: any,
+    @Req() req: { user: { id: string } },
     @ActiveLanguage() activeLanguage: ActiveLanguageContext,
     @Query() q: VocabularyQueryDto,
   ): Promise<VocabularyListDto> {
@@ -42,7 +42,10 @@ export class VocabularyController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a single vocabulary item' })
   @ApiResponse({ status: 200, type: VocabularyItemDto })
-  findOne(@Req() req: any, @Param('id', ParseUUIDPipe) id: string): Promise<VocabularyItemDto> {
+  findOne(
+    @Req() req: { user: { id: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<VocabularyItemDto> {
     return this.service.findOne(req.user.id, id);
   }
 
@@ -50,7 +53,10 @@ export class VocabularyController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Delete a vocabulary item' })
   @ApiResponse({ status: 204, description: 'Deleted' })
-  async remove(@Req() req: any, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+  async remove(
+    @Req() req: { user: { id: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
     await this.service.remove(req.user.id, id);
   }
 }

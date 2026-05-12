@@ -52,12 +52,13 @@ export class IntakeChatEngine {
     if (!isFirstTurn && !message) {
       throw new BadRequestException('message required after first turn');
     }
+    const turnMessage = message ?? 'Start';
 
     const history = await this.getHistory(conversationId);
     const messages: BaseMessage[] = [
       new SystemMessage(systemPrompt),
       ...history,
-      isFirstTurn ? new HumanMessage('Start') : new HumanMessage(message!),
+      new HumanMessage(isFirstTurn ? 'Start' : turnMessage),
     ];
 
     const rawReply = await this.llmService.chat(messages, {
@@ -74,7 +75,7 @@ export class IntakeChatEngine {
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn, config.maxTurns);
 
     if (!isFirstTurn) {
-      await this.saveMessage(conversationId, MessageRole.USER, message!);
+      await this.saveMessage(conversationId, MessageRole.USER, turnMessage);
     }
     const messageId = await this.saveMessage(conversationId, MessageRole.ASSISTANT, reply);
     await this.conversationRepo.increment(
