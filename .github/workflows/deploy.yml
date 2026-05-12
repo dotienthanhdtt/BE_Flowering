@@ -1,16 +1,20 @@
-name: Deploy
+name: Build & Push Image
+
+# Deployment itself is handled by Railway's GitHub integration (auto-deploys on
+# push). This workflow only builds the production image and publishes it to
+# Docker Hub as a registry artifact.
 
 on:
   push:
     branches: [main, dev]
 
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: image-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Build, Push, Deploy
+  build-push:
+    name: Build, Test, Push
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,14 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve environment
+      - name: Resolve image tag
         id: env
         run: |
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            echo "name=production" >> "$GITHUB_OUTPUT"
             echo "tag=production" >> "$GITHUB_OUTPUT"
           else
-            echo "name=staging" >> "$GITHUB_OUTPUT"
             echo "tag=staging" >> "$GITHUB_OUTPUT"
           fi
 
@@ -67,10 +69,3 @@ jobs:
             docker.io/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Deploy to Cloudflare (${{ steps.env.outputs.name }})
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --env ${{ steps.env.outputs.name }}
