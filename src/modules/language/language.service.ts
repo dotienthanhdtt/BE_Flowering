@@ -14,7 +14,6 @@ import { User } from '../../database/entities/user.entity';
 import { LanguageDto } from './dto/language.dto';
 import { UserLanguageDto } from './dto/user-language.dto';
 import { AddUserLanguageDto } from './dto/add-user-language.dto';
-import { UpdateUserLanguageDto } from './dto/update-user-language.dto';
 import { SetNativeLanguageDto } from './dto/set-native-language.dto';
 import { LanguageType } from './dto/language-query.dto';
 import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
@@ -108,42 +107,10 @@ export class LanguageService implements OnModuleInit {
     return this.mapToUserLanguageDto(result);
   }
 
-  async updateUserLanguage(
-    userId: string,
-    languageId: string,
-    dto: UpdateUserLanguageDto,
-  ): Promise<UserLanguageDto> {
-    const userLanguage = await this.userLanguageRepo.findOne({
-      where: { userId, languageId },
-      relations: ['language'],
-    });
-    if (!userLanguage) throw new NotFoundException('User language not found');
-
-    if (dto.proficiencyLevel !== undefined) {
-      // DB trigger validates
-      userLanguage.proficiencyLevel = dto.proficiencyLevel;
-    }
-
-    if (dto.lastLearned !== undefined) {
-      if (dto.lastLearned) {
-        await this.userLanguageRepo.update({ userId, lastLearned: true }, { lastLearned: false });
-      }
-      userLanguage.lastLearned = dto.lastLearned;
-    }
-
-    const saved = await this.userLanguageRepo.save(userLanguage);
-    return this.mapToUserLanguageDto(saved);
-  }
-
   async getNativeLanguage(userId: string): Promise<Language | null> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user?.nativeLanguage) return null;
     return this.languageRepo.findOne({ where: { code: user.nativeLanguage } });
-  }
-
-  async removeUserLanguage(userId: string, languageId: string): Promise<void> {
-    const result = await this.userLanguageRepo.delete({ userId, languageId });
-    if (result.affected === 0) throw new NotFoundException('User language not found');
   }
 
   private mapToLanguageDto(lang: Language): LanguageDto {

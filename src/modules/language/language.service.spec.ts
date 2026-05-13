@@ -181,41 +181,4 @@ describe('LanguageService', () => {
     });
   });
 
-  describe('updateUserLanguage', () => {
-    const userId = 'user-uuid';
-    const languageId = 'lang-uuid';
-    const existingUL = {
-      id: 'ul-1', userId, languageId, lastLearned: false, language: mockLang,
-      proficiencyLevel: 'beginner',
-    };
-
-    it('should clear lastLearned on others when setting lastLearned to true', async () => {
-      userLanguageRepo.findOne.mockResolvedValue({ ...existingUL });
-      userLanguageRepo.update.mockResolvedValue({ affected: 1 });
-      userLanguageRepo.save.mockResolvedValue({ ...existingUL, lastLearned: true });
-
-      await service.updateUserLanguage(userId, languageId, { lastLearned: true });
-
-      expect(userLanguageRepo.update).toHaveBeenCalledWith(
-        { userId, lastLearned: true },
-        { lastLearned: false },
-      );
-    });
-
-    it('should NOT clear others when setting lastLearned to false', async () => {
-      userLanguageRepo.findOne.mockResolvedValue({ ...existingUL, lastLearned: true });
-      userLanguageRepo.save.mockResolvedValue({ ...existingUL, lastLearned: false });
-
-      await service.updateUserLanguage(userId, languageId, { lastLearned: false });
-
-      expect(userLanguageRepo.update).not.toHaveBeenCalled();
-    });
-
-    it('should throw NotFoundException when user language not found', async () => {
-      userLanguageRepo.findOne.mockResolvedValue(null);
-      await expect(
-        service.updateUserLanguage(userId, languageId, { lastLearned: true }),
-      ).rejects.toThrow(NotFoundException);
-    });
-  });
 });

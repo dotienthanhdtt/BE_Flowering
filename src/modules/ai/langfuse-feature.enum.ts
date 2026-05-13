@@ -3,8 +3,6 @@
  * Used in LLM call metadata to tag and filter traces in the Langfuse dashboard.
  */
 export enum LangfuseFeature {
-  CHAT = 'chat',
-  CHAT_STREAM = 'chat-stream',
   CORRECTION_CHECK = 'correction-check',
   ONBOARDING_CHAT = 'onboarding-chat',
   ONBOARDING_EXTRACTION = 'onboarding-extraction',

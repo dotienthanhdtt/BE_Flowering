@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Vocabulary } from '../../../database/entities/vocabulary.entity';
@@ -41,17 +41,6 @@ export class VocabularyService {
       page: q.page,
       limit: q.limit,
     };
-  }
-
-  async findOne(userId: string, id: string): Promise<VocabularyItemDto> {
-    const row = await this.repo.findOne({ where: { id, userId } });
-    if (!row) throw new NotFoundException('Vocabulary not found');
-    return this.toDto(row);
-  }
-
-  async remove(userId: string, id: string): Promise<void> {
-    const res = await this.repo.delete({ id, userId });
-    if (!res.affected) throw new NotFoundException('Vocabulary not found');
   }
 
   private toDto(v: Vocabulary): VocabularyItemDto {

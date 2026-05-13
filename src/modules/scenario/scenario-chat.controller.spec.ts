@@ -8,8 +8,6 @@ import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
 
 const mockScenarioChatService = () => ({
   chat: jest.fn(),
-  listConversations: jest.fn(),
-  getConversation: jest.fn(),
 });
 
 interface MockRequest {
@@ -125,50 +123,5 @@ describe('ScenarioChatController', () => {
       await expect(controller.chat(req as any, mockLang, dto)).rejects.toThrow('Service error');
     });
 
-  });
-
-  describe('listConversations', () => {
-    it('should delegate to service and return list', async () => {
-      const listResponse = {
-        items: [
-          {
-            id: mockConversationId,
-            startedAt: '2026-04-14T09:00:00.000Z',
-            lastTurnAt: '2026-04-14T09:15:00.000Z',
-            turnCount: 5,
-            status: ScenarioChatStatus.CHATTING,
-            maxTurns: 12,
-          },
-        ],
-      };
-      service.listConversations.mockResolvedValue(listResponse);
-
-      const req: MockRequest = { user: { id: mockUserId } };
-      const result = await controller.listConversations(req as any, mockScenarioId);
-
-      expect(service.listConversations).toHaveBeenCalledWith(mockUserId, mockScenarioId);
-      expect(result).toBe(listResponse);
-    });
-  });
-
-  describe('getConversation', () => {
-    it('should delegate to service and return transcript', async () => {
-      const detail: ScenarioChatResponseDto = {
-        scenario: {
-          conversation_id: mockConversationId,
-          max_turns: 12,
-          turn: 12,
-          status: ScenarioChatStatus.DONE,
-        },
-        messages: [],
-      };
-      service.getConversation.mockResolvedValue(detail);
-
-      const req: MockRequest = { user: { id: mockUserId } };
-      const result = await controller.getConversation(req as any, mockConversationId);
-
-      expect(service.getConversation).toHaveBeenCalledWith(mockUserId, mockConversationId);
-      expect(result).toBe(detail);
-    });
   });
 });

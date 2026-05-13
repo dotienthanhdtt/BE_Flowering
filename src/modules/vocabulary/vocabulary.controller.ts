@@ -2,20 +2,11 @@ import {
   ActiveLanguage,
   ActiveLanguageContext,
 } from '../../common/decorators/active-language.decorator';
-import {
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Param,
-  ParseUUIDPipe,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { VocabularyService } from './services/vocabulary.service';
 import { VocabularyQueryDto } from './dto/vocabulary-query.dto';
-import { VocabularyItemDto, VocabularyListDto } from './dto/vocabulary-response.dto';
+import { VocabularyListDto } from './dto/vocabulary-response.dto';
 
 @ApiTags('Vocabulary')
 @ApiBearerAuth()
@@ -39,24 +30,4 @@ export class VocabularyController {
     return this.service.list(req.user.id, q, activeLanguage.code);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get a single vocabulary item' })
-  @ApiResponse({ status: 200, type: VocabularyItemDto })
-  findOne(
-    @Req() req: { user: { id: string } },
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<VocabularyItemDto> {
-    return this.service.findOne(req.user.id, id);
-  }
-
-  @Delete(':id')
-  @HttpCode(204)
-  @ApiOperation({ summary: 'Delete a vocabulary item' })
-  @ApiResponse({ status: 204, description: 'Deleted' })
-  async remove(
-    @Req() req: { user: { id: string } },
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<void> {
-    await this.service.remove(req.user.id, id);
-  }
 }

@@ -1,4 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Vocabulary } from '../../../database/entities/vocabulary.entity';
@@ -131,30 +130,4 @@ describe('VocabularyService', () => {
     });
   });
 
-  describe('findOne', () => {
-    it('returns item for owner', async () => {
-      repo.findOne.mockResolvedValue(mockVocab());
-      const r = await service.findOne('u-1', 'v-1');
-      expect(r.id).toBe('v-1');
-      expect(repo.findOne).toHaveBeenCalledWith({ where: { id: 'v-1', userId: 'u-1' } });
-    });
-
-    it('throws NotFoundException when not found or not owned', async () => {
-      repo.findOne.mockResolvedValue(null);
-      await expect(service.findOne('u-1', 'v-x')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('remove', () => {
-    it('deletes for owner', async () => {
-      repo.delete.mockResolvedValue({ affected: 1 });
-      await expect(service.remove('u-1', 'v-1')).resolves.toBeUndefined();
-      expect(repo.delete).toHaveBeenCalledWith({ id: 'v-1', userId: 'u-1' });
-    });
-
-    it('throws NotFoundException when affected=0', async () => {
-      repo.delete.mockResolvedValue({ affected: 0 });
-      await expect(service.remove('u-1', 'v-x')).rejects.toThrow(NotFoundException);
-    });
-  });
 });

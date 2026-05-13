@@ -28,11 +28,7 @@ import { ScenarioAccessService } from './scenario-access.service';
 import { LangfuseFeature } from '@/modules/ai/langfuse-feature.enum';
 import { VocabularyInjectionService } from './vocabulary-injection.service';
 import { matchesWord } from './vocabulary-usage-matcher';
-import {
-  ScenarioChatRequestDto,
-  ScenarioChatResponseDto,
-  ScenarioConversationListResponseDto,
-} from '../dto/scenario-chat.dto';
+import { ScenarioChatRequestDto, ScenarioChatResponseDto } from '../dto/scenario-chat.dto';
 import { PersonalizationTriggerService } from '@/modules/personalization/services/personalization-trigger.service';
 
 const MAX_TURNS = 12;
@@ -347,67 +343,6 @@ export class ScenarioChatService {
     if (c.userId !== userId) throw new ForbiddenException();
     if (c.scenarioId !== scenarioId) throw new BadRequestException('scenarioId mismatch');
     return c;
-  }
-
-  /**
-   * Lists all past scenario conversations owned by the user, newest first.
-   * Owner-filter only (no premium gate) so users can still review history
-   * after a subscription downgrade.
-   */
-  async listConversations(
-    userId: string,
-    scenarioId: string,
-  ): Promise<ScenarioConversationListResponseDto> {
-    const rows = await this.convoRepo.find({
-      where: { userId, scenarioId },
-      order: { createdAt: 'DESC' },
-    });
-
-    return {
-      items: rows.map((r) => ({
-        id: r.id,
-        startedAt: r.createdAt.toISOString(),
-        lastTurnAt: r.updatedAt.toISOString(),
-        turnCount: Math.floor(r.messageCount / 2),
-        status: r.status,
-        maxTurns: r.maxTurns ?? MAX_TURNS,
-      })),
-    };
-  }
-
-  /**
-   * Fetches a single conversation with its full transcript.
-   * Owner-check only — any authenticated user may read their own conversations,
-   * even for scenarios they no longer have premium access to.
-   */
-  async getConversation(userId: string, conversationId: string): Promise<ScenarioChatResponseDto> {
-    const c = await this.convoRepo.findOne({ where: { id: conversationId } });
-    if (!c) throw new NotFoundException('Conversation not found');
-    if (c.userId !== userId) throw new ForbiddenException();
-
-    const rows = await this.msgRepo.find({
-      where: { conversationId },
-      order: { createdAt: 'ASC' },
-    });
-
-    const maxTurns = c.maxTurns ?? MAX_TURNS;
-
-    return {
-      scenario: {
-        conversation_id: c.id,
-        max_turns: maxTurns,
-        turn: Math.floor(c.messageCount / 2),
-        status: c.status,
-      },
-      messages: rows
-        .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
-        .map((r) => ({
-          id: r.id,
-          role: r.role as 'user' | 'assistant',
-          content: r.content,
-          created_at: r.createdAt.toISOString(),
-        })),
-    };
   }
 
   private async buildDoneResponse(conversation: AiConversation): Promise<ScenarioChatResponseDto> {

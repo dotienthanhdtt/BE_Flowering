@@ -1,20 +1,9 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  Query,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { LanguageService } from './language.service';
 import { LanguageDto } from './dto/language.dto';
 import { UserLanguageDto } from './dto/user-language.dto';
 import { AddUserLanguageDto } from './dto/add-user-language.dto';
-import { UpdateUserLanguageDto } from './dto/update-user-language.dto';
 import { SetNativeLanguageDto } from './dto/set-native-language.dto';
 import { LanguageQueryDto, LanguageType } from './dto/language-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -66,24 +55,4 @@ export class LanguageController {
     return this.languageService.setNativeLanguage(user.id, dto);
   }
 
-  @ApiBearerAuth('JWT-auth')
-  @Patch('user/:languageId')
-  @ApiOperation({ summary: 'Update user language proficiency' })
-  async updateUserLanguage(
-    @CurrentUser() user: User,
-    @Param('languageId', ParseUUIDPipe) languageId: string,
-    @Body() dto: UpdateUserLanguageDto,
-  ): Promise<UserLanguageDto> {
-    return this.languageService.updateUserLanguage(user.id, languageId, dto);
-  }
-
-  @ApiBearerAuth('JWT-auth')
-  @Delete('user/:languageId')
-  @ApiOperation({ summary: 'Remove language from user learning list' })
-  async removeUserLanguage(
-    @CurrentUser() user: User,
-    @Param('languageId', ParseUUIDPipe) languageId: string,
-  ): Promise<void> {
-    return this.languageService.removeUserLanguage(user.id, languageId);
-  }
 }

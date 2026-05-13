@@ -65,27 +65,3 @@ export class ScenarioChatResponseDto {
   messages!: ScenarioChatMessageDto[];
 }
 
-export class ScenarioConversationListItemDto {
-  @ApiProperty({ format: 'uuid' })
-  id!: string;
-
-  @ApiProperty({ description: 'ISO timestamp when the conversation was created' })
-  startedAt!: string;
-
-  @ApiProperty({ description: 'ISO timestamp of the last activity' })
-  lastTurnAt!: string;
-
-  @ApiProperty({ description: 'Number of completed user/assistant turn pairs' })
-  turnCount!: number;
-
-  @ApiProperty({ enum: ScenarioChatStatus })
-  status!: ScenarioChatStatus;
-
-  @ApiProperty({ description: 'Maximum turns allowed for this conversation' })
-  maxTurns!: number;
-}
-
-export class ScenarioConversationListResponseDto {
-  @ApiProperty({ type: [ScenarioConversationListItemDto] })
-  items!: ScenarioConversationListItemDto[];
-}

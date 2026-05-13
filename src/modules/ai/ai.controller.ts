@@ -1,7 +1,6 @@
 import {
   Controller,
   Post,
-  Sse,
   Body,
   BadRequestException,
   UseGuards,
@@ -11,23 +10,16 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
-import { Observable, Subject } from 'rxjs';
 import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
 import { TranscriptionService } from './services/transcription.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
 import { RequirePremium } from '../../common/decorators/require-premium.decorator';
-import {
-  ActiveLanguage,
-  ActiveLanguageContext,
-  SkipLanguageContext,
-} from '../../common/decorators/active-language.decorator';
+import { SkipLanguageContext } from '../../common/decorators/active-language.decorator';
 import { PremiumGuard } from '../../common/guards/premium.guard';
 import { User } from '../../database/entities';
 import {
-  ChatRequestDto,
-  ChatResponseDto,
   CorrectionCheckRequestDto,
   CorrectionCheckResponseDto,
   TranslateRequestDto,
@@ -52,45 +44,6 @@ export class AiController {
     private translationService: TranslationService,
     private transcriptionService: TranscriptionService,
   ) {}
-
-  @Post('chat')
-  @ApiOperation({ summary: 'Chat with AI tutor' })
-  @ApiResponse({ status: 200, type: ChatResponseDto })
-  async chat(
-    @CurrentUser() user: User,
-    @ActiveLanguage() lang: ActiveLanguageContext,
-    @Body() dto: ChatRequestDto,
-  ): Promise<ChatResponseDto> {
-    const context = { ...dto.context, targetLanguage: lang.code };
-    return this.learningAgent.chat(user.id, dto.message, context, dto.model);
-  }
-
-  @Sse('chat/stream')
-  @ApiOperation({ summary: 'Stream chat response (SSE)' })
-  streamChat(
-    @CurrentUser() user: User,
-    @ActiveLanguage() lang: ActiveLanguageContext,
-    @Body() dto: ChatRequestDto,
-  ): Observable<MessageEvent> {
-    const subject = new Subject<MessageEvent>();
-    const context = { ...dto.context, targetLanguage: lang.code };
-
-    // Start streaming in background
-    void (async () => {
-      try {
-        const stream = this.learningAgent.streamChat(user.id, dto.message, context, dto.model);
-
-        for await (const chunk of stream) {
-          subject.next({ data: { content: chunk } } as MessageEvent);
-        }
-        subject.complete();
-      } catch (error) {
-        subject.error(error);
-      }
-    })();
-
-    return subject.asObservable();
-  }
 
   @OptionalAuth()
   @SkipLanguageContext()
