@@ -3,7 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { ScenariosRedeemService } from './scenarios-redeem.service';
-import { Scenario, ScenarioDifficulty } from '@/database/entities/scenario.entity';
+import { Scenario } from '@/database/entities/scenario.entity';
 import { KolBundle } from '@/database/entities/kol-bundle.entity';
 import { KolBundleScenario } from '@/database/entities/kol-bundle-scenario.entity';
 import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
@@ -22,7 +22,6 @@ describe('ScenariosRedeemService', () => {
     type: ScenarioType.KOL,
     title: `KOL Scenario ${id}`,
     description: `Description for KOL ${id}`,
-    difficulty: ScenarioDifficulty.INTERMEDIATE,
     languageId: 'lang-1',
     categoryId: 'cat-1',
     status: ContentStatus.PUBLISHED,

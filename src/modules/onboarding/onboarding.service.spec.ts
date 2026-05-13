@@ -288,11 +288,11 @@ describe('OnboardingService', () => {
       const conversation = makeConversation();
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish', currentLevel: 'A1' };
       const scenarios = [
-        { id: '1', title: 'Scenario 1', description: 'Desc 1', icon: 'briefcase', accentColor: 'primary' },
-        { id: '2', title: 'Scenario 2', description: 'Desc 2', icon: 'coffee', accentColor: 'blue' },
-        { id: '3', title: 'Scenario 3', description: 'Desc 3', icon: 'globe', accentColor: 'green' },
-        { id: '4', title: 'Scenario 4', description: 'Desc 4', icon: 'book', accentColor: 'lavender' },
-        { id: '5', title: 'Scenario 5', description: 'Desc 5', icon: 'mic', accentColor: 'rose' },
+        { id: '1', title: 'Scenario 1', description: 'Desc 1' },
+        { id: '2', title: 'Scenario 2', description: 'Desc 2' },
+        { id: '3', title: 'Scenario 3', description: 'Desc 3' },
+        { id: '4', title: 'Scenario 4', description: 'Desc 4' },
+        { id: '5', title: 'Scenario 5', description: 'Desc 5' },
       ];
 
       engine.findConversation.mockResolvedValue(conversation);
@@ -322,8 +322,8 @@ describe('OnboardingService', () => {
       const conversation = makeConversation();
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
       const badScenarios = [
-        { id: '1', title: 'S1', description: 'D1', icon: 'star', accentColor: 'primary' },
-        { id: '2', title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
+        { id: '1', title: 'S1', description: 'D1' },
+        { id: '2', title: 'S2', description: 'D2' },
       ];
 
       engine.findConversation.mockResolvedValue(conversation);
@@ -339,11 +339,11 @@ describe('OnboardingService', () => {
       const conversation = makeConversation();
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
       const scenarios = [
-        { id: '00000000-0000-0000-0000-000000000001', title: 'S1', description: 'D1', icon: 'star', accentColor: 'primary' },
-        { id: '00000000-0000-0000-0000-000000000002', title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
-        { id: '00000000-0000-0000-0000-000000000003', title: 'S3', description: 'D3', icon: 'star', accentColor: 'green' },
-        { id: '00000000-0000-0000-0000-000000000004', title: 'S4', description: 'D4', icon: 'star', accentColor: 'lavender' },
-        { id: '00000000-0000-0000-0000-000000000005', title: 'S5', description: 'D5', icon: 'star', accentColor: 'rose' },
+        { id: '00000000-0000-0000-0000-000000000001', title: 'S1', description: 'D1' },
+        { id: '00000000-0000-0000-0000-000000000002', title: 'S2', description: 'D2' },
+        { id: '00000000-0000-0000-0000-000000000003', title: 'S3', description: 'D3' },
+        { id: '00000000-0000-0000-0000-000000000004', title: 'S4', description: 'D4' },
+        { id: '00000000-0000-0000-0000-000000000005', title: 'S5', description: 'D5' },
       ];
 
       engine.findConversation.mockResolvedValue(conversation);
@@ -356,24 +356,24 @@ describe('OnboardingService', () => {
       });
     });
 
-    it('validates accentColor from engine output', async () => {
+    it('returns scenarios with id, title, description fields only', async () => {
       const conversation = makeConversation();
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
-      const scenariosWithColor = [
-        { id: '1', title: 'S1', description: 'D1', icon: 'star', accentColor: 'primary' },
-        { id: '2', title: 'S2', description: 'D2', icon: 'star', accentColor: 'blue' },
-        { id: '3', title: 'S3', description: 'D3', icon: 'star', accentColor: 'green' },
-        { id: '4', title: 'S4', description: 'D4', icon: 'star', accentColor: 'lavender' },
-        { id: '5', title: 'S5', description: 'D5', icon: 'star', accentColor: 'rose' },
+      const scenariosFromEngine = [
+        { id: '1', title: 'S1', description: 'D1' },
+        { id: '2', title: 'S2', description: 'D2' },
+        { id: '3', title: 'S3', description: 'D3' },
+        { id: '4', title: 'S4', description: 'D4' },
+        { id: '5', title: 'S5', description: 'D5' },
       ];
 
       engine.findConversation.mockResolvedValue(conversation);
-      engine.completeAndGenerate.mockResolvedValue({ profile, generated: scenariosWithColor });
+      engine.completeAndGenerate.mockResolvedValue({ profile, generated: scenariosFromEngine });
 
       const result = await service.complete({ conversationId: 'conv-1' });
 
-      expect(result.scenarios[0].accentColor).toBe('primary');
-      expect(result.scenarios[1].accentColor).toBe('blue');
+      expect(result.scenarios[0].title).toBe('S1');
+      expect(result.scenarios[0].description).toBe('D1');
     });
   });
 

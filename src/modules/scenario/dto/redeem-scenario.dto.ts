@@ -15,7 +15,6 @@ export class RedeemedScenarioItemDto {
   @ApiProperty() id!: string;
   @ApiProperty() title!: string;
   @ApiProperty() description?: string;
-  @ApiProperty() difficulty!: string;
   @ApiProperty() languageId!: string;
 }
 

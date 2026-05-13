@@ -180,12 +180,12 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - User-granted access via user_scenario_access table
 - Scenario status computation: available, locked, learned (based on access_tier and subscription)
 - Premium subscription enforcement (free users cannot access premium scenarios)
-- Search, difficulty level filtering
+- Search and filtering
 - Pagination with total count
 
 **Entities:**
 - ScenarioCategory: Groups scenarios by topic/category
-- Scenario: Learning content with difficulty levels, premium flags, trial flags
+- Scenario: Learning content with premium flags and lifecycle status
 - UserScenarioAccess: Grants specific users access to scenarios
 
 ### 9. Scenario Chat Module (7 files, ~600 LOC)
@@ -264,7 +264,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 ### 12. Scenario Module (17 files, ~900 LOC)
 
-**Purpose:** Default + personalized scenario listing and KOL gift code redemption
+**Purpose:** Default + personalized scenario listing and KOL gift code redemption with onboarding materialization
 
 **Endpoints:**
 - GET /scenarios/default — list default scenarios for active language (paginated, auto-enroll)
@@ -274,6 +274,11 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 **Services:**
 - ScenariosListingService: Query default scenarios, merge AI + KOL grants
 - ScenariosRedeemService: Validate gift code, create UserAiScenario grants (idempotent)
+- OnboardingMaterializationService: Materialize anonymous onboarding scenarios to personal Scenario rows on auth
+
+**Helpers:**
+- scenario-text-sanitizer.ts: sanitizeTitle(), sanitizeDescription()
+- personal-scenario-builder.ts: buildPersonalScenarioPartial(), isValidPersonalScenarioInput()
 
 **DTOs:** ListScenariosQueryDto (page, limit), RedeemScenarioDto (giftCode)
 
@@ -281,6 +286,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Type filtering: default vs kol scenario variants
 - Idempotent redemption (duplicate codes safe)
 - Auto-enrollment in language via @AutoEnrollLanguage()
+- Onboarding materialization: 5 anonymous scenarios → PERSONAL Scenario rows on linkOnboardingSession (idempotent)
 
 ### 13. KOL Bundle Module (7 files, ~350 LOC)
 
@@ -364,7 +370,6 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `title` - String (max 255, e.g., "Meet & Greet")
 - `description` - Text (nullable)
 - `image_url` - Text (nullable)
-- `difficulty` - Enum (beginner, intermediate, advanced)
 - `access_tier` - Enum (free, premium; default: free) — determines subscription requirement
 - `status` - ContentStatus enum (draft, published, archived; default: published) — published = active, archived = inactive
 - `order_index` - Integer for display ordering within category
@@ -401,7 +406,6 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - `language_id` - FK to Language (non-nullable, language partitioning key)
 - `title` - String (max 255)
 - `description` - Text (nullable)
-- `difficulty` - Enum (beginner, intermediate, advanced)
 - `access_tier` - Enum (free, premium; default: free) — determines subscription requirement
 - `status` - ContentStatus enum (draft, published, archived; default: published) — published = active, archived = inactive
 - `order_index` - Integer for display ordering

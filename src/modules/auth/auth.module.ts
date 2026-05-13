@@ -15,11 +15,13 @@ import { PasswordReset } from '../../database/entities/password-reset.entity';
 import { UserLanguage } from '../../database/entities/user-language.entity';
 import { AppConfiguration } from '../../config/app-configuration';
 import { EmailModule } from '../email/email.module';
+import { ScenarioMaterializationModule } from '../scenario/scenario-materialization.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, RefreshToken, AiConversation, PasswordReset, UserLanguage]),
     EmailModule,
+    ScenarioMaterializationModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

@@ -188,7 +188,6 @@ export class AdminContentService implements OnModuleInit {
       title: String(item.title ?? '').substring(0, 255),
       description:
         typeof item.description === 'string' ? item.description.substring(0, 1000) : undefined,
-      difficulty: item.difficulty,
       orderIndex: typeof item.orderIndex === 'number' ? item.orderIndex : 0,
       languageId,
       status: ContentStatus.DRAFT,

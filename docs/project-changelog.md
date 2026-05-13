@@ -5,6 +5,59 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-05-13 — Onboarding → Personal Scenarios Materialization
+
+### Added
+
+- **ScenarioMaterializationModule** (`src/modules/scenario/scenario-materialization.module.ts`) — Exports `OnboardingMaterializationService`
+  - `OnboardingMaterializationService` (`src/modules/scenario/services/onboarding-materialization.service.ts`) — Materializes anonymous onboarding scenarios to PERSONAL Scenario rows on user auth
+  - Triggered via `linkOnboardingSession()` on Firebase login
+  - Uses `INSERT ... ON CONFLICT DO NOTHING` for idempotency (best-effort, never blocks auth)
+
+- **Scenario Helpers:**
+  - `scenario-text-sanitizer.ts` — `sanitizeTitle()`, `sanitizeDescription()` for input validation
+  - `personal-scenario-builder.ts` — `buildPersonalScenarioPartial()`, `isValidPersonalScenarioInput()` for scenario construction
+
+- **Migration `1780000000000-drop-scenarios-difficulty.ts`** — Removes `difficulty` column from Scenario entity (no longer needed; difficulty filtering removed from API)
+
+### Breaking Changes
+
+- **GET /lessons** — `level` query parameter removed (difficulty filtering discontinued)
+- **Lesson/Scenario Response DTOs** — `difficulty` field removed from all response shapes
+- **Onboarding Scenario Shape** — Changed from `{id, title, description, icon, accentColor, difficulty}` to `{id, title, description}` only
+- **POST /onboarding/complete Response** — Now includes `scenarios: [{id, title, description}]` in addition to `extracted_profile`
+
+### Changed
+
+- **Auth Flow:** When user authenticates via `linkOnboardingSession`, their 5 anonymous onboarding scenarios are materialized as PERSONAL Scenario rows. This is best-effort and never blocks login.
+- **Onboarding → Personal Transition:** Users' AI-generated scenarios from onboarding immediately appear in `GET /scenarios/personal` after login
+
+### Database
+
+- Migration drops `difficulty` column and `scenario_difficulty` enum type
+- Down migration restores both for development rollback
+- Zero data loss; scenarios with materialized content unaffected
+
+### Documentation Impact
+
+- `codebase-summary.md` — Updated Scenario Module with materialization service + helpers
+- `system-architecture.md` — Updated Onboarding flow with materialization step; removed difficulty from Lesson flow
+- `api-documentation.md` — Removed `level` query param from GET /lessons; removed `difficulty` from all lesson/scenario responses; updated onboarding scenario shape
+- `project-changelog.md` — This entry
+
+### Testing
+
+- All existing tests pass (materialization is best-effort, non-blocking)
+- Idempotency verified via INSERT...ON CONFLICT
+
+### Known Behavior
+
+- Materialization is best-effort; if DB insert fails, login still succeeds
+- Duplicate materialization is safe (unique constraint prevents double-grants)
+- Users can still access materialized scenarios via GET /scenarios/personal
+
+---
+
 ## 2026-05-13 — Remove Sentry Error Tracking
 
 ### Removed

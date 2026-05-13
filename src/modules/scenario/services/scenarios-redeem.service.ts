@@ -58,7 +58,6 @@ export class ScenariosRedeemService {
         id: s.id,
         title: s.title,
         description: s.description,
-        difficulty: s.difficulty,
         languageId: s.languageId,
       })),
     };

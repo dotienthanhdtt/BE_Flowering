@@ -238,6 +238,7 @@ AI-powered language learning backend following Clean Architecture principles wit
 │  - Session-based state management                   │
 │  - Profile extraction (cached after first success)  │
 │  - Scenario generation (cached after first success) │
+│  - 5 scenario objects: {id, title, description}     │
 │  - Max 10 turns per session                         │
 └──────────────────────────────────────────────────────┘
 ```
@@ -247,13 +248,13 @@ AI-powered language learning backend following Clean Architecture principles wit
 - Chat continuation (with `conversation_id`): 30 req/hr per IP
 - Message fetch GET endpoint: 30 req/hr per IP
 
-**First-Turn Detection:** Via `messageCount` on AiConversation (authoritative). **Caching:** /complete caches profile + scenarios (5 items, stable UUIDs); idempotent. **Resume:** GET messages fetches transcript for mobile rehydration.
+**First-Turn Detection:** Via `messageCount` on AiConversation (authoritative). **Caching:** /complete caches profile + scenarios (5 items, stable UUIDs); idempotent. **Resume:** GET messages fetches transcript for mobile rehydration. **Materialization:** When user authenticates via `linkOnboardingSession`, OnboardingMaterializationService materializes the 5 cached scenarios as PERSONAL Scenario rows using INSERT...ON CONFLICT DO NOTHING (idempotent, best-effort).
 
 ### Lesson Module Flow
 ```
 ┌──────────────────────────────────────────────────────┐
 │           Lesson Controller                          │
-│  GET /lessons?language=uuid&level=beginner&search=.. │
+│  GET /lessons?language=uuid&search=...              │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
@@ -266,7 +267,7 @@ AI-powered language learning backend following Clean Architecture principles wit
                     ↓
 ┌────────────────────────────────────────────────────────────┐
 │     Repository Queries (TypeORM QueryBuilder)              │
-│  - Scenario: visibility + difficulty + search filters     │
+│  - Scenario: visibility + search filters                  │
 │  - UserScenarioAccess: user-granted scenarios             │
 │  - Subscription: premium status for status computation    │
 │  - UserProgress: (future) learned status tracking        │

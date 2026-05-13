@@ -23,6 +23,7 @@ import { UserLanguageDto } from '../language/dto/user-language.dto';
 import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
 import { FirebaseTokenStrategy, OAuthProvider } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
+import { OnboardingMaterializationService } from '../scenario/services/onboarding-materialization.service';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_EXPIRY = '30d';
@@ -57,6 +58,7 @@ export class AuthService {
     @InjectRepository(UserLanguage)
     private userLanguageRepository: Repository<UserLanguage>,
     private frameworkLevels: FrameworkLevelsService,
+    private readonly onboardingMaterialization: OnboardingMaterializationService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -383,6 +385,13 @@ export class AuthService {
         languageId: conversation.languageId,
         error,
       });
+    }
+
+    // Materialize onboarding scenarios into PERSONAL rows. Best-effort — never block auth.
+    try {
+      await this.onboardingMaterialization.materializeFromConversation(userId, conversation);
+    } catch {
+      // service is self-guarded; this catch is a safety net
     }
 
     // Bootstrap user.nativeLanguage from onboarding column (language code).

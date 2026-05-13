@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { mapGenericToFramework } from '../../common/constants/language-levels';
 import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
-import { OnboardingScenarioDto, SCENARIO_ACCENT_COLORS } from './dto/onboarding-scenario.dto';
+import { OnboardingScenarioDto } from './dto/onboarding-scenario.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
@@ -170,13 +170,9 @@ export class OnboardingService {
     }
 
     return parsed.map((s) => ({
-      id: randomUUID(),
+      id: typeof s.id === 'string' && s.id.length > 0 ? s.id : randomUUID(),
       title: String(s.title ?? ''),
       description: String(s.description ?? ''),
-      icon: String(s.icon ?? 'star'),
-      accentColor: (SCENARIO_ACCENT_COLORS.includes(s.accentColor)
-        ? s.accentColor
-        : 'primary') as OnboardingScenarioDto['accentColor'],
     }));
   }
 

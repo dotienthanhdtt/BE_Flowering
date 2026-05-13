@@ -4,7 +4,7 @@ import { Repository, SelectQueryBuilder } from 'typeorm';
 import { ScenariosListingService } from './scenarios-listing.service';
 import { ScenarioAccessService } from './scenario-access.service';
 import { SubscriptionService } from '../../subscription/subscription.service';
-import { Scenario, ScenarioDifficulty } from '@/database/entities/scenario.entity';
+import { Scenario } from '@/database/entities/scenario.entity';
 import { UserLanguage } from '@/database/entities/user-language.entity';
 import { ContentStatus } from '@/database/entities/content-status.enum';
 import { AccessTier } from '@/database/entities/access-tier.enum';
@@ -17,7 +17,6 @@ const mockScenario = (id: string, overrides?: Partial<Scenario>): Scenario =>
     title: `Scenario ${id}`,
     description: `Description for ${id}`,
     imageUrl: 'https://example.com/image.jpg',
-    difficulty: ScenarioDifficulty.BEGINNER,
     languageId: 'lang-1',
     orderIndex: 0,
     categoryId: 'cat-1',

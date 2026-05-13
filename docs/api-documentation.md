@@ -366,9 +366,9 @@ Remove language.
 ### Lessons
 
 #### GET /lessons
-Get lessons grouped by category. **Auth:** Required | **Query:** language (uuid), level (beginner|intermediate|advanced), search (string), page (1+), limit (1-50, default 20).
+Get lessons grouped by category. **Auth:** Required | **Query:** language (uuid), search (string), page (1+), limit (1-50, default 20).
 
-**Response:** `{data: {categories: [{id, name, scenarios: [{id, title, image_url, difficulty, status}]}], pagination}}`
+**Response:** `{data: {categories: [{id, name, scenarios: [{id, title, image_url, status}]}], pagination}}`
 
 **Status:** available | locked (premium, free user) | learned. **Visibility:** published + (global OR matching language OR user_scenario_access). **Errors:** 400, 401
 
@@ -377,7 +377,7 @@ Get lessons grouped by category. **Auth:** Required | **Query:** language (uuid)
 ### Scenarios
 
 #### GET /scenarios/default
-List default scenarios for active language (paginated). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page` (1+, default 1), `limit` (1-50, default 20) | **Response (200):** `{code: 1, message: "Scenarios found", data: {items: [{id, title, description, image_url, difficulty, type: "default", status}], total, page, limit}}`
+List default scenarios for active language (paginated). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page` (1+, default 1), `limit` (1-50, default 20) | **Response (200):** `{code: 1, message: "Scenarios found", data: {items: [{id, title, description, image_url, type: "default", status}], total, page, limit}}`
 
 **Type:** Only returns scenarios with `type='default'`. Automatically enrolls user in language if not yet enrolled. **Errors:** 400 (missing header), 401 (unauthorized), 403 (inactive language)
 
@@ -400,20 +400,20 @@ Redeem a KOL gift code to grant access to scenarios. **Auth:** Required | **Rate
 #### GET /scenarios/:id
 Get full scenario detail including access state. **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Path:** `id` (uuid)
 
-**Response (200):** `{code: 1, message: "...", data: {id, title, description?, imageUrl?, difficulty, languageId, orderIndex, category: {id, name}, accessTier, isLocked, lockReason?}}`
+**Response (200):** `{code: 1, message: "...", data: {id, title, description?, imageUrl?, languageId, orderIndex, category: {id, name}, accessTier, isLocked, lockReason?}}`
 
 **Soft-lock behavior:** Premium scenarios return `isLocked=true, lockReason="premium_required"` instead of 403, enabling mobile upgrade CTA in a single round-trip. **Errors:** 401, 404 (not found / wrong language / unpublished)
 
 Sample responses:
 ```json
 // FREE tier — 200
-{"code":1,"data":{"id":"uuid","title":"Ordering Food","description":"Learn how to order at a restaurant","difficulty":"beginner","languageId":"uuid","orderIndex":1,"category":{"id":"uuid","name":"Restaurant"},"accessTier":"free","isLocked":false}}
+{"code":1,"data":{"id":"uuid","title":"Ordering Food","description":"Learn how to order at a restaurant","languageId":"uuid","orderIndex":1,"category":{"id":"uuid","name":"Restaurant"},"accessTier":"free","isLocked":false}}
 
 // PREMIUM, no subscription — 200
-{"code":1,"data":{"id":"uuid","title":"Luxury Hotel","description":"Practice checking into a 5-star hotel","difficulty":"intermediate","languageId":"uuid","orderIndex":5,"category":{"id":"uuid","name":"Hotel"},"accessTier":"premium","isLocked":true,"lockReason":"premium_required"}}
+{"code":1,"data":{"id":"uuid","title":"Luxury Hotel","description":"Practice checking into a 5-star hotel","languageId":"uuid","orderIndex":5,"category":{"id":"uuid","name":"Hotel"},"accessTier":"premium","isLocked":true,"lockReason":"premium_required"}}
 
 // PREMIUM, active subscription — 200
-{"code":1,"data":{"id":"uuid","title":"Luxury Hotel","description":"Practice checking into a 5-star hotel","difficulty":"intermediate","languageId":"uuid","orderIndex":5,"category":{"id":"uuid","name":"Hotel"},"accessTier":"premium","isLocked":false}}
+{"code":1,"data":{"id":"uuid","title":"Luxury Hotel","description":"Practice checking into a 5-star hotel","languageId":"uuid","orderIndex":5,"category":{"id":"uuid","name":"Hotel"},"accessTier":"premium","isLocked":false}}
 
 // Not found / language mismatch — 404
 {"code":0,"message":"Scenario not found"}
@@ -662,7 +662,7 @@ Start new or resume session. **Auth:** Not required | **Rate Limit:** 5 req/hr (
 Fetch transcript for mobile rehydration. **Auth:** Not required | **Rate Limit:** 30 req/hr per IP | **Response:** `{data: {conversation_id, turn_number, max_turns, is_last_turn, messages: [{id, role, content, created_at}]}}` | **Errors:** 404
 
 #### POST /onboarding/complete
-Extract onboarding profile (idempotent, caches on first success). **Auth:** Not required | **Request:** `{conversation_id}` | **Response:** `{data: {extracted_profile: {languages, interests, level}}}`
+Extract onboarding profile + scenarios (idempotent, caches on first success). **Auth:** Not required | **Request:** `{conversation_id}` | **Response:** `{data: {extracted_profile: {languages, interests, level}, scenarios: [{id, title, description}]}}`
 
 ---
 

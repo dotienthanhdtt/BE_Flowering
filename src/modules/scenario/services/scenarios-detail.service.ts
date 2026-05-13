@@ -23,7 +23,6 @@ export class ScenariosDetailService {
       title: scenario.title,
       description: scenario.description ?? null,
       imageUrl: scenario.imageUrl,
-      difficulty: scenario.difficulty,
       languageId: scenario.languageId,
       orderIndex: scenario.orderIndex,
       category: scenario.category

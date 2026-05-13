@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { SelectQueryBuilder } from 'typeorm';
 import { LessonService } from './lesson.service';
-import { Scenario, ScenarioDifficulty } from '../../database/entities/scenario.entity';
+import { Scenario } from '../../database/entities/scenario.entity';
 import { AccessTier } from '../../database/entities/access-tier.enum';
 import { ContentStatus } from '../../database/entities/content-status.enum';
 import { ScenarioType } from '../../database/entities/scenario-type.enum';
@@ -88,7 +88,6 @@ describe('LessonService', () => {
     title: 'Test Scenario',
     description: 'Test Description',
     imageUrl: 'https://example.com/image.jpg',
-    difficulty: ScenarioDifficulty.BEGINNER,
     accessTier: AccessTier.FREE,
     status: ContentStatus.PUBLISHED,
     orderIndex: 0,
@@ -189,53 +188,6 @@ describe('LessonService', () => {
         const andWhereCall = (queryBuilder.andWhere as jest.Mock).mock.calls[0];
         expect(andWhereCall[0]).toContain('language_id = :languageId');
         expect(andWhereCall[0]).toContain('IN (');
-      });
-    });
-
-    describe('Filters - Level', () => {
-      it('should filter scenarios by difficulty level', async () => {
-        const category = mockCategory('cat-1', 'Conversation');
-        const scenarios = [
-          mockScenario('s-1', category, { difficulty: ScenarioDifficulty.INTERMEDIATE }),
-        ];
-        const queryBuilder = createMockQueryBuilder();
-
-        scenarioRepo.createQueryBuilder.mockReturnValue(queryBuilder);
-
-        (queryBuilder.getCount as jest.Mock).mockResolvedValue(1);
-        (queryBuilder.getMany as jest.Mock).mockResolvedValue(scenarios);
-        subscriptionRepo.findOne.mockResolvedValue(null);
-
-        const query: GetLessonsQueryDto = {
-          level: ScenarioDifficulty.INTERMEDIATE,
-          page: 1,
-          limit: 20,
-        };
-        await service.getLessons(userId, 'lang-en', query);
-
-        expect(queryBuilder.andWhere).toHaveBeenCalledWith('scenario.difficulty = :level', {
-          level: ScenarioDifficulty.INTERMEDIATE,
-        });
-      });
-
-      it('should not apply level filter if not provided', async () => {
-        const category = mockCategory('cat-1', 'Conversation');
-        const scenarios = [mockScenario('s-1', category)];
-        const queryBuilder = createMockQueryBuilder();
-
-        scenarioRepo.createQueryBuilder.mockReturnValue(queryBuilder);
-
-        (queryBuilder.getCount as jest.Mock).mockResolvedValue(1);
-        (queryBuilder.getMany as jest.Mock).mockResolvedValue(scenarios);
-        subscriptionRepo.findOne.mockResolvedValue(null);
-
-        const query: GetLessonsQueryDto = { page: 1, limit: 20 };
-        await service.getLessons(userId, 'lang-en', query);
-
-        // Should not have called andWhere for difficulty filter
-        const andWhereCalls = (queryBuilder.andWhere as jest.Mock).mock.calls;
-        const hasLevelFilter = andWhereCalls.some((call) => call[0]?.includes('difficulty'));
-        expect(hasLevelFilter).toBe(false);
       });
     });
 
@@ -570,13 +522,12 @@ describe('LessonService', () => {
     });
 
     describe('Combined Filters', () => {
-      it('should apply language + level + search filters together', async () => {
+      it('should apply language + search filters together', async () => {
         const langId = 'lang-1';
         const category = mockCategory('cat-1', 'Conversation');
         const scenarios = [
           mockScenario('s-1', category, {
             languageId: langId,
-            difficulty: ScenarioDifficulty.ADVANCED,
             title: 'Advanced Restaurant',
           }),
         ];
@@ -590,16 +541,15 @@ describe('LessonService', () => {
 
         const query: GetLessonsQueryDto = {
           language: langId,
-          level: ScenarioDifficulty.ADVANCED,
           search: 'Restaurant',
           page: 1,
           limit: 20,
         };
         await service.getLessons(userId, 'lang-en', query);
 
-        // Should apply all three filters
+        // Should apply visibility + search filters
         const andWhereCalls = (queryBuilder.andWhere as jest.Mock).mock.calls;
-        expect(andWhereCalls.length).toBeGreaterThanOrEqual(3); // visibility + level + search
+        expect(andWhereCalls.length).toBeGreaterThanOrEqual(2); // visibility + search
       });
     });
 

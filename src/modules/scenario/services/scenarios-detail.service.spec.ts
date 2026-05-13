@@ -4,7 +4,6 @@ import { ScenariosDetailService } from './scenarios-detail.service';
 import { ScenarioAccessService } from './scenario-access.service';
 import { AccessTier } from '../../../database/entities/access-tier.enum';
 import { ContentStatus } from '../../../database/entities/content-status.enum';
-import { ScenarioDifficulty } from '../../../database/entities/scenario.entity';
 
 const mockAccessService = () => ({ checkAccess: jest.fn() });
 
@@ -30,7 +29,6 @@ describe('ScenariosDetailService', () => {
     title: 'Ordering Food',
     description: 'Learn how to order',
     imageUrl: undefined as string | undefined,
-    difficulty: ScenarioDifficulty.BEGINNER,
     languageId: 'lang-uuid-en',
     orderIndex: 1,
     category: mockCategory,

@@ -29,15 +29,12 @@ export class LessonService {
     languageId: string,
     query: GetLessonsQueryDto,
   ): Promise<GetLessonsResponseDto> {
-    const { level, search, page = 1, limit = 20 } = query;
+    const { search, page = 1, limit = 20 } = query;
 
     // Build visibility query
     const qb = this.buildVisibilityQuery(userId, languageId);
 
     // Apply filters
-    if (level) {
-      qb.andWhere('scenario.difficulty = :level', { level });
-    }
     if (search) {
       qb.andWhere('scenario.title ILIKE :search', { search: `%${search}%` });
     }
@@ -112,7 +109,6 @@ export class LessonService {
         id: scenario.id,
         title: scenario.title,
         imageUrl: scenario.imageUrl ?? null,
-        difficulty: scenario.difficulty,
         status: this.computeStatus(scenario, isFreeUser),
       });
     }

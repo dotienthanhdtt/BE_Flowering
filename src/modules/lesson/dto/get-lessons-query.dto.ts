@@ -1,7 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ScenarioDifficulty } from '../../../database/entities/scenario.entity';
 
 /**
  * Query params for GET /lessons endpoint
@@ -11,11 +10,6 @@ export class GetLessonsQueryDto {
   @IsOptional()
   @IsUUID()
   language?: string;
-
-  @ApiPropertyOptional({ description: 'Filter by difficulty level', enum: ScenarioDifficulty })
-  @IsOptional()
-  @IsEnum(ScenarioDifficulty)
-  level?: ScenarioDifficulty;
 
   @ApiPropertyOptional({ description: 'Search scenarios by title' })
   @IsOptional()

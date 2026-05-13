@@ -15,7 +15,6 @@
     "personalization_rules": [
       "Base scenarios on their CURRENT job, project, upcoming event, or recent interest",
       "Each scenario should address a real situation they're likely to face soon",
-      "Align difficulty with suggestedProficiency",
       "No scenario should be generic — if you could use it for anyone, make it more specific"
     ],
     "specificity_rules": [

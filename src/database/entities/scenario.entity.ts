@@ -14,12 +14,6 @@ import { ContentStatus } from './content-status.enum';
 import { AccessTier } from './access-tier.enum';
 import { ScenarioType } from './scenario-type.enum';
 
-export enum ScenarioDifficulty {
-  BEGINNER = 'beginner',
-  INTERMEDIATE = 'intermediate',
-  ADVANCED = 'advanced',
-}
-
 @Entity('scenarios')
 export class Scenario {
   @PrimaryGeneratedColumn('uuid')
@@ -66,13 +60,6 @@ export class Scenario {
 
   @Column({ type: 'text', name: 'image_url', nullable: true })
   imageUrl?: string;
-
-  @Column({
-    type: 'enum',
-    enum: ScenarioDifficulty,
-    default: ScenarioDifficulty.BEGINNER,
-  })
-  difficulty!: ScenarioDifficulty;
 
   @Column({ type: 'enum', enum: AccessTier, default: AccessTier.FREE, name: 'access_tier' })
   accessTier!: AccessTier;

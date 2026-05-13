@@ -9,14 +9,12 @@
       "All scenario content must be in English"
     ],
     "schema": {
+      "id": "A UUID v4 string uniquely identifying this scenario",
       "title": "Short scenario title, 5-8 words, in English",
-      "description": "1-2 sentences describing a SPECIFIC situation with concrete details (names, places, numbers, items), in English",
-      "icon": "One of: briefcase, coffee, globe, book, mic, headphones, users, shopping-cart, plane, utensils, heart, home, star, zap, camera",
-      "accentColor": "One of: primary, blue, green, lavender, rose. Vary across 5 scenarios"
+      "description": "1-2 sentences describing a SPECIFIC situation with concrete details (names, places, numbers, items), in English"
     },
     "personalization_rules": [
       "Match scenarios to learner's job and daily context",
-      "Align difficulty with suggestedProficiency",
       "Reflect learningMotivation in scenario goals",
       "Consider age and region for culturally relevant situations"
     ],

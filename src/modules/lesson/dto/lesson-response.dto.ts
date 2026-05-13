@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ScenarioDifficulty } from '../../../database/entities/scenario.entity';
 
 export enum ScenarioStatus {
   AVAILABLE = 'available',
@@ -16,9 +15,6 @@ export class ScenarioItemDto {
 
   @ApiProperty({ nullable: true })
   imageUrl!: string | null;
-
-  @ApiProperty({ enum: ScenarioDifficulty })
-  difficulty!: ScenarioDifficulty;
 
   @ApiProperty({ enum: ScenarioStatus })
   status!: ScenarioStatus;

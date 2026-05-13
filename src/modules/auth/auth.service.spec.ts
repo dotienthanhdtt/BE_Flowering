@@ -14,6 +14,7 @@ import { RegisterDto, LoginDto, FirebaseAuthDto } from './dto';
 import { FirebaseTokenStrategy, FirebaseAuthUser } from './strategies/firebase-token.strategy';
 import { EmailService } from '../email/email.service';
 import { FrameworkLevelsService } from '../../common/services/framework-levels.service';
+import { OnboardingMaterializationService } from '../scenario/services/onboarding-materialization.service';
 
 jest.mock('bcrypt');
 
@@ -27,6 +28,7 @@ describe('AuthService', () => {
   let firebaseTokenStrategy: jest.Mocked<FirebaseTokenStrategy>;
   let passwordResetRepository: jest.Mocked<{ count: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock }>;
   let emailService: jest.Mocked<{ sendOtp: jest.Mock }>;
+  let onboardingMaterialization: jest.Mocked<{ materializeFromConversation: jest.Mock }>;
 
   const mockUser: User = {
     id: 'user-123',
@@ -129,6 +131,12 @@ describe('AuthService', () => {
             getDescription: jest.fn().mockReturnValue(''),
           },
         },
+        {
+          provide: OnboardingMaterializationService,
+          useValue: {
+            materializeFromConversation: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -141,6 +149,7 @@ describe('AuthService', () => {
     passwordResetRepository = module.get(getRepositoryToken(PasswordReset));
     emailService = module.get(EmailService);
     userLanguageRepository = module.get(getRepositoryToken(UserLanguage));
+    onboardingMaterialization = module.get(OnboardingMaterializationService);
   });
 
   afterEach(() => {
@@ -884,6 +893,55 @@ describe('AuthService', () => {
       expect(loggerSpy).toHaveBeenCalledWith(
         expect.stringContaining('already linked — skipping bootstrap'),
       );
+    });
+  });
+
+  describe('onboarding materialization (via linkOnboardingSession)', () => {
+    const mockConversation = { id: 'conv-1', languageId: 'lang-es', scenarios: [] } as any;
+
+    beforeEach(() => {
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockReturnValue(mockUser);
+      userRepository.save.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('access-token');
+      refreshTokenRepository.create.mockReturnValue({} as RefreshToken);
+      refreshTokenRepository.save.mockResolvedValue({} as RefreshToken);
+      conversationRepository.findOne.mockResolvedValue(mockConversation);
+      conversationRepository.update.mockResolvedValue({ affected: 1 } as any);
+      userLanguageRepository.findOne.mockResolvedValue(null);
+      userLanguageRepository.update.mockResolvedValue({ affected: 0 } as any);
+      userLanguageRepository.save.mockResolvedValue({} as any);
+    });
+
+    it('calls materializeFromConversation after successful link (register path)', async () => {
+      await service.register({ email: 'a@b.com', password: 'Pass123!', conversationId: 'conv-1' });
+
+      expect(onboardingMaterialization.materializeFromConversation).toHaveBeenCalledWith(
+        mockUser.id,
+        mockConversation,
+      );
+    });
+
+    it('does not call materializeFromConversation when affected=0 (race loser)', async () => {
+      conversationRepository.update.mockResolvedValue({ affected: 0 } as any);
+
+      await service.register({ email: 'a@b.com', password: 'Pass123!', conversationId: 'conv-1' });
+
+      expect(onboardingMaterialization.materializeFromConversation).not.toHaveBeenCalled();
+    });
+
+    it('does not call materializeFromConversation when no conversationId', async () => {
+      await service.register({ email: 'a@b.com', password: 'Pass123!' });
+
+      expect(onboardingMaterialization.materializeFromConversation).not.toHaveBeenCalled();
+    });
+
+    it('auth still succeeds when materializeFromConversation rejects (best-effort)', async () => {
+      onboardingMaterialization.materializeFromConversation.mockRejectedValue(new Error('DB fail'));
+
+      await expect(
+        service.register({ email: 'a@b.com', password: 'Pass123!', conversationId: 'conv-1' }),
+      ).resolves.toHaveProperty('accessToken');
     });
   });
 });

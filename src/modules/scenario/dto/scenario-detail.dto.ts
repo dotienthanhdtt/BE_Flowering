@@ -1,5 +1,4 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ScenarioDifficulty } from '@/database/entities/scenario.entity';
 import { AccessTier } from '@/database/entities/access-tier.enum';
 
 export class CategoryRefDto {
@@ -26,9 +25,6 @@ export class ScenarioDetailDto {
 
   @ApiPropertyOptional()
   imageUrl?: string;
-
-  @ApiProperty({ enum: ScenarioDifficulty })
-  difficulty!: ScenarioDifficulty;
 
   @ApiProperty()
   languageId!: string;

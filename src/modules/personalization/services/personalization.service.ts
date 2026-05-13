@@ -10,10 +10,11 @@ import { Repository } from 'typeorm';
 import { AiConversation } from '@/database/entities/ai-conversation.entity';
 import { MessageRole } from '@/database/entities';
 import { Scenario } from '@/database/entities/scenario.entity';
-import { ScenarioType } from '@/database/entities/scenario-type.enum';
 import { User } from '@/database/entities/user.entity';
-import { ContentStatus } from '@/database/entities/content-status.enum';
-import { ScenarioDifficulty } from '@/database/entities/scenario.entity';
+import {
+  buildPersonalScenarioPartial,
+  isValidPersonalScenarioInput,
+} from '@/modules/scenario/helpers/personal-scenario-builder';
 import { AiConversationType } from '@/database/entities/ai-conversation.entity';
 import { IntakeChatEngine } from '@/modules/ai/services/intake-chat-engine.service';
 import { LanguageService } from '@/modules/language/language.service';
@@ -241,15 +242,15 @@ export class PersonalizationService {
         );
       }
 
-      return parsed.map((s) => ({
-        type: ScenarioType.PERSONAL,
-        ownerId,
-        languageId,
-        title: String(s.title ?? ''),
-        description: s.description ? String(s.description) : undefined,
-        difficulty: ScenarioDifficulty.BEGINNER,
-        status: ContentStatus.PUBLISHED,
-      }));
+      return parsed
+        .map((s) => ({
+          title: String(s.title ?? ''),
+          description: s.description ? String(s.description) : undefined,
+          ownerId,
+          languageId,
+        }))
+        .filter((input) => isValidPersonalScenarioInput(input))
+        .map((input) => buildPersonalScenarioPartial(input));
     } catch (err) {
       this.logger.warn(`Failed to parse generated scenarios: ${(err as Error).message}`);
       return [];
