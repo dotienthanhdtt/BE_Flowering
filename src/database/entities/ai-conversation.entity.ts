@@ -92,6 +92,9 @@ export class AiConversation {
   @Column({ type: 'uuid', array: true, name: 'injected_vocab_ids', nullable: true })
   injectedVocabIds?: string[] | null;
 
+  @Column({ type: 'timestamptz', name: 'completed_at', nullable: true })
+  completedAt?: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

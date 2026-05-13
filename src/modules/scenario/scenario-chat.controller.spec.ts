@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ScenarioChatController } from './scenario-chat.controller';
 import { ScenarioChatService } from './services/scenario-chat.service';
+import { ScenarioCompleteService } from './services/scenario-complete.service';
 import { ScenarioChatRequestDto, ScenarioChatResponseDto } from './dto/scenario-chat.dto';
 import { ScenarioChatStatus } from '../../database/entities/ai-conversation.entity';
 import { ThrottlerGuard } from '@nestjs/throttler';
@@ -8,6 +9,10 @@ import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
 
 const mockScenarioChatService = () => ({
   chat: jest.fn(),
+});
+
+const mockScenarioCompleteService = () => ({
+  complete: jest.fn(),
 });
 
 interface MockRequest {
@@ -23,6 +28,7 @@ describe('ScenarioChatController', () => {
       controllers: [ScenarioChatController],
       providers: [
         { provide: ScenarioChatService, useFactory: mockScenarioChatService },
+        { provide: ScenarioCompleteService, useFactory: mockScenarioCompleteService },
       ],
     })
       .overrideGuard(ThrottlerGuard)

@@ -1,0 +1,309 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
+import {
+  AiConversation,
+  AiConversationMessage,
+} from '@/database/entities';
+import { VocabularyInjectionEvent } from '@/database/entities/vocabulary-injection-event.entity';
+import { ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
+import { MessageRole } from '@/database/entities/ai-conversation-message.entity';
+import { ScenarioEvaluation } from '@/database/entities/scenario-evaluation.entity';
+import { ScenarioCompleteRequestDto, ScenarioCompleteResponseDto, EvaluationErrorCode } from '../dto/scenario-complete.dto';
+import { ScenarioAccessService } from './scenario-access.service';
+import { ScenarioEvaluatorService, EvaluatorError, EvaluatorInput } from './scenario-evaluator.service';
+import { VocabularyInjectionService } from './vocabulary-injection.service';
+import { LanguageService } from '@/modules/language/language.service';
+import { PersonalizationTriggerService } from '@/modules/personalization/services/personalization-trigger.service';
+
+const MAX_EVAL_RETRIES = 3;
+
+@Injectable()
+export class ScenarioCompleteService {
+  private readonly logger = new Logger(ScenarioCompleteService.name);
+
+  constructor(
+    @InjectRepository(AiConversation)
+    private readonly convoRepo: Repository<AiConversation>,
+    @InjectRepository(AiConversationMessage)
+    private readonly msgRepo: Repository<AiConversationMessage>,
+    @InjectRepository(ScenarioEvaluation)
+    private readonly evalRepo: Repository<ScenarioEvaluation>,
+    private readonly dataSource: DataSource,
+    private readonly scenarioAccessService: ScenarioAccessService,
+    private readonly evaluator: ScenarioEvaluatorService,
+    private readonly vocabInjection: VocabularyInjectionService,
+    private readonly languageService: LanguageService,
+    private readonly personalizationTrigger: PersonalizationTriggerService,
+  ) {}
+
+  async complete(
+    userId: string,
+    dto: ScenarioCompleteRequestDto,
+    languageId: string,
+  ): Promise<ScenarioCompleteResponseDto> {
+    // 1. Verify scenario access (404 if not found or not accessible)
+    const scenario = await this.scenarioAccessService.findAccessibleScenario(
+      userId,
+      dto.scenarioId,
+      languageId,
+    );
+
+    // 2. Resolve conversation — enforces userId/scenarioId ownership (403/400/404)
+    const conversation = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
+
+    // 3. Fast idempotency check outside the transaction — avoid unnecessary work
+    const cached = await this.evalRepo.findOne({ where: { conversationId: conversation.id } });
+    if (cached && cached.overallScore !== null) {
+      const messages = await this.loadTranscript(conversation.id);
+      return this.buildResponse(conversation, messages, cached, undefined);
+    }
+    if (cached && cached.errorCount >= MAX_EVAL_RETRIES) {
+      const messages = await this.loadTranscript(conversation.id);
+      return this.buildResponse(conversation, messages, null, 'retry_cap_reached');
+    }
+
+    // 4. Load context outside the transaction to avoid holding a pool connection during I/O
+    const [msgRows, langCtx, vocabEvents] = await Promise.all([
+      this.msgRepo.find({
+        where: { conversationId: conversation.id },
+        order: { createdAt: 'ASC' },
+      }),
+      this.loadLanguageContext(userId, languageId),
+      this.dataSource.getRepository(VocabularyInjectionEvent).find({
+        where: { conversationId: conversation.id },
+      }),
+    ]);
+
+    // Read-only vocab hydration — do NOT re-run injection (that's chat's job)
+    const injectedVocab = await this.vocabInjection.hydrateByIds(
+      conversation.injectedVocabIds ?? [],
+    );
+    const vocabUsageHits = vocabEvents.map((e) => ({ vocabId: e.vocabularyId, wasUsed: e.wasUsed }));
+
+    // 5. LLM evaluation outside the transaction — prevents holding pool connection during 15s call
+    const evalInput: EvaluatorInput = {
+      scenario: { id: scenario.id, title: scenario.title, description: scenario.description ?? null },
+      messages: msgRows,
+      injectedVocab,
+      vocabUsageHits,
+      langCtx,
+      userId,
+      conversationId: conversation.id,
+    };
+
+    let evalResult: Awaited<ReturnType<ScenarioEvaluatorService['evaluate']>> | null = null;
+    let evalErrorCode: EvaluationErrorCode | undefined;
+    try {
+      evalResult = await this.evaluator.evaluate(evalInput);
+    } catch (err) {
+      if (err instanceof EvaluatorError) {
+        evalErrorCode = err.code;
+      } else {
+        throw err;
+      }
+    }
+
+    // 6. Short transaction: advisory lock + re-check + DONE flip + persist result
+    let evaluation: ScenarioEvaluation | null = null;
+    let evaluationErrorCode: EvaluationErrorCode | undefined = evalErrorCode;
+    let triggerPersonalization = false;
+
+    await this.dataSource.transaction(async (tx) => {
+      // Advisory lock prevents concurrent inserts (not concurrent LLM calls — those are rare
+      // and accepted as cheaper than holding a pool connection for 15s per lock holder).
+      await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+        `complete:${conversation.id}`,
+      ]);
+
+      // Re-check inside lock — success OR retry cap (catches concurrent requests that both passed the fast check)
+      const insideLock = await tx.findOne(ScenarioEvaluation, {
+        where: { conversationId: conversation.id },
+      });
+      if (insideLock && insideLock.overallScore !== null) {
+        evaluation = insideLock;
+        return;
+      }
+      if (insideLock && insideLock.errorCount >= MAX_EVAL_RETRIES) {
+        evaluationErrorCode = 'retry_cap_reached';
+        return;
+      }
+      const tombstone = insideLock;
+
+      // Flip status to DONE and record completedAt
+      if (conversation.status !== ScenarioChatStatus.DONE || !conversation.completedAt) {
+        conversation.status = ScenarioChatStatus.DONE;
+        conversation.completedAt = new Date();
+        await tx.save(AiConversation, conversation);
+      }
+
+      if (evalResult) {
+        // ON CONFLICT (conversation_id) DO NOTHING — race-safe if two requests evaluated concurrently
+        const inserted = await tx
+          .createQueryBuilder()
+          .insert()
+          .into(ScenarioEvaluation)
+          .values({
+            conversationId: conversation.id,
+            userId,
+            scenarioId: scenario.id,
+            overallScore: evalResult.overallScore,
+            fluencyScore: evalResult.fluencyScore,
+            accuracyScore: evalResult.accuracyScore,
+            vocabScore: evalResult.vocabScore,
+            strengths: evalResult.strengths,
+            improvements: evalResult.improvements,
+            summary: evalResult.summary,
+            vocabUsage: evalResult.vocabUsage,
+            modelUsed: evalResult.modelUsed,
+            promptVersion: evalResult.promptVersion,
+            errorCount: 0,
+            lastErrorCode: null,
+          })
+          .orIgnore()
+          .returning('*')
+          .execute();
+
+        evaluation =
+          (inserted.raw[0] as ScenarioEvaluation | undefined) ??
+          (await tx.findOne(ScenarioEvaluation, { where: { conversationId: conversation.id } }));
+
+        triggerPersonalization = true;
+      } else {
+        // Upsert tombstone: increment error_count to track retries, cap at MAX_EVAL_RETRIES
+        const newCount = (tombstone?.errorCount ?? 0) + 1;
+        this.logger.warn(
+          `Evaluation failed conv=${conversation.id} attempt=${newCount} code=${evaluationErrorCode}`,
+        );
+
+        await tx
+          .createQueryBuilder()
+          .insert()
+          .into(ScenarioEvaluation)
+          .values({
+            conversationId: conversation.id,
+            userId,
+            scenarioId: scenario.id,
+            overallScore: null,
+            fluencyScore: null,
+            accuracyScore: null,
+            vocabScore: null,
+            strengths: [],
+            improvements: [],
+            summary: null,
+            vocabUsage: null,
+            modelUsed: null,
+            errorCount: newCount,
+            lastErrorCode: evaluationErrorCode ?? 'llm_unavailable',
+          })
+          .orUpdate(['error_count', 'last_error_code'], ['conversation_id'])
+          .execute();
+      }
+    });
+
+    // 7. Fire-and-forget personalization trigger (outside transaction)
+    if (triggerPersonalization && scenario.id) {
+      void this.personalizationTrigger.maybeTrigger(userId, scenario.id);
+    }
+
+    // 8. Build response
+    const messages = await this.loadTranscript(conversation.id);
+    return this.buildResponse(conversation, messages, evaluation, evaluationErrorCode);
+  }
+
+  private async resolveExisting(
+    userId: string,
+    conversationId: string,
+    scenarioId: string,
+  ): Promise<AiConversation> {
+    const c = await this.convoRepo.findOne({ where: { id: conversationId } });
+    if (!c) throw new NotFoundException('Conversation not found');
+    if (c.userId !== userId) throw new ForbiddenException();
+    if (c.scenarioId !== scenarioId) throw new BadRequestException('scenarioId mismatch');
+    return c;
+  }
+
+  private async loadLanguageContext(
+    userId: string,
+    languageId: string,
+  ): Promise<{ targetLanguage: string; nativeLanguage: string; proficiencyLevel: string }> {
+    const [langs, nativeLang] = await Promise.all([
+      this.languageService.getUserLanguages(userId),
+      this.languageService.getNativeLanguage(userId),
+    ]);
+    const target =
+      langs.find((l) => l.languageId === languageId) ??
+      langs.find((l) => l.lastLearned) ??
+      langs[0];
+    if (!target) throw new BadRequestException('User has no active learning language');
+    return {
+      targetLanguage: target.language.name,
+      nativeLanguage: nativeLang?.name ?? 'English',
+      proficiencyLevel: target.proficiencyLevel,
+    };
+  }
+
+  private async loadTranscript(conversationId: string): Promise<
+    Array<{ id: string; role: 'user' | 'assistant'; content: string; created_at: string }>
+  > {
+    const rows = await this.msgRepo.find({
+      where: { conversationId },
+      order: { createdAt: 'ASC' },
+    });
+    return rows
+      .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
+      .map((r) => ({
+        id: r.id,
+        role: r.role as 'user' | 'assistant',
+        content: r.content,
+        created_at: r.createdAt.toISOString(),
+      }));
+  }
+
+  private buildResponse(
+    conversation: AiConversation,
+    messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; created_at: string }>,
+    evalRow: ScenarioEvaluation | null,
+    errorCode: EvaluationErrorCode | undefined,
+  ): ScenarioCompleteResponseDto {
+    const maxTurns = conversation.maxTurns ?? 12;
+    const response: ScenarioCompleteResponseDto = {
+      scenario: {
+        conversation_id: conversation.id,
+        max_turns: maxTurns,
+        turn: Math.floor(conversation.messageCount / 2),
+        status: conversation.status,
+      },
+      messages,
+      evaluation:
+        evalRow && evalRow.overallScore !== null
+          ? {
+              overall_score: evalRow.overallScore,
+              fluency_score: evalRow.fluencyScore ?? 0,
+              accuracy_score: evalRow.accuracyScore ?? 0,
+              vocab_score: evalRow.vocabScore ?? 0,
+              strengths: evalRow.strengths,
+              improvements: evalRow.improvements,
+              summary: evalRow.summary ?? '',
+              vocab_usage: (evalRow.vocabUsage ?? []) as Array<{
+                vocab_id: string;
+                word: string;
+                used: boolean;
+              }>,
+            }
+          : null,
+    };
+
+    if (errorCode) {
+      response.evaluation_error = errorCode;
+    }
+
+    return response;
+  }
+}

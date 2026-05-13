@@ -15,4 +15,5 @@ export enum LangfuseFeature {
   PERSONALIZATION_CHAT = 'personalization-chat',
   PERSONALIZATION_EXTRACTION = 'personalization-extraction',
   PERSONALIZATION_SCENARIOS = 'personalization-scenarios',
+  SCENARIO_EVALUATION = 'scenario-evaluation',
 }

@@ -216,6 +216,9 @@ export class ScenarioChatService {
     const turnAfter = Math.floor(conversation.messageCount / 2);
     const hardEnd = turnAfter >= maxTurns;
     conversation.status = isEnd || hardEnd ? ScenarioChatStatus.DONE : ScenarioChatStatus.CHATTING;
+    if (conversation.status === ScenarioChatStatus.DONE && !conversation.completedAt) {
+      conversation.completedAt = new Date();
+    }
     await this.convoRepo.save(conversation);
 
     // 12. Fire-and-forget vocab usage tracking

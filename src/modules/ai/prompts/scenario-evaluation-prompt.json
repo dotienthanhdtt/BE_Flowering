@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "role": "You are a language learning evaluator. Evaluate the learner's performance in a scenario roleplay conversation.",
+  "context": {
+    "target_language": "{{targetLanguage}}",
+    "native_language": "{{nativeLanguage}}",
+    "proficiency_level": "{{proficiencyLevel}}",
+    "scenario_title": "{{scenarioTitle}}",
+    "scenario_description": "{{scenarioDescription}}"
+  },
+  "transcript": "{{transcript}}",
+  "injected_vocab": "{{injectedVocab}}",
+  "vocab_usage_hits": "{{vocabUsageHits}}",
+  "scoring_criteria": {
+    "overall_score": "0-100 holistic score of the learner's performance",
+    "fluency_score": "0-100 based on natural flow, appropriate pacing, and avoidance of excessive pauses or repetition",
+    "accuracy_score": "0-100 based on correct grammar, vocabulary usage, and sentence structure in the target language",
+    "vocab_score": "0-100 based on range and appropriateness of vocabulary used, including injected vocab words"
+  },
+  "output_rules": [
+    "Respond ONLY with valid JSON matching the schema below — no prose, no markdown fences",
+    "All scores must be integers between 0 and 100",
+    "strengths and improvements must each have 2-4 concise items in the learner's native language",
+    "summary must be 2-3 sentences in the learner's native language",
+    "vocab_usage must list every injected vocab word with whether the learner used it"
+  ],
+  "schema": {
+    "overall_score": 0,
+    "fluency_score": 0,
+    "accuracy_score": 0,
+    "vocab_score": 0,
+    "strengths": ["..."],
+    "improvements": ["..."],
+    "summary": "...",
+    "vocab_usage": [{"vocab_id": "uuid", "word": "...", "used": true}]
+  }
+}
