@@ -1,6 +1,6 @@
 # Codebase Summary
 
-**Last Updated:** 2026-05-11
+**Last Updated:** 2026-05-13
 **Generated from:** repomix-output.xml (auto-generated 2026-04-21)
 
 ## Overview
@@ -15,7 +15,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - **Database Entities:** 21 TypeORM entities + 5 enums (AccessTier, ContentStatus, ScenarioType, UserRole, AiConversationType)
 - **Migrations:** 37 versioned migrations (1615238400000–1781100000000)
 - **API Endpoints:** 55+ REST endpoints + 1 SSE stream across all modules
-- **External Integrations:** 7 (Railway PostgreSQL + S3, RevenueCat, OpenAI, Anthropic, Google AI, Langfuse, Firebase)
+- **External Integrations:** 8 (Railway PostgreSQL + S3, RevenueCat, OpenAI, Anthropic, Google AI, 9router AI gateway, Langfuse, Firebase)
 
 ## Tech Stack
 
@@ -60,7 +60,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - JWT HS256 (7d expiry)
 - Firebase Admin SDK for ID token verification
 
-### 2. AI Module (~30 files, ~2,200 LOC)
+### 2. AI Module (~31 source files + specs, ~2,400 LOC)
 
 **Purpose:** Multi-provider LLM integration via LangChain with Langfuse tracing + Speech-to-Text (STT) transcription
 
@@ -71,17 +71,18 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - POST /ai/translate (word/sentence translation, public + optional premium)
 - POST /ai/transcribe (audio to text transcription, premium-only, multipart/form-data)
 
-**Supported Models:** GPT-4o, GPT-4o-mini, GPT-4.1-nano, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash
+**Supported Models:** GPT-4o, GPT-4o-mini, GPT-4.1-nano, Claude 3.5 Sonnet, Claude 3 Haiku, Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro/Flash, `flowering_chat` (9router server-side alias)
 
 **Rate Limiting:** 20 req/min, 100 req/hr per user
 
 **Key Features:**
-- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini for LLM)
+- Multi-provider strategy pattern (OpenAI, Anthropic, Gemini, 9router gateway for LLM)
+- 9router (`flowering_chat` alias) powers scenario roleplay chat, anonymous onboarding chat turns, and sentence translation — each with a transparent one-shot Gemini fallback on `ServiceUnavailableException`
 - STT providers (OpenAI Whisper primary, Gemini multimodal fallback)
 - Prompts stored as markdown in prompts/ directory (9 templates)
 - Langfuse tracing with per-invocation handlers and explicit flushAsync
 - Async processing for long-running tasks
-- Translation service (word/sentence) with vocabulary storage
+- Translation service: word/chunk translation on GPT-4.1-nano; sentence translation routes through 9router (`flowering_chat`) with Gemini fallback; vocabulary storage
 - Correction check endpoint with context awareness, ignores punctuation/capitalization
 - Transcription service with audio persistence (Railway S3-compatible bucket) and multi-provider fallback
 - **Signed URLs for private audio bucket:** STT outputs persisted to object storage; presigned URLs (1h expiry) returned to mobile for secure access
@@ -92,7 +93,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Max file size: 10MB
 - Supported formats: M4A, MP4, MPEG, WAV
 
-### 3. Onboarding Module (11 files, ~1,309 LOC)
+### 3. Onboarding Module (13 files, ~1,350 LOC)
 
 **Purpose:** Anonymous session-based chat for new users
 
@@ -102,10 +103,10 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - GET /onboarding/conversations/:conversationId/messages (fetch transcript for resume UX)
 
 **Config:**
-- maxTurns: 10
-- model: GPT-4o-mini
+- maxTurns: 8
+- model: `flowering_chat` (9router gateway) for per-turn chat, with one-shot fallback to `gemini-3.1-flash-lite-preview` on `ServiceUnavailableException`; profile extraction + scenario generation stay on Gemini
 - maxTokens: 1024
-- temperature: 0.7
+- temperature: 0
 
 **Rate Limiting (OnboardingThrottlerGuard):**
 - New session creation (no conversationId): 5 req/hr per IP
@@ -200,6 +201,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Features:**
 - Turn-based roleplay conversations with configurable max turns (default: 10)
+- Per-turn chat runs on 9router (`flowering_chat`) with one-shot Gemini fallback on `ServiceUnavailableException`
 - AI-initiated first turn (omit message parameter)
 - Conversation resumption via conversation_id
 - Premium access control (free users blocked from premium scenarios)
@@ -624,7 +626,7 @@ npm run build
 
 **Auth:** passport, passport-jwt, firebase-admin, bcrypt
 
-**AI:** langchain, @langchain/core, @langchain/openai, @langchain/anthropic, @langchain/google-genai, openai, langfuse-langchain
+**AI:** langchain, @langchain/core, @langchain/openai (also used for the OpenAI-compatible 9router gateway), @langchain/anthropic, @langchain/google-genai, openai, langfuse-langchain, @langfuse/otel, @opentelemetry/sdk-node
 
 **Services:** firebase-admin, nodemailer
 
@@ -633,7 +635,7 @@ npm run build
 
 ## Monitoring & Observability
 
-**Langfuse:** All AI requests traced with prompt, response, model, tokens, latency. Fresh CallbackHandler per invocation with explicit await handler.flushAsync() in finally blocks to ensure output flushing across all 3 LLM providers (OpenAI, Anthropic, Gemini).
+**Langfuse:** All AI requests traced with prompt, response, model, tokens, latency. Fresh CallbackHandler per invocation with explicit await handler.flushAsync() in finally blocks to ensure output flushing across all 4 LLM providers (OpenAI, Anthropic, Gemini, 9router). Wired via the `@langfuse/otel` SpanProcessor on `@opentelemetry/sdk-node` in `src/instrument.ts` (no Sentry — 5xx errors log to stdout, captured by Railway log streaming).
 
 **HTTP Logger:** Logs all incoming requests and outgoing responses
 

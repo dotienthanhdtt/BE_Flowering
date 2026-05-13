@@ -6,21 +6,21 @@ NestJS-based backend API for AI-powered language learning applications. Supports
 
 - **Authentication** - Email/password, Google OAuth, Apple Sign-In with JWT
 - **AI Learning** - Chat tutoring, grammar checks, exercise generation, pronunciation assessment
-- **Multi-LLM Support** - OpenAI GPT-4, Anthropic Claude, Google Gemini
+- **Multi-LLM Support** - OpenAI GPT-4, Anthropic Claude, Google Gemini, 9router AI gateway (`flowering_chat` alias powers scenario/onboarding chat + sentence translation, with Gemini fallback)
 - **Subscriptions** - RevenueCat integration for iOS/Android/Web
 - **Push Notifications** - Firebase Cloud Messaging
-- **Database** - PostgreSQL via Supabase with Row-Level Security
-- **Observability** - Langfuse AI tracing, Sentry error tracking
+- **Database** - PostgreSQL (Railway; production on Supabase) with Row-Level Security
+- **Observability** - Langfuse AI tracing; 5xx errors logged to stdout (captured by Railway log streaming)
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Framework | NestJS 11.0, TypeScript 5.7 |
-| Database | PostgreSQL 14+ (Supabase), TypeORM 0.3.28 |
+| Database | PostgreSQL 18 (Railway; production on Supabase), TypeORM 0.3.28 |
 | Auth | JWT, Passport.js, bcrypt |
-| AI | LangChain, OpenAI, Anthropic, Google AI |
-| External | RevenueCat, Firebase Admin SDK |
+| AI | LangChain, OpenAI, Anthropic, Google AI, 9router gateway |
+| External | RevenueCat, Firebase Admin SDK, AWS S3 SDK (Railway S3-compatible bucket) |
 | Docs | Swagger/OpenAPI |
 
 ## Quick Start
@@ -99,13 +99,14 @@ OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_AI_API_KEY=AIza...
 
+# 9router AI gateway (optional — scenario/onboarding chat + sentence translation fall back to Gemini if unset)
+NINEROUTER_URL=https://9router-dev.up.railway.app
+NINEROUTER_KEY=...
+
 # AI Observability (Langfuse)
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_HOST=https://cloud.langfuse.com
-
-# Error Tracking (Sentry)
-SENTRY_DSN=https://...@sentry.io/...
 ```
 
 ## API Overview
@@ -315,8 +316,8 @@ npm run start:prod
 
 ## Monitoring
 
-- **Error Tracking:** Sentry (optional, via `SENTRY_DSN`)
-- **AI Observability:** Langfuse (optional, tracks prompts/responses/tokens)
+- **Error Tracking:** 5xx exceptions logged to stdout/console (captured by Railway log streaming)
+- **AI Observability:** Langfuse (optional, tracks prompts/responses/tokens; wired via `@langfuse/otel` SpanProcessor in `src/instrument.ts`)
 - **Application Logs:** NestJS Logger with contextual information
 
 ## Security Best Practices
