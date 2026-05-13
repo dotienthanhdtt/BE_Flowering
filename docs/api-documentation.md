@@ -1,6 +1,6 @@
 # API Documentation
 
-**Last Updated:** 2026-04-27
+**Last Updated:** 2026-05-13
 **Base URL:** `http://localhost:3000` (development)
 **API Version:** 2.0.0
 
@@ -558,6 +558,89 @@ Fetch conversation transcript (owner only, chronological). **Auth:** Required | 
 **Response Details:**
 - Same response shape as `POST /scenario/chat`
 - Messages ordered chronologically (oldest first)
+
+---
+
+#### POST /scenario/complete
+Finalize a scenario conversation: flip status to DONE, run LLM evaluation (optional), persist evaluation result, trigger personalization. **Auth:** Required (Premium) | **Header:** `X-Learning-Language: <code>` (required) | **Rate Limit:** 30 req/min (`scenario-complete` bucket) | **Request:**
+```json
+{
+  "scenario_id": "uuid",
+  "conversation_id": "uuid"
+}
+```
+
+**Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "scenario": {
+      "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
+      "max_turns": 12,
+      "turn": 10,
+      "status": "DONE"
+    },
+    "messages": [
+      {
+        "id": "660e8400-e29b-41d4-a716-446655440001",
+        "role": "assistant",
+        "content": "Welcome to the restaurant scenario!",
+        "created_at": "2026-04-25T10:00:00.000Z"
+      }
+    ],
+    "evaluation": {
+      "overall_score": 82,
+      "fluency_score": 80,
+      "accuracy_score": 85,
+      "vocab_score": 78,
+      "strengths": ["Good pronunciation", "Natural pacing"],
+      "improvements": ["More complex sentence structures"],
+      "summary": "Strong conversational performance with room for advanced vocabulary"
+    },
+    "evaluation_error": null
+  }
+}
+```
+
+**Behavior:**
+- Marks conversation status as DONE (idempotent via UNIQUE constraint on conversation_id)
+- Runs synchronous LLM evaluation against transcript + injected vocabulary
+- Evaluation fields included only if assessment succeeds; on LLM failure, `evaluation: null` and `evaluation_error` contains reason
+- Triggers personalization rules (AI scenario generation, profile updates) on success
+- Supports IDOR protection: caller must own the conversation
+- Returns 200 + `evaluation: null, evaluation_error: 'timeout'` if LLM times out (15s limit)
+
+**Evaluation Whitelist (response only):**
+- `overall_score` (0–100)
+- `fluency_score` (0–100)
+- `accuracy_score` (0–100)
+- `vocab_score` (0–100)
+- `strengths` (string array)
+- `improvements` (string array)
+- `summary` (string)
+
+Internal fields (`model_used`, `prompt_version`, `user_id`, etc.) excluded from response.
+
+**Error Cases:**
+- 400 (Bad Request): Missing or invalid UUIDs
+- 401 (Unauthorized): Missing/invalid JWT token
+- 403 (Forbidden): Caller does not own the conversation
+- 404 (Not Found): Conversation or scenario not found
+- 500: Rare; LLM provider outage (unlikely with async retry fallback)
+
+**Example cURL:**
+```bash
+curl -X POST http://localhost:3000/scenario/complete \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "X-Learning-Language: es" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenario_id": "550e8400-e29b-41d4-a716-446655440000",
+    "conversation_id": "550e8400-e29b-41d4-a716-446655440001"
+  }'
+```
 
 ---
 
