@@ -10,7 +10,6 @@ import {
 } from '../helpers/personal-scenario-builder';
 
 interface RawScenarioJson {
-  id?: string;
   title?: string;
   description?: string;
 }
@@ -56,7 +55,6 @@ export class OnboardingMaterializationService {
 
       const partials = (raw as RawScenarioJson[])
         .map((s, index) => ({
-          id: typeof s?.id === 'string' && s.id.length > 0 ? s.id : undefined,
           title: typeof s?.title === 'string' ? s.title : '',
           description: typeof s?.description === 'string' ? s.description : undefined,
           ownerId: userId,
@@ -71,7 +69,7 @@ export class OnboardingMaterializationService {
         return;
       }
 
-      // INSERT ... ON CONFLICT (id) DO NOTHING — never overwrite existing rows (cross-user safety)
+      // orIgnore — silently drops conflicts if DB constraint violated (safety net)
       await this.scenarioRepo
         .createQueryBuilder()
         .insert()

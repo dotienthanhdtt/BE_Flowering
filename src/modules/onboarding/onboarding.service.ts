@@ -4,7 +4,6 @@ import { FrameworkLevelsService } from '../../common/services/framework-levels.s
 import { OnboardingScenarioDto } from './dto/onboarding-scenario.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { randomUUID } from 'crypto';
 import { AiConversation } from '../../database/entities';
 import { AiConversationType } from '../../database/entities/ai-conversation.entity';
 import { Language } from '../../database/entities/language.entity';
@@ -87,7 +86,7 @@ export class OnboardingService {
       ? await this.languageRepo.findOne({ where: { id: conversation.languageId } })
       : null;
 
-    // Cache hit: return previously extracted profile + scenarios to keep UUIDs stable
+    // Cache hit: return previously extracted profile + scenarios
     if (
       conversation.extractedProfile &&
       Array.isArray(conversation.scenarios) &&
@@ -170,7 +169,6 @@ export class OnboardingService {
     }
 
     return parsed.map((s) => ({
-      id: typeof s.id === 'string' && s.id.length > 0 ? s.id : randomUUID(),
       title: String(s.title ?? ''),
       description: String(s.description ?? ''),
     }));

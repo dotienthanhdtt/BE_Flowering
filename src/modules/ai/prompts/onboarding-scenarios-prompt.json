@@ -9,7 +9,6 @@
       "All scenario content must be in English"
     ],
     "schema": {
-      "id": "A UUID v4 string uniquely identifying this scenario",
       "title": "Short scenario title, 5-8 words, in English",
       "description": "1-2 sentences describing a SPECIFIC situation with concrete details (names, places, numbers, items), in English"
     },

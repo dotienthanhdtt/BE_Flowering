@@ -288,11 +288,11 @@ describe('OnboardingService', () => {
       const conversation = makeConversation();
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish', currentLevel: 'A1' };
       const scenarios = [
-        { id: '1', title: 'Scenario 1', description: 'Desc 1' },
-        { id: '2', title: 'Scenario 2', description: 'Desc 2' },
-        { id: '3', title: 'Scenario 3', description: 'Desc 3' },
-        { id: '4', title: 'Scenario 4', description: 'Desc 4' },
-        { id: '5', title: 'Scenario 5', description: 'Desc 5' },
+        { title: 'Scenario 1', description: 'Desc 1' },
+        { title: 'Scenario 2', description: 'Desc 2' },
+        { title: 'Scenario 3', description: 'Desc 3' },
+        { title: 'Scenario 4', description: 'Desc 4' },
+        { title: 'Scenario 5', description: 'Desc 5' },
       ];
 
       engine.findConversation.mockResolvedValue(conversation);
@@ -322,8 +322,8 @@ describe('OnboardingService', () => {
       const conversation = makeConversation();
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
       const badScenarios = [
-        { id: '1', title: 'S1', description: 'D1' },
-        { id: '2', title: 'S2', description: 'D2' },
+        { title: 'S1', description: 'D1' },
+        { title: 'S2', description: 'D2' },
       ];
 
       engine.findConversation.mockResolvedValue(conversation);
@@ -335,36 +335,15 @@ describe('OnboardingService', () => {
       expect(result.scenarios).toHaveLength(2);
     });
 
-    it('returns scenarios with UUIDs from engine', async () => {
-      const conversation = makeConversation();
-      const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
-      const scenarios = [
-        { id: '00000000-0000-0000-0000-000000000001', title: 'S1', description: 'D1' },
-        { id: '00000000-0000-0000-0000-000000000002', title: 'S2', description: 'D2' },
-        { id: '00000000-0000-0000-0000-000000000003', title: 'S3', description: 'D3' },
-        { id: '00000000-0000-0000-0000-000000000004', title: 'S4', description: 'D4' },
-        { id: '00000000-0000-0000-0000-000000000005', title: 'S5', description: 'D5' },
-      ];
-
-      engine.findConversation.mockResolvedValue(conversation);
-      engine.completeAndGenerate.mockResolvedValue({ profile, generated: scenarios });
-
-      const result = await service.complete({ conversationId: 'conv-1' });
-
-      result.scenarios.forEach((s: { id: string }, i: number) => {
-        expect(s.id).toBe(scenarios[i].id);
-      });
-    });
-
-    it('returns scenarios with id, title, description fields only', async () => {
+    it('returns scenarios with title and description from engine', async () => {
       const conversation = makeConversation();
       const profile = { nativeLanguage: 'English', targetLanguage: 'Spanish' };
       const scenariosFromEngine = [
-        { id: '1', title: 'S1', description: 'D1' },
-        { id: '2', title: 'S2', description: 'D2' },
-        { id: '3', title: 'S3', description: 'D3' },
-        { id: '4', title: 'S4', description: 'D4' },
-        { id: '5', title: 'S5', description: 'D5' },
+        { title: 'S1', description: 'D1' },
+        { title: 'S2', description: 'D2' },
+        { title: 'S3', description: 'D3' },
+        { title: 'S4', description: 'D4' },
+        { title: 'S5', description: 'D5' },
       ];
 
       engine.findConversation.mockResolvedValue(conversation);

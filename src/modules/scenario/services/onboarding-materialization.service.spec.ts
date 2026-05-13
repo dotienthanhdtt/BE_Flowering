@@ -10,11 +10,11 @@ const makeConversation = (overrides: Partial<AiConversation> = {}): AiConversati
     id: 'conv-uuid',
     languageId: 'lang-en',
     scenarios: [
-      { id: 'sc-1', title: 'Scenario One', description: 'Desc 1' },
-      { id: 'sc-2', title: 'Scenario Two', description: 'Desc 2' },
-      { id: 'sc-3', title: 'Scenario Three', description: 'Desc 3' },
-      { id: 'sc-4', title: 'Scenario Four', description: 'Desc 4' },
-      { id: 'sc-5', title: 'Scenario Five', description: 'Desc 5' },
+      { title: 'Scenario One', description: 'Desc 1' },
+      { title: 'Scenario Two', description: 'Desc 2' },
+      { title: 'Scenario Three', description: 'Desc 3' },
+      { title: 'Scenario Four', description: 'Desc 4' },
+      { title: 'Scenario Five', description: 'Desc 5' },
     ],
     ...overrides,
   }) as unknown as AiConversation;
