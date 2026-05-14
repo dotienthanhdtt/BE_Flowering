@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { FirebaseAdminService } from '../../../common/services/firebase-admin.service';
 
 export type OAuthProvider = 'google' | 'apple';
@@ -15,9 +15,14 @@ export interface FirebaseAuthUser {
 
 @Injectable()
 export class FirebaseTokenStrategy {
+  private readonly logger = new Logger(FirebaseTokenStrategy.name);
+
   constructor(private firebaseAdmin: FirebaseAdminService) {}
 
   async validate(idToken: string): Promise<FirebaseAuthUser> {
+    if (!idToken || typeof idToken !== 'string') {
+      throw new UnauthorizedException('Missing Firebase ID token');
+    }
     try {
       const decoded = await this.firebaseAdmin.auth.verifyIdToken(idToken);
 
@@ -53,7 +58,15 @@ export class FirebaseTokenStrategy {
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
-      throw new UnauthorizedException('Invalid Firebase ID token');
+      const code = (error as { code?: string; errorInfo?: { code?: string } })?.errorInfo?.code
+        ?? (error as { code?: string })?.code;
+      const message = (error as Error)?.message;
+      this.logger.warn(
+        `verifyIdToken failed: code=${code ?? 'unknown'} message=${message ?? 'unknown'}`,
+      );
+      // Surface the Firebase error code so clients can react (e.g. refresh on expired).
+      const reason = code ?? 'verification-failed';
+      throw new UnauthorizedException(`Invalid Firebase ID token (${reason})`);
     }
   }
 }
