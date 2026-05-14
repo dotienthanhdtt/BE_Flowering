@@ -23,6 +23,12 @@ export class FirebaseTokenStrategy {
     if (!idToken || typeof idToken !== 'string') {
       throw new UnauthorizedException('Missing Firebase ID token');
     }
+    if (!this.firebaseAdmin.isInitialized) {
+      this.logger.error(
+        'Firebase Admin SDK not initialized — check FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY env vars',
+      );
+      throw new UnauthorizedException('Invalid Firebase ID token (admin-not-initialized)');
+    }
     try {
       const decoded = await this.firebaseAdmin.auth.verifyIdToken(idToken);
 

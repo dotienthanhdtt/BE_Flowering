@@ -9,7 +9,11 @@ export class FirebaseAdminService implements OnModuleInit {
 
   constructor(private configService: ConfigService<AppConfiguration>) {}
 
-  private initialized = false;
+  private _initialized = false;
+
+  get isInitialized(): boolean {
+    return this._initialized;
+  }
 
   onModuleInit() {
     const projectId = this.configService.get('firebase.projectId', { infer: true });
@@ -31,7 +35,7 @@ export class FirebaseAdminService implements OnModuleInit {
           credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
         });
       }
-      this.initialized = true;
+      this._initialized = true;
       this.logger.log('Firebase Admin SDK initialized');
     } catch (error) {
       this.logger.error(
@@ -42,7 +46,7 @@ export class FirebaseAdminService implements OnModuleInit {
   }
 
   get auth() {
-    if (!this.initialized) {
+    if (!this._initialized) {
       throw new Error('Firebase Admin SDK not initialized — check credentials');
     }
     return admin.auth();
