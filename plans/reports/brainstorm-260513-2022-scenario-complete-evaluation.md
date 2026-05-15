@@ -204,6 +204,5 @@ Each dimension 0-100. Plus `strengths[]`, `improvements[]`, `summary`, `vocab_us
 
 ---
 
-## Next Steps
-
+## Next Step
 Invoke `/ck:plan` with this brainstorm as context to generate phased implementation plan under `plans/260513-2022-scenario-complete-evaluation/`.
