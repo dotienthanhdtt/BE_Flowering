@@ -119,6 +119,21 @@ npm run start:dev          # hot-reload dev server on :3000
 # or: npm run build && npm run start:prod
 ```
 
+## Migrations on deploy
+
+Migrations run **automatically** on container start, before the app boots. The Dockerfile
+`CMD` (and `Procfile`) chains `typeorm migration:run` → `node dist/main`. If a migration
+fails, the container exits non-zero and Railway marks the deploy failed (no traffic is
+routed to a half-migrated app).
+
+- **Adding a migration**: `npm run migration:generate -- src/database/migrations/<name>`,
+  commit, push. Deploy runs it automatically.
+- **Never run `migration:run` manually against prod.** The deploy pipeline is the only
+  caller.
+- **Production runtime uses compiled JS** (`dist/database/typeorm-data-source.js`); local
+  dev still uses ts-node via `npm run migration:run`. The data source resolves
+  entity/migration globs relative to `__dirname` so both paths work.
+
 ## Rollback (Railway)
 
 Use the Railway dashboard → service → Deployments → pick a previous successful deploy →

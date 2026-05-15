@@ -23,4 +23,4 @@ COPY --from=build --chown=app:app /app/dist ./dist
 COPY --from=build --chown=app:app /app/package.json ./package.json
 USER app
 EXPOSE 3000
-CMD ["node", "dist/main"]
+CMD ["sh", "-c", "node node_modules/typeorm/cli.js migration:run -d dist/database/typeorm-data-source.js && node dist/main"]
