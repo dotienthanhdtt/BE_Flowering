@@ -57,15 +57,18 @@ export class AddLanguageIdAndSlugToScenarioCategories1781400000000 implements Mi
     `);
 
     // 5. Backfill scenarios.category_id to language-matched clones
+    // Note: Postgres UPDATE...FROM does not allow referencing the target table (s)
+    // inside a JOIN ON clause — the join is evaluated before correlation with target.
+    // Hence s.language_id must live in the outer WHERE.
     await queryRunner.query(`
       UPDATE scenarios s
          SET category_id = new_cat.id
         FROM scenario_categories old_cat
         JOIN scenario_categories new_cat
           ON new_cat.slug = old_cat.slug
-         AND new_cat.language_id = s.language_id
        WHERE s.category_id = old_cat.id
          AND old_cat.language_id IS NULL
+         AND new_cat.language_id = s.language_id
     `);
 
     // 6. Delete old global rows
