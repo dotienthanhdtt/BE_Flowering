@@ -10,6 +10,7 @@ export interface PersonalScenarioInput {
   description?: string;
   ownerId: string;
   languageId: string;
+  categoryId?: string;
   orderIndex?: number;
   accessTier?: AccessTier;
 }
@@ -22,6 +23,7 @@ export function buildPersonalScenarioPartial(input: PersonalScenarioInput): Part
     type: ScenarioType.PERSONAL,
     ownerId: input.ownerId,
     languageId: input.languageId,
+    ...(input.categoryId ? { categoryId: input.categoryId } : {}),
     title,
     ...(description !== undefined ? { description } : {}),
     status: ContentStatus.PUBLISHED,

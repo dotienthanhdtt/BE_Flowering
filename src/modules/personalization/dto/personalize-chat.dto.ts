@@ -11,4 +11,9 @@ export class PersonalizeChatDto {
   @IsOptional()
   @IsString()
   message?: string;
+
+  @ApiProperty({ required: false, description: 'Scenario that triggered this personalization offer' })
+  @IsOptional()
+  @IsUUID()
+  sourceScenarioId?: string;
 }

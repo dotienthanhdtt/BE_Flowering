@@ -184,9 +184,12 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Pagination with total count
 
 **Entities:**
-- ScenarioCategory: Groups scenarios by topic/category
-- Scenario: Learning content with premium flags and lifecycle status
+- ScenarioCategory: Language-scoped categories grouping scenarios by topic (includes reserved `for_you` per language)
+- Scenario: Learning content with premium flags, lifecycle status, and category assignment
 - UserScenarioAccess: Grants specific users access to scenarios
+
+**Listing:**
+- `GET /scenarios` returns all visible scenarios (system + KOL + personal) grouped by language-scoped category, sorted by recency within each category, with empty categories hidden
 
 ### 9. Scenario Chat Module (7 files, ~600 LOC)
 
@@ -356,10 +359,13 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 ### ScenarioCategory Entity
 - `id` - UUID primary key
 - `name` - String (max 100, e.g., "Greetings", "Food")
+- `slug` - String (max 64, kebab-case identifier, e.g., "greetings", "for_you") — unique per `(language_id, slug)`
+- `language_id` - FK to Language (non-nullable, each category scoped to one language)
 - `icon` - Text (icon URL, nullable)
 - `order_index` - Integer for display ordering
 - `is_active` - Boolean (default: true)
 - Created/updated timestamps
+- **Note:** Every language has a reserved `for_you` category (slug='for_you', orderIndex=999) for personal/trigger-generated scenarios
 
 ### Scenario Entity
 - `id` - UUID primary key

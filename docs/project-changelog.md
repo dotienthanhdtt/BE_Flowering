@@ -1,9 +1,57 @@
 # Project Changelog
 
-**Last Updated:** 2026-05-13
+**Last Updated:** 2026-05-16
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-05-16 — Scenarios Grouped by Category (Per-Language)
+
+### Added
+
+- **Language-Scoped Categories** — `scenario_categories` now includes `slug` (kebab-case, e.g., "for_you", "restaurant") and `language_id` (FK to Language). Every language receives a reserved "For you" category (slug='for_you', orderIndex=999) for personal/trigger-generated scenarios.
+- **DB Trigger on Scenarios** (`scenarios_default_category`) — Auto-fills NULL `category_id` with the matching-language `for_you` category on INSERT or UPDATE. Raises exception if no `for_you` row exists for the scenario's language.
+- **Source Scenario Tracking** — `ai_conversations.source_scenario_id` (nullable FK) tracks which scenario triggered a personalization conversation, enabling category inheritance for generated personal scenarios.
+- **Unified Scenarios Endpoint** — `GET /scenarios` (replaces `/default` + `/personal`) returns all visible scenarios grouped by language-scoped category. Response shape: `{ items: [{ category: {id, name, slug, orderIndex}, scenarios: [{id, title, description?, imageUrl?, languageId, type, source, addedAt, locked?}] }], pagination: {page, limit, total} }`. Empty categories hidden. Categories sorted by `orderIndex ASC`; scenarios within each category by `COALESCE(grantedAt, addedAt) DESC`.
+
+### Breaking Changes
+
+- **GET /scenarios/default removed** — Use `GET /scenarios` instead
+- **GET /scenarios/personal removed** — Use `GET /scenarios` instead
+- **Scenario Categories** — Categories are now language-specific. Each language has its own category set cloned from globals. Old global categories deleted post-migration.
+- **Personalization scenarios** — Now stamped with explicit `category_id` at creation (onboarding → 'for_you'; trigger-flow → inherit source scenario's category or fallback to 'for_you'). No more NULL `category_id`.
+
+### Changed
+
+- **Scenario listing behavior:** Previously, `/default` + `/personal` endpoints returned separate lists. Now, `GET /scenarios` returns a single mixed-source grouped view with system, KOL, and personal scenarios in their assigned categories per language.
+- **Personal scenario generation:** Onboarding-origin → lands in `for_you` category. Trigger-origin (`PersonalizationOfferedEvent`) → inherits source scenario's `category_id` via `ai_conversations.source_scenario_id`.
+- **Category display order:** Categories sorted by `order_index`; within each category, scenarios sorted by recency (`COALESCE(grantedAt, addedAt) DESC`). Categories with zero visible scenarios omitted from response.
+
+### Database Migrations
+
+- **1780000000001-add-language-id-and-slug-to-scenario-categories.ts** — Adds `language_id` (FK) + `slug` columns, clones existing global categories per active language, backfills scenario category assignments, deletes global rows, enforces NOT NULL + UNIQUE(language_id, slug).
+- **1780000000002-seed-for-you-and-default-category-trigger.ts** — Seeds one `for_you` row per active language (with language-specific translations). Creates PL/pgSQL trigger `scenarios_default_category` that auto-fills NULL category_id on INSERT/UPDATE.
+- **1780000000003-add-source-scenario-id-to-ai-conversations.ts** — Adds nullable `source_scenario_id` (FK to Scenario) with ON DELETE SET NULL.
+- **1780000000004-backfill-null-category-id-on-scenarios.ts** — Backfills remaining NULL `category_id` to per-language `for_you` category (primarily legacy personal + KOL scenarios).
+
+### Documentation Impact
+
+- `api-documentation.md` — Replaced `/default` + `/personal` sections with unified `GET /scenarios` endpoint + response shape
+- `codebase-summary.md` — Updated ScenarioCategory entity to include `slug`, `language_id`, and per-language 'for_you' note; noted unified listing behavior
+- `project-changelog.md` — This entry
+
+### Testing
+
+- Unit tests updated for `scenarios-listing.service` (covers `listGrouped`, category sorting, empty-category hiding, lock semantics, KOL merging)
+- Personalization specs updated for `resolveCategoryId` branches (onboarding → 'for_you', trigger with valid source → inherit, fallback on cross-lang/missing source, error on missing 'for_you' seed)
+- Integration tests verify: grouped endpoint, category ordering, recency sorting, language-scoped filtering, empty category hiding, premium lock stubs
+
+### Migration Path for Clients
+
+- **Mobile:** Hard cut required — coordinate app version gate with this server release. Old endpoint hits return 404.
+- **Post-Release:** Monitor /scenarios usage; confirm client receives grouped response and renders categories correctly.
+
+---
 
 ## 2026-05-13 — Onboarding → Personal Scenarios Materialization
 

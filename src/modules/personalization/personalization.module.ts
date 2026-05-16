@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiConversation, AiConversationMessage, User } from '@/database/entities';
 import { Scenario } from '@/database/entities/scenario.entity';
+import { ScenarioCategory } from '@/database/entities/scenario-category.entity';
 import { AiModule } from '@/modules/ai/ai.module';
 import { LanguageModule } from '@/modules/language/language.module';
 import { SubscriptionModule } from '@/modules/subscription/subscription.module';
@@ -14,7 +15,7 @@ import { PersonalizationTriggerService } from './services/personalization-trigge
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AiConversation, AiConversationMessage, Scenario, User]),
+    TypeOrmModule.forFeature([AiConversation, AiConversationMessage, Scenario, ScenarioCategory, User]),
     AiModule,
     LanguageModule,
     SubscriptionModule,

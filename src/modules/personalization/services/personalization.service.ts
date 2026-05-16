@@ -1,6 +1,7 @@
 import {
   Injectable,
   ForbiddenException,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   BadRequestException,
@@ -10,6 +11,7 @@ import { Repository } from 'typeorm';
 import { AiConversation } from '@/database/entities/ai-conversation.entity';
 import { MessageRole } from '@/database/entities';
 import { Scenario } from '@/database/entities/scenario.entity';
+import { ScenarioCategory } from '@/database/entities/scenario-category.entity';
 import { User } from '@/database/entities/user.entity';
 import {
   buildPersonalScenarioPartial,
@@ -51,6 +53,8 @@ export class PersonalizationService {
     private readonly conversationRepo: Repository<AiConversation>,
     @InjectRepository(Scenario)
     private readonly scenarioRepo: Repository<Scenario>,
+    @InjectRepository(ScenarioCategory)
+    private readonly categoryRepo: Repository<ScenarioCategory>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly engine: IntakeChatEngine,
@@ -77,7 +81,9 @@ export class PersonalizationService {
       throw new ForbiddenException('Personalization requires a premium subscription');
     }
 
-    const conversationId = dto.conversationId ?? (await this.startConversation(userId, languageId));
+    const conversationId =
+      dto.conversationId ??
+      (await this.startConversation(userId, languageId, dto.sourceScenarioId));
     const langCtx = await this.loadLanguageContext(userId, languageId);
 
     const result = await this.engine.runTurn(
@@ -98,7 +104,7 @@ export class PersonalizationService {
     languageId: string,
     dto: PersonalizeCompleteDto,
   ): Promise<CompleteResult> {
-    await this.assertConversationOwnership(userId, dto.conversationId);
+    const conversation = await this.assertConversationOwnership(userId, dto.conversationId);
 
     const quotaDecision = await this.quota.checkQuota(userId);
     if (!quotaDecision.allowed) {
@@ -136,12 +142,15 @@ export class PersonalizationService {
     }
 
     // Generate and persist scenarios
-    const langCtx = await this.loadLanguageContext(userId, languageId);
+    const [langCtx, categoryId] = await Promise.all([
+      this.loadLanguageContext(userId, languageId),
+      this.resolveCategoryId(conversation, languageId),
+    ]);
     const generated = await this.engine.generateOutputs(
       { ...profile, targetLanguage: langCtx.targetLanguage },
       dto.conversationId,
       personalizationEngineConfig,
-      (raw) => this.parseScenarios(raw, userId, languageId),
+      (raw) => this.parseScenarios(raw, userId, languageId, categoryId),
     );
 
     const saved = await this.scenarioRepo.save(generated);
@@ -192,23 +201,54 @@ export class PersonalizationService {
     );
   }
 
-  private async startConversation(userId: string, languageId: string): Promise<string> {
+  private async startConversation(
+    userId: string,
+    languageId: string,
+    sourceScenarioId?: string,
+  ): Promise<string> {
     const conversation = this.conversationRepo.create({
       userId,
       languageId,
       type: AiConversationType.PERSONALIZE_INTAKE,
       title: 'Personalization Chat',
+      ...(sourceScenarioId ? { sourceScenarioId } : {}),
     });
     const saved = await this.conversationRepo.save(conversation);
     return saved.id;
   }
 
-  private async assertConversationOwnership(userId: string, conversationId: string): Promise<void> {
+  private async resolveCategoryId(
+    conversation: AiConversation,
+    languageId: string,
+  ): Promise<string> {
+    if (conversation.sourceScenarioId) {
+      const source = await this.scenarioRepo.findOne({
+        where: { id: conversation.sourceScenarioId },
+        select: ['id', 'categoryId', 'languageId'],
+      });
+      if (source?.categoryId && source.languageId === languageId) {
+        return source.categoryId;
+      }
+    }
+    const forYou = await this.categoryRepo.findOne({
+      where: { languageId, slug: 'for_you', isActive: true },
+    });
+    if (!forYou) {
+      throw new InternalServerErrorException(`Missing for_you category for language ${languageId}`);
+    }
+    return forYou.id;
+  }
+
+  private async assertConversationOwnership(
+    userId: string,
+    conversationId: string,
+  ): Promise<AiConversation> {
     const conversation = await this.conversationRepo.findOne({
       where: { id: conversationId, type: AiConversationType.PERSONALIZE_INTAKE },
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.userId !== userId) throw new ForbiddenException();
+    return conversation;
   }
 
   private async loadLanguageContext(
@@ -230,7 +270,12 @@ export class PersonalizationService {
     };
   }
 
-  private parseScenarios(raw: string, ownerId: string, languageId: string): Partial<Scenario>[] {
+  private parseScenarios(
+    raw: string,
+    ownerId: string,
+    languageId: string,
+    categoryId?: string,
+  ): Partial<Scenario>[] {
     try {
       const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
       const jsonStr = jsonMatch ? jsonMatch[1].trim() : raw.trim();
@@ -248,6 +293,7 @@ export class PersonalizationService {
           description: s.description ? String(s.description) : undefined,
           ownerId,
           languageId,
+          categoryId,
         }))
         .filter((input) => isValidPersonalScenarioInput(input))
         .map((input) => buildPersonalScenarioPartial(input));

@@ -58,6 +58,9 @@ describe('LessonService', () => {
   const mockCategory = (id: string = 'cat-1', name: string = 'Category 1'): ScenarioCategory => ({
     id,
     name,
+    slug: name.toLowerCase().replace(/\s+/g, '_'),
+    languageId: 'lang-en',
+    language: { id: 'lang-en', code: 'en', name: 'English', isActive: true, isNativeAvailable: true, isLearningAvailable: true },
     orderIndex: 0,
     isActive: true,
     createdAt: new Date(),

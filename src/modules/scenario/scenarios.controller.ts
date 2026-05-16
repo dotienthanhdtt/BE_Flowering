@@ -19,10 +19,8 @@ import {
   SkipLanguageContext,
 } from '@common/decorators/active-language.decorator';
 import { ListScenariosQueryDto } from './dto/list-scenarios-query.dto';
-import { ScenarioDefaultDto } from './dto/scenario-default.dto';
-import { ScenarioPersonalDto } from './dto/scenario-personal.dto';
+import { ListScenariosGroupedResponseDto } from './dto/list-scenarios-response.dto';
 import { RedeemScenarioDto, RedeemResponseDto } from './dto/redeem-scenario.dto';
-import { ListScenariosResponseDto } from './dto/list-scenarios-response.dto';
 import { ScenarioDetailDto } from './dto/scenario-detail.dto';
 import { ScenariosListingService } from './services/scenarios-listing.service';
 import { ScenariosRedeemService } from './services/scenarios-redeem.service';
@@ -44,32 +42,18 @@ export class ScenariosController {
     private readonly detailService: ScenariosDetailService,
   ) {}
 
-  @Get('default')
+  @Get()
   @AutoEnrollLanguage()
   @ApiHeader(LANGUAGE_HEADER)
-  @ApiOperation({ summary: 'List default scenarios for active language' })
-  @ApiResponse({ status: 200, type: ListScenariosResponseDto<ScenarioDefaultDto> })
+  @ApiOperation({ summary: 'List scenarios grouped by category for active language' })
+  @ApiResponse({ status: 200, type: ListScenariosGroupedResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  listDefault(
+  listGrouped(
     @CurrentUser() user: { id: string },
     @ActiveLanguage() lang: ActiveLanguageContext,
     @Query() query: ListScenariosQueryDto,
   ) {
-    return this.listingService.listDefault(user.id, lang.id, query.page, query.limit);
-  }
-
-  @Get('personal')
-  @AutoEnrollLanguage()
-  @ApiHeader(LANGUAGE_HEADER)
-  @ApiOperation({ summary: 'List personalized + KOL-granted scenarios' })
-  @ApiResponse({ status: 200, type: ListScenariosResponseDto<ScenarioPersonalDto> })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  listPersonal(
-    @CurrentUser() user: { id: string },
-    @ActiveLanguage() lang: ActiveLanguageContext,
-    @Query() query: ListScenariosQueryDto,
-  ) {
-    return this.listingService.listPersonal(user.id, lang.id, query.page, query.limit);
+    return this.listingService.listGrouped(user.id, lang.id, query.page, query.limit);
   }
 
   @Get(':id')

@@ -1,77 +1,51 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ScenariosListingService } from './scenarios-listing.service';
-import { ScenarioAccessService } from './scenario-access.service';
 import { SubscriptionService } from '../../subscription/subscription.service';
-import { Scenario } from '@/database/entities/scenario.entity';
 import { UserLanguage } from '@/database/entities/user-language.entity';
-import { ContentStatus } from '@/database/entities/content-status.enum';
 import { AccessTier } from '@/database/entities/access-tier.enum';
-import { ScenarioType } from '@/database/entities/scenario-type.enum';
 
-const mockScenario = (id: string, overrides?: Partial<Scenario>): Scenario =>
-  ({
-    id,
-    type: ScenarioType.SYSTEM,
-    title: `Scenario ${id}`,
-    description: `Description for ${id}`,
-    imageUrl: 'https://example.com/image.jpg',
-    languageId: 'lang-1',
-    orderIndex: 0,
-    categoryId: 'cat-1',
-    accessTier: AccessTier.FREE,
-    status: ContentStatus.PUBLISHED,
-    triggersPersonalization: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  }) as Scenario;
-
-const mockKolQueryBuilder = (entities: Scenario[] = [], raw: unknown[] = []) =>
-  ({
-    innerJoin: jest.fn().mockReturnThis(),
-    where: jest.fn().mockReturnThis(),
-    andWhere: jest.fn().mockReturnThis(),
-    addSelect: jest.fn().mockReturnThis(),
-    getRawAndEntities: jest.fn().mockResolvedValue({ entities, raw }),
-  }) as unknown as SelectQueryBuilder<Scenario>;
+const makeRow = (overrides: Partial<{
+  id: string; title: string; type: string; source: string;
+  cat_id: string; cat_name: string; cat_slug: string; cat_order: number;
+  access_tier: string; sort_at: Date; description: string; image_url: string;
+  language_id: string;
+}> = {}) => ({
+  id: 'scenario-1',
+  title: 'Test Scenario',
+  description: 'A description',
+  image_url: null,
+  language_id: 'lang-1',
+  access_tier: AccessTier.FREE,
+  type: 'system',
+  source: 'system',
+  sort_at: new Date('2026-04-01'),
+  cat_id: 'cat-1',
+  cat_name: 'Daily Life',
+  cat_slug: 'daily_life',
+  cat_order: 1,
+  ...overrides,
+});
 
 describe('ScenariosListingService', () => {
   let service: ScenariosListingService;
-  let scenarioRepo: jest.Mocked<Repository<Scenario>>;
-  let accessService: jest.Mocked<Pick<ScenarioAccessService, 'listPublicByType' | 'listPersonalForUser'>>;
+  let userLangRepo: { manager: { query: jest.Mock } };
   let subscriptionService: jest.Mocked<Pick<SubscriptionService, 'isUserPremium'>>;
 
   beforeEach(async () => {
+    const queryMock = jest.fn().mockImplementation((sql: string) => {
+      if (sql.trim().toUpperCase().startsWith('UPDATE')) return Promise.resolve();
+      return Promise.resolve([]);
+    });
+    userLangRepo = { manager: { query: queryMock } };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ScenariosListingService,
         {
-          provide: getRepositoryToken(Scenario),
-          useValue: {
-            findAndCount: jest.fn(),
-            find: jest.fn(),
-            createQueryBuilder: jest.fn(),
-          } as unknown as Repository<Scenario>,
-        },
-        {
           provide: getRepositoryToken(UserLanguage),
-          useValue: {
-            manager: {
-              transaction: jest.fn(async (cb: (mgr: unknown) => Promise<void>) => {
-                const repo = { update: jest.fn().mockResolvedValue({ affected: 1 }) };
-                await cb({ getRepository: () => repo });
-              }),
-            },
-          } as unknown as Repository<UserLanguage>,
-        },
-        {
-          provide: ScenarioAccessService,
-          useValue: {
-            listPublicByType: jest.fn(),
-            listPersonalForUser: jest.fn(),
-          },
+          useValue: userLangRepo as unknown as Repository<UserLanguage>,
         },
         {
           provide: SubscriptionService,
@@ -81,107 +55,118 @@ describe('ScenariosListingService', () => {
     }).compile();
 
     service = module.get(ScenariosListingService);
-    scenarioRepo = module.get(getRepositoryToken(Scenario));
-    accessService = module.get(ScenarioAccessService);
     subscriptionService = module.get(SubscriptionService);
   });
 
-  describe('listDefault', () => {
-    it('returns paginated items via ScenarioAccessService', async () => {
-      const scenarios = [mockScenario('s1', { orderIndex: 1 }), mockScenario('s2', { orderIndex: 2 })];
-      jest.spyOn(accessService, 'listPublicByType').mockResolvedValue({ items: scenarios, total: 2 });
+  describe('listGrouped', () => {
+    it('returns empty items when no visible scenarios', async () => {
+      userLangRepo.manager.query.mockResolvedValue([]);
 
-      const result = await service.listDefault('user-1', 'lang-1', 1, 10);
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 20);
 
-      expect(result.total).toBe(2);
+      expect(result.items).toHaveLength(0);
+      expect(result.pagination.total).toBe(0);
+    });
+
+    it('groups scenarios by category', async () => {
+      const rows = [
+        makeRow({ id: 's1', cat_id: 'cat-1', cat_name: 'Daily Life', cat_order: 1 }),
+        makeRow({ id: 's2', cat_id: 'cat-1', cat_name: 'Daily Life', cat_order: 1, sort_at: new Date('2026-04-02') }),
+        makeRow({ id: 's3', cat_id: 'cat-2', cat_name: 'Travel', cat_slug: 'travel', cat_order: 2 }),
+      ];
+      userLangRepo.manager.query.mockResolvedValue(rows);
+
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 20);
+
       expect(result.items).toHaveLength(2);
-      expect(result.items[0].id).toBe('s1');
+      expect(result.items[0].category.slug).toBe('daily_life');
+      expect(result.items[0].scenarios).toHaveLength(2);
+      expect(result.items[1].category.slug).toBe('travel');
     });
 
-    it('calls listPublicByType with SYSTEM type', async () => {
-      jest.spyOn(accessService, 'listPublicByType').mockResolvedValue({ items: [], total: 0 });
+    it('sorts categories by order_index ASC', async () => {
+      const rows = [
+        makeRow({ id: 's1', cat_id: 'cat-2', cat_name: 'Travel', cat_slug: 'travel', cat_order: 2 }),
+        makeRow({ id: 's2', cat_id: 'cat-1', cat_name: 'Daily Life', cat_slug: 'daily_life', cat_order: 1 }),
+      ];
+      userLangRepo.manager.query.mockResolvedValue(rows);
 
-      await service.listDefault('user-1', 'lang-1', 1, 10);
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 20);
 
-      expect(accessService.listPublicByType).toHaveBeenCalledWith(ScenarioType.SYSTEM, 'lang-1', 1, 10);
+      expect(result.items[0].category.orderIndex).toBe(1);
+      expect(result.items[1].category.orderIndex).toBe(2);
     });
 
-    it('marks premium scenarios as locked for free users', async () => {
-      const premiumScenario = mockScenario('s1', { accessTier: AccessTier.PREMIUM });
-      jest.spyOn(accessService, 'listPublicByType').mockResolvedValue({ items: [premiumScenario], total: 1 });
+    it('sorts scenarios within category by addedAt DESC', async () => {
+      const rows = [
+        makeRow({ id: 's1', cat_id: 'cat-1', sort_at: new Date('2026-04-01') }),
+        makeRow({ id: 's2', cat_id: 'cat-1', sort_at: new Date('2026-04-10') }),
+      ];
+      userLangRepo.manager.query.mockResolvedValue(rows);
+
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 20);
+
+      expect(result.items[0].scenarios[0].id).toBe('s2');
+      expect(result.items[0].scenarios[1].id).toBe('s1');
+    });
+
+    it('marks premium scenarios locked for free users', async () => {
       jest.spyOn(subscriptionService, 'isUserPremium').mockResolvedValue(false);
+      userLangRepo.manager.query.mockResolvedValue([
+        makeRow({ id: 's1', access_tier: AccessTier.PREMIUM }),
+      ]);
 
-      const result = await service.listDefault('user-1', 'lang-1', 1, 10);
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 20);
 
-      expect(result.items[0].locked).toBe(true);
+      const item = result.items[0].scenarios[0];
+      expect(item.locked).toBe(true);
+      expect(item.description).toBeUndefined();
+      expect(item.imageUrl).toBeUndefined();
     });
 
     it('does not lock premium scenarios for premium users', async () => {
-      const premiumScenario = mockScenario('s1', { accessTier: AccessTier.PREMIUM });
-      jest.spyOn(accessService, 'listPublicByType').mockResolvedValue({ items: [premiumScenario], total: 1 });
       jest.spyOn(subscriptionService, 'isUserPremium').mockResolvedValue(true);
+      userLangRepo.manager.query.mockResolvedValue([
+        makeRow({ id: 's1', access_tier: AccessTier.PREMIUM }),
+      ]);
 
-      const result = await service.listDefault('user-1', 'lang-1', 1, 10);
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 20);
 
-      expect(result.items[0].locked).toBeUndefined();
-    });
-  });
-
-  describe('listPersonal', () => {
-    it('merges personal and KOL scenarios sorted by addedAt DESC', async () => {
-      const ai1 = mockScenario('ai-1', { type: ScenarioType.PERSONAL, createdAt: new Date('2026-04-15') });
-      const ai2 = mockScenario('ai-2', { type: ScenarioType.PERSONAL, createdAt: new Date('2026-04-20') });
-      jest.spyOn(accessService, 'listPersonalForUser').mockResolvedValue([ai1, ai2]);
-      jest.spyOn(scenarioRepo, 'createQueryBuilder').mockReturnValue(
-        mockKolQueryBuilder(
-          [mockScenario('kol-1', { type: ScenarioType.KOL })],
-          [{ s_id: 'kol-1', grantedAt: '2026-04-18' }],
-        ),
-      );
-
-      const result = await service.listPersonal('user-1', 'lang-1', 1, 10);
-
-      expect(result.total).toBe(3);
-      expect(result.items[0].id).toBe('ai-2');
-      expect(result.items[0].source).toBe('personalized');
-      expect(result.items[1].source).toBe('kol');
-      expect(result.items[2].id).toBe('ai-1');
+      expect(result.items[0].scenarios[0].locked).toBeUndefined();
     });
 
-    it('handles empty personal scenarios', async () => {
-      jest.spyOn(accessService, 'listPersonalForUser').mockResolvedValue([]);
-      jest.spyOn(scenarioRepo, 'createQueryBuilder').mockReturnValue(
-        mockKolQueryBuilder([mockScenario('kol-1')], [{ s_id: 'kol-1' }]),
-      );
+    it('paginates over categories', async () => {
+      const rows = [
+        makeRow({ id: 's1', cat_id: 'cat-1', cat_order: 1 }),
+        makeRow({ id: 's2', cat_id: 'cat-2', cat_order: 2, cat_slug: 'travel' }),
+        makeRow({ id: 's3', cat_id: 'cat-3', cat_order: 3, cat_slug: 'food' }),
+      ];
+      userLangRepo.manager.query.mockResolvedValue(rows);
 
-      const result = await service.listPersonal('user-1', 'lang-1', 1, 10);
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 2);
 
-      expect(result.total).toBe(1);
-      expect(result.items[0].source).toBe('kol');
-    });
-
-    it('handles empty KOL access', async () => {
-      const ai1 = mockScenario('ai-1', { type: ScenarioType.PERSONAL, createdAt: new Date() });
-      jest.spyOn(accessService, 'listPersonalForUser').mockResolvedValue([ai1]);
-      jest.spyOn(scenarioRepo, 'createQueryBuilder').mockReturnValue(mockKolQueryBuilder());
-
-      const result = await service.listPersonal('user-1', 'lang-1', 1, 10);
-
-      expect(result.total).toBe(1);
-      expect(result.items[0].source).toBe('personalized');
-    });
-
-    it('applies pagination to merged results', async () => {
-      const aiScenarios = Array.from({ length: 5 }, (_, i) =>
-        mockScenario(`ai-${i}`, { type: ScenarioType.PERSONAL, createdAt: new Date(Date.now() - i * 1000) }),
-      );
-      jest.spyOn(accessService, 'listPersonalForUser').mockResolvedValue(aiScenarios);
-      jest.spyOn(scenarioRepo, 'createQueryBuilder').mockReturnValue(mockKolQueryBuilder());
-
-      const result = await service.listPersonal('user-1', 'lang-1', 2, 2);
-
-      expect(result.total).toBe(5);
+      expect(result.pagination.total).toBe(3);
       expect(result.items).toHaveLength(2);
+    });
+
+    it('hides categories with zero visible scenarios (empty cat_id impossible from query, but handles gracefully)', async () => {
+      userLangRepo.manager.query.mockResolvedValue([]);
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 20);
+      expect(result.items).toHaveLength(0);
+    });
+
+    it('includes source field correctly for kol and personalized', async () => {
+      const rows = [
+        makeRow({ id: 's1', type: 'kol', source: 'kol' }),
+        makeRow({ id: 's2', type: 'personal', source: 'personalized', cat_id: 'cat-1' }),
+      ];
+      userLangRepo.manager.query.mockResolvedValue(rows);
+
+      const result = await service.listGrouped('user-1', 'lang-1', 1, 20);
+      const scenarios = result.items[0].scenarios;
+      const sources = scenarios.map((s) => s.source);
+      expect(sources).toContain('kol');
+      expect(sources).toContain('personalized');
     });
   });
 });

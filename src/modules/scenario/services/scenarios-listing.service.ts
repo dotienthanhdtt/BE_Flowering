@@ -1,127 +1,163 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Scenario } from '@/database/entities/scenario.entity';
 import { UserLanguage } from '@/database/entities/user-language.entity';
-import { UserScenarioAccess } from '@/database/entities/user-scenario-access.entity';
-import { AccessTier } from '@/database/entities/access-tier.enum';
-import { ContentStatus } from '@/database/entities/content-status.enum';
-import { ScenarioType } from '@/database/entities/scenario-type.enum';
 import { SubscriptionService } from '@/modules/subscription/subscription.service';
-import { ScenarioDefaultDto } from '../dto/scenario-default.dto';
-import { ScenarioPersonalDto } from '../dto/scenario-personal.dto';
-import { ScenarioAccessService } from './scenario-access.service';
+import { AccessTier } from '@/database/entities/access-tier.enum';
+import { CategoryGroupDto } from '../dto/category-group.dto';
+import { ScenarioListItemDto } from '../dto/scenario-list-item.dto';
+import { ListScenariosGroupedResponseDto } from '../dto/list-scenarios-response.dto';
+
+interface VisibleScenarioRow {
+  id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  language_id: string;
+  access_tier: string;
+  type: string;
+  sort_at: Date;
+  source: string;
+  cat_id: string;
+  cat_name: string;
+  cat_slug: string;
+  cat_order: number;
+}
 
 @Injectable()
 export class ScenariosListingService {
   constructor(
-    @InjectRepository(Scenario)
-    private readonly scenarioRepo: Repository<Scenario>,
     @InjectRepository(UserLanguage)
     private readonly userLanguageRepo: Repository<UserLanguage>,
-    private readonly access: ScenarioAccessService,
     private readonly subscriptionService: SubscriptionService,
   ) {}
 
-  async listDefault(
+  async listGrouped(
     userId: string,
     languageId: string,
     page: number,
     limit: number,
-  ): Promise<{ items: ScenarioDefaultDto[]; total: number }> {
+  ): Promise<ListScenariosGroupedResponseDto> {
     await this.markLastLearned(userId, languageId);
 
-    const [{ items: rows, total }, userIsPremium] = await Promise.all([
-      this.access.listPublicByType(ScenarioType.SYSTEM, languageId, page, limit),
+    const [rows, userIsPremium] = await Promise.all([
+      this.queryVisibleScenarios(userId, languageId),
       this.subscriptionService.isUserPremium(userId),
     ]);
 
-    const items: ScenarioDefaultDto[] = rows.map((s) => {
-      const isPremiumRow = s.accessTier === AccessTier.PREMIUM;
-      const locked = isPremiumRow && !userIsPremium ? true : undefined;
-      return {
-        id: s.id,
-        title: s.title,
-        // Omit description/imageUrl/orderIndex for locked stubs
-        ...(locked
-          ? {}
-          : {
-              description: s.description,
-              imageUrl: s.imageUrl,
-              orderIndex: s.orderIndex,
-            }),
-        languageId: s.languageId,
-        orderIndex: s.orderIndex,
+    // Group by category
+    const categoryMap = new Map<
+      string,
+      { meta: CategoryGroupDto['category']; scenarios: ScenarioListItemDto[] }
+    >();
+
+    for (const row of rows) {
+      if (!categoryMap.has(row.cat_id)) {
+        categoryMap.set(row.cat_id, {
+          meta: {
+            id: row.cat_id,
+            name: row.cat_name,
+            slug: row.cat_slug,
+            orderIndex: row.cat_order,
+          },
+          scenarios: [],
+        });
+      }
+
+      const locked =
+        row.access_tier === AccessTier.PREMIUM && !userIsPremium ? true : undefined;
+
+      const item: ScenarioListItemDto = {
+        id: row.id,
+        title: row.title,
+        languageId: row.language_id,
+        type: row.type,
+        source: row.source,
+        addedAt: new Date(row.sort_at),
+        ...(locked ? {} : { description: row.description ?? undefined, imageUrl: row.image_url ?? undefined }),
         ...(locked !== undefined ? { locked } : {}),
       };
-    });
-    return { items, total };
+
+      categoryMap.get(row.cat_id)!.scenarios.push(item);
+    }
+
+    // Sort categories by order_index ASC then id ASC (stable), filter empty
+    const sortedCategories = [...categoryMap.values()]
+      .filter((c) => c.scenarios.length > 0)
+      .sort((a, b) => a.meta.orderIndex - b.meta.orderIndex || a.meta.id.localeCompare(b.meta.id));
+
+    // Within each category sort by addedAt DESC (already in sort_at order from query, but enforce)
+    for (const cat of sortedCategories) {
+      cat.scenarios.sort((a, b) => b.addedAt.getTime() - a.addedAt.getTime());
+    }
+
+    const total = sortedCategories.length;
+    const offset = (page - 1) * limit;
+    const pageItems: CategoryGroupDto[] = sortedCategories
+      .slice(offset, offset + limit)
+      .map((c) => ({ category: c.meta, scenarios: c.scenarios }));
+
+    return {
+      items: pageItems,
+      pagination: { page, limit, total },
+    };
   }
 
-  async listPersonal(
+  private async queryVisibleScenarios(
     userId: string,
     languageId: string,
-    page: number,
-    limit: number,
-  ): Promise<{ items: ScenarioPersonalDto[]; total: number }> {
-    const [personalRows, kolAccess, userIsPremium] = await Promise.all([
-      this.access.listPersonalForUser(userId, languageId),
-      this.scenarioRepo
-        .createQueryBuilder('s')
-        .innerJoin(UserScenarioAccess, 'usa', 'usa.scenario_id = s.id')
-        .where('usa.user_id = :userId', { userId })
-        .andWhere('s.language_id = :languageId', { languageId })
-        .andWhere('s.status = :status', { status: ContentStatus.PUBLISHED })
-        .andWhere('s.type = :type', { type: ScenarioType.KOL })
-        .andWhere('s.owner_id IS NULL')
-        .addSelect('usa.granted_at', 'grantedAt')
-        .getRawAndEntities(),
-      this.subscriptionService.isUserPremium(userId),
-    ]);
-
-    const personalized: ScenarioPersonalDto[] = personalRows.map((s) => {
-      const locked = s.accessTier === AccessTier.PREMIUM && !userIsPremium ? true : undefined;
-      return {
-        id: s.id,
-        title: s.title,
-        ...(locked ? {} : { description: s.description, imageUrl: s.imageUrl }),
-        languageId: s.languageId,
-        addedAt: s.createdAt,
-        source: 'personalized' as const,
-        ...(locked !== undefined ? { locked } : {}),
-      };
-    });
-
-    const grantedAtMap = new Map<string, Date>(
-      kolAccess.raw.map((r) => [r.s_id as string, new Date(r.grantedAt as string)]),
+  ): Promise<VisibleScenarioRow[]> {
+    return this.userLanguageRepo.manager.query(
+      `
+      WITH visible AS (
+        SELECT
+          s.id,
+          s.title,
+          s.description,
+          s.image_url,
+          s.language_id,
+          s.category_id,
+          s.access_tier,
+          s.type,
+          s.created_at,
+          usa.granted_at,
+          COALESCE(usa.granted_at, s.created_at) AS sort_at,
+          CASE
+            WHEN s.type = 'kol'      THEN 'kol'
+            WHEN s.type = 'personal' THEN 'personalized'
+            ELSE 'system'
+          END AS source
+        FROM scenarios s
+        LEFT JOIN user_scenario_access usa
+               ON usa.scenario_id = s.id AND usa.user_id = $1
+        WHERE s.language_id = $2
+          AND s.status = 'published'
+          AND (
+                (s.type = 'system'   AND s.owner_id IS NULL)
+             OR (s.type = 'personal' AND s.owner_id = $1)
+             OR (s.type = 'kol'      AND usa.user_id IS NOT NULL AND s.owner_id IS NULL)
+          )
+      )
+      SELECT
+        v.id, v.title, v.description, v.image_url, v.language_id,
+        v.access_tier, v.type, v.sort_at, v.source,
+        c.id   AS cat_id,
+        c.name AS cat_name,
+        c.slug AS cat_slug,
+        c.order_index AS cat_order
+      FROM visible v
+      JOIN scenario_categories c ON c.id = v.category_id
+      ORDER BY c.order_index ASC, v.sort_at DESC
+      `,
+      [userId, languageId],
     );
-    const kol: ScenarioPersonalDto[] = kolAccess.entities.map((s) => {
-      const locked = s.accessTier === AccessTier.PREMIUM && !userIsPremium ? true : undefined;
-      return {
-        id: s.id,
-        title: s.title,
-        ...(locked ? {} : { description: s.description, imageUrl: s.imageUrl }),
-        languageId: s.languageId,
-        addedAt: grantedAtMap.get(s.id) ?? s.createdAt,
-        source: 'kol' as const,
-        ...(locked !== undefined ? { locked } : {}),
-      };
-    });
-
-    const merged = [...personalized, ...kol].sort(
-      (a, b) => b.addedAt.getTime() - a.addedAt.getTime(),
-    );
-
-    const total = merged.length;
-    const offset = (page - 1) * limit;
-    return { items: merged.slice(offset, offset + limit), total };
   }
 
   private async markLastLearned(userId: string, languageId: string): Promise<void> {
-    await this.userLanguageRepo.manager.transaction(async (mgr) => {
-      const repo = mgr.getRepository(UserLanguage);
-      await repo.update({ userId }, { lastLearned: false });
-      await repo.update({ userId, languageId }, { lastLearned: true });
-    });
+    // Single atomic statement: true only for the target language, false for all others
+    await this.userLanguageRepo.manager.query(
+      `UPDATE user_languages SET last_learned = (language_id = $2) WHERE user_id = $1`,
+      [userId, languageId],
+    );
   }
 }

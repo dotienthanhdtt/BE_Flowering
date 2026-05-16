@@ -95,6 +95,13 @@ export class AiConversation {
   @Column({ type: 'timestamptz', name: 'completed_at', nullable: true })
   completedAt?: Date | null;
 
+  @ManyToOne(() => Scenario, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'source_scenario_id' })
+  sourceScenario?: Scenario | null;
+
+  @Column({ type: 'uuid', name: 'source_scenario_id', nullable: true })
+  sourceScenarioId?: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

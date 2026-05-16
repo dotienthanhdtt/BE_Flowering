@@ -376,17 +376,46 @@ Get lessons grouped by category. **Auth:** Required | **Query:** language (uuid)
 
 ### Scenarios
 
-#### GET /scenarios/default
-List default scenarios for active language (paginated). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page` (1+, default 1), `limit` (1-50, default 20) | **Response (200):** `{code: 1, message: "Scenarios found", data: {items: [{id, title, description, image_url, type: "default", status}], total, page, limit}}`
+#### GET /scenarios
+List all available scenarios grouped by category for active language (paginated by category). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page` (1+, default 1), `limit` (1-50, default 20) | **Response (200):**
+```json
+{
+  "code": 1,
+  "message": "Scenarios found",
+  "data": {
+    "items": [
+      {
+        "category": {
+          "id": "uuid",
+          "name": "Restaurant",
+          "slug": "restaurant",
+          "orderIndex": 1
+        },
+        "scenarios": [
+          {
+            "id": "uuid",
+            "title": "Ordering Food",
+            "description": "Learn to order at a cafe",
+            "imageUrl": "https://...",
+            "languageId": "uuid",
+            "type": "system|kol|personal",
+            "source": "system|kol|personalized",
+            "addedAt": "2026-05-16T...",
+            "locked": false
+          }
+        ]
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 45
+    }
+  }
+}
+```
 
-**Type:** Only returns scenarios with `type='default'`. Automatically enrolls user in language if not yet enrolled. **Errors:** 400 (missing header), 401 (unauthorized), 403 (inactive language)
-
----
-
-#### GET /scenarios/personal
-List user's AI-generated + KOL-granted scenarios (merged). **Auth:** Required | **Header:** `X-Learning-Language: <code>` (required) | **Query:** `page`, `limit` | **Response (200):** `{code: 1, message: "Personal scenarios found", data: {items: [{id, title, source: "ai_generated"|"kol_granted", granted_at?, status}], total, page, limit}}`
-
-**Merges:** UserAiScenario rows (AI-generated) + KolBundleScenario grant rows (KOL-granted). Sorted by granted_at descending. **Errors:** 400, 401, 403
+**Behavior:** Returns all visible scenarios (system, KOL-granted, personal) grouped by language-scoped category. Empty categories are hidden. Categories sorted by `orderIndex ASC`. Within each category, scenarios sorted by `COALESCE(grantedAt, addedAt) DESC`. Premium scenarios return `locked=true` (omit description/imageUrl). Automatically enrolls user in language. **Errors:** 400 (missing header), 401 (unauthorized), 403 (inactive language)
 
 ---
 
