@@ -49,17 +49,14 @@ export class ScenarioCompleteService {
     // 1. Resolve conversation first — enforces ownership; scenarioId derived from row
     const conversation = await this.resolveExisting(userId, dto.conversationId);
 
-    // 2. Verify scenario access including premium gating (replaces ResourceAccessGuard
-    //    that used to run pre-controller; moved here so client doesn't need to send scenarioId).
-    const access = await this.scenarioAccessService.checkAccess(
+    // 2. Load scenario (ownership/visibility only — no premium gating on completion;
+    //    user may have started chat while premium and lapsed, but their evaluation
+    //    history must remain viewable).
+    const scenario = await this.scenarioAccessService.findVisibleToUser(
       userId,
       conversation.scenarioId!,
       languageId,
     );
-    if (access.isLocked) {
-      throw new ForbiddenException('Premium subscription required');
-    }
-    const scenario = access.scenario;
 
     // 3. Fast idempotency check outside the transaction — avoid unnecessary work
     const cached = await this.evalRepo.findOne({ where: { conversationId: conversation.id } });
