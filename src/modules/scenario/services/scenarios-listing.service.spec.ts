@@ -120,7 +120,7 @@ describe('ScenariosListingService', () => {
 
       const item = result.items[0].scenarios[0];
       expect(item.locked).toBe(true);
-      expect(item.description).toBeUndefined();
+      expect(item.description).toBe('A description');
       expect(item.imageUrl).toBeUndefined();
     });
 

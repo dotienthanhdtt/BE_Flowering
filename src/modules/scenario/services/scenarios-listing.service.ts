@@ -74,7 +74,8 @@ export class ScenariosListingService {
         type: row.type,
         source: row.source,
         addedAt: new Date(row.sort_at),
-        ...(locked ? {} : { description: row.description ?? undefined, imageUrl: row.image_url ?? undefined }),
+        description: row.description ?? undefined,
+        imageUrl: row.image_url ?? undefined,
         ...(locked !== undefined ? { locked } : {}),
       };
 
