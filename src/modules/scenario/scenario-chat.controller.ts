@@ -54,12 +54,10 @@ export class ScenarioChatController {
 
   @Post('complete')
   @Throttle({ 'scenario-complete': { limit: 30, ttl: 60_000 } })
-  @UseGuards(ResourceAccessGuard)
-  @RequireResourceAccess({ resource: 'scenario', bodyKey: 'scenarioId' })
   @ApiOperation({ summary: 'Mark scenario conversation as complete and return evaluation' })
   @ApiResponse({ status: 200, type: ScenarioCompleteResponseDto })
-  @ApiResponse({ status: 400, description: 'Invalid body or scenarioId mismatch' })
-  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 400, description: 'Invalid body' })
+  @ApiResponse({ status: 403, description: 'Forbidden or premium required' })
   @ApiResponse({ status: 404, description: 'Conversation or scenario not found' })
   async complete(
     @Req() req: AuthenticatedRequest,

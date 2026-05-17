@@ -102,7 +102,7 @@ describe('ScenarioCompleteService', () => {
         { provide: getRepositoryToken(ScenarioEvaluation), useFactory: mockEvalRepo },
         { provide: getRepositoryToken(VocabularyInjectionEvent), useFactory: mockVocabEventsRepo },
         { provide: DataSource, useFactory: mockDataSource },
-        { provide: ScenarioAccessService, useValue: { findAccessibleScenario: jest.fn() } },
+        { provide: ScenarioAccessService, useValue: { checkAccess: jest.fn() } },
         { provide: ScenarioEvaluatorService, useValue: { evaluate: jest.fn() } },
         { provide: VocabularyInjectionService, useValue: { hydrateByIds: jest.fn() } },
         { provide: LanguageService, useValue: {
@@ -172,7 +172,7 @@ describe('ScenarioCompleteService', () => {
   };
 
   const setupSuccess = () => {
-    scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
+    scenarioAccessService.checkAccess.mockResolvedValue({ scenario: mockScenario, isLocked: false });
     convoRepo.findOne.mockResolvedValue(mockConversation);
     evalRepo.findOne.mockResolvedValue(null); // no prior eval
     msgRepo.find.mockResolvedValue(mockMessages);
@@ -208,7 +208,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -239,7 +238,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -270,7 +268,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -304,7 +301,6 @@ describe('ScenarioCompleteService', () => {
       msgRepo.find.mockResolvedValue(mockMessages);
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -338,7 +334,6 @@ describe('ScenarioCompleteService', () => {
       msgRepo.find.mockResolvedValue(mockMessages);
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -372,7 +367,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -409,7 +403,6 @@ describe('ScenarioCompleteService', () => {
       evaluator.evaluate.mockRejectedValue(evalError);
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -443,7 +436,6 @@ describe('ScenarioCompleteService', () => {
       evaluator.evaluate.mockRejectedValue(new EvaluatorError('parse_failed'));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -475,7 +467,6 @@ describe('ScenarioCompleteService', () => {
       evaluator.evaluate.mockRejectedValue(new EvaluatorError('llm_unavailable'));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -508,7 +499,6 @@ describe('ScenarioCompleteService', () => {
       msgRepo.find.mockResolvedValue(mockMessages);
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -561,7 +551,6 @@ describe('ScenarioCompleteService', () => {
       evaluator.evaluate.mockRejectedValue(new EvaluatorError('llm_unavailable'));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -573,11 +562,10 @@ describe('ScenarioCompleteService', () => {
 
   describe('complete - guards (access control)', () => {
     it('should throw NotFoundException when conversationId not found', async () => {
-      scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
+      scenarioAccessService.checkAccess.mockResolvedValue({ scenario: mockScenario, isLocked: false });
       convoRepo.findOne.mockResolvedValue(null);
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: 'non-existent',
       };
 
@@ -585,40 +573,41 @@ describe('ScenarioCompleteService', () => {
     });
 
     it('should throw ForbiddenException when conversation userId does not match', async () => {
-      scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
+      scenarioAccessService.checkAccess.mockResolvedValue({ scenario: mockScenario, isLocked: false });
       const wrongUserConvo = { ...mockConversation, userId: 'other-user' };
       convoRepo.findOne.mockResolvedValue(wrongUserConvo);
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
       await expect(service.complete(mockUserId, dto, mockLanguageId)).rejects.toThrow(ForbiddenException);
     });
 
-    it('should throw BadRequestException when conversation scenarioId does not match', async () => {
-      scenarioAccessService.findAccessibleScenario.mockResolvedValue(mockScenario);
-      const wrongScenarioConvo = { ...mockConversation, scenarioId: 'other-scenario' };
-      convoRepo.findOne.mockResolvedValue(wrongScenarioConvo);
+    it('should throw BadRequestException when conversation has no scenarioId', async () => {
+      const orphanConvo = { ...mockConversation, scenarioId: null };
+      convoRepo.findOne.mockResolvedValue(orphanConvo);
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
       await expect(service.complete(mockUserId, dto, mockLanguageId)).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw NotFoundException when scenario is not accessible', async () => {
-      scenarioAccessService.findAccessibleScenario.mockResolvedValue(null);
+    it('should throw ForbiddenException when scenario is premium-locked', async () => {
+      convoRepo.findOne.mockResolvedValue(mockConversation);
+      scenarioAccessService.checkAccess.mockResolvedValue({
+        scenario: mockScenario,
+        isLocked: true,
+        lockReason: 'premium_required',
+      });
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
-      await expect(service.complete(mockUserId, dto, mockLanguageId)).rejects.toThrow();
+      await expect(service.complete(mockUserId, dto, mockLanguageId)).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -642,7 +631,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -655,43 +643,9 @@ describe('ScenarioCompleteService', () => {
       expect(result.evaluation).not.toHaveProperty('user_id');
       expect(result.evaluation).toHaveProperty('overall_score');
       expect(result.evaluation).toHaveProperty('fluency_score');
-      expect(result.evaluation).toHaveProperty('vocab_usage');
-    });
-
-    it('should return messages in snake_case format (id, role, content, created_at)', async () => {
-      setupSuccess();
-      const mockTx = {
-        query: jest.fn().mockResolvedValue([]),
-        findOne: jest.fn().mockResolvedValue(null),
-        find: jest.fn().mockResolvedValue(mockMessages),
-        save: jest.fn().mockResolvedValue(mockConversation),
-        createQueryBuilder: jest.fn().mockReturnValue({
-          insert: jest.fn().mockReturnThis(),
-          into: jest.fn().mockReturnThis(),
-          values: jest.fn().mockReturnThis(),
-          orIgnore: jest.fn().mockReturnThis(),
-          returning: jest.fn().mockReturnThis(),
-          execute: jest.fn().mockResolvedValue({ raw: [{ ...mockEvaluationResult, id: 'eval-1' }] }),
-        }),
-      };
-      dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
-
-      const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
-        conversationId: mockConversationId,
-      };
-
-      const result = await service.complete(mockUserId, dto, mockLanguageId);
-
-      expect(result.messages).toHaveLength(4);
-      expect(result.messages[0]).toHaveProperty('id');
-      expect(result.messages[0]).toHaveProperty('role');
-      expect(result.messages[0]).toHaveProperty('content');
-      expect(result.messages[0]).toHaveProperty('created_at');
-      expect(result.messages[0]).toEqual(expect.objectContaining({
-        role: 'user',
-        content: 'Bonjour',
-      }));
+      expect(result.evaluation).not.toHaveProperty('vocab_score');
+      expect(result.evaluation).not.toHaveProperty('vocab_usage');
+      expect(result).not.toHaveProperty('messages');
     });
 
     it('should return scenario with conversation_id, max_turns, turn, status in snake_case', async () => {
@@ -713,7 +667,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -748,7 +701,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -792,7 +744,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -808,42 +759,6 @@ describe('ScenarioCompleteService', () => {
   });
 
   describe('complete - transcript loading', () => {
-    it('should filter and return only USER and ASSISTANT messages', async () => {
-      setupSuccess();
-      const mixedMessages = [
-        { id: 'msg-1', role: MessageRole.USER, content: 'Hi', createdAt: new Date() },
-        { id: 'msg-2', role: MessageRole.ASSISTANT, content: 'Hello', createdAt: new Date() },
-        { id: 'msg-3', role: 'system' as any, content: 'System message', createdAt: new Date() },
-        { id: 'msg-4', role: MessageRole.USER, content: 'How are you?', createdAt: new Date() },
-      ] as any;
-      msgRepo.find.mockResolvedValue(mixedMessages);
-
-      const mockTx = {
-        query: jest.fn().mockResolvedValue([]),
-        findOne: jest.fn().mockResolvedValue(null),
-        find: jest.fn().mockResolvedValue(mixedMessages),
-        save: jest.fn().mockResolvedValue(mockConversation),
-        createQueryBuilder: jest.fn().mockReturnValue({
-          insert: jest.fn().mockReturnThis(),
-          into: jest.fn().mockReturnThis(),
-          values: jest.fn().mockReturnThis(),
-          orIgnore: jest.fn().mockReturnThis(),
-          returning: jest.fn().mockReturnThis(),
-          execute: jest.fn().mockResolvedValue({ raw: [{ ...mockEvaluationResult, id: 'eval-1' }] }),
-        }),
-      };
-      dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
-
-      const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
-        conversationId: mockConversationId,
-      };
-
-      const result = await service.complete(mockUserId, dto, mockLanguageId);
-
-      expect(result.messages).toHaveLength(3);
-      expect(result.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
-    });
   });
 
   describe('complete - error handling details', () => {
@@ -869,7 +784,6 @@ describe('ScenarioCompleteService', () => {
       evaluator.evaluate.mockRejectedValue(new EvaluatorError('timeout'));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 
@@ -900,7 +814,6 @@ describe('ScenarioCompleteService', () => {
       dataSource.transaction.mockImplementation((cb: any) => cb(mockTx));
 
       const dto: ScenarioCompleteRequestDto = {
-        scenarioId: mockScenarioId,
         conversationId: mockConversationId,
       };
 

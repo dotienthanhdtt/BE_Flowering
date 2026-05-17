@@ -12,7 +12,6 @@ import {
   AiConversationMessage,
 } from '@/database/entities';
 import { ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
-import { MessageRole } from '@/database/entities/ai-conversation-message.entity';
 import { ScenarioEvaluation } from '@/database/entities/scenario-evaluation.entity';
 import { ScenarioCompleteRequestDto, ScenarioCompleteResponseDto, EvaluationErrorCode } from '../dto/scenario-complete.dto';
 import { ScenarioAccessService } from './scenario-access.service';
@@ -45,25 +44,28 @@ export class ScenarioCompleteService {
     dto: ScenarioCompleteRequestDto,
     languageId: string,
   ): Promise<ScenarioCompleteResponseDto> {
-    // 1. Verify scenario access (404 if not found or not accessible)
-    const scenario = await this.scenarioAccessService.findAccessibleScenario(
+    // 1. Resolve conversation first — enforces ownership; scenarioId derived from row
+    const conversation = await this.resolveExisting(userId, dto.conversationId);
+
+    // 2. Verify scenario access including premium gating (replaces ResourceAccessGuard
+    //    that used to run pre-controller; moved here so client doesn't need to send scenarioId).
+    const access = await this.scenarioAccessService.checkAccess(
       userId,
-      dto.scenarioId,
+      conversation.scenarioId!,
       languageId,
     );
-
-    // 2. Resolve conversation — enforces userId/scenarioId ownership (403/400/404)
-    const conversation = await this.resolveExisting(userId, dto.conversationId, dto.scenarioId);
+    if (access.isLocked) {
+      throw new ForbiddenException('Premium subscription required');
+    }
+    const scenario = access.scenario;
 
     // 3. Fast idempotency check outside the transaction — avoid unnecessary work
     const cached = await this.evalRepo.findOne({ where: { conversationId: conversation.id } });
     if (cached && cached.overallScore !== null) {
-      const messages = await this.loadTranscript(conversation.id);
-      return this.buildResponse(conversation, messages, cached, undefined);
+      return this.buildResponse(conversation, cached, undefined);
     }
     if (cached && cached.errorCount >= MAX_EVAL_RETRIES) {
-      const messages = await this.loadTranscript(conversation.id);
-      return this.buildResponse(conversation, messages, null, 'retry_cap_reached');
+      return this.buildResponse(conversation, null, 'retry_cap_reached');
     }
 
     // 4. Load context outside the transaction to avoid holding a pool connection during I/O
@@ -199,19 +201,17 @@ export class ScenarioCompleteService {
     }
 
     // 8. Build response
-    const messages = await this.loadTranscript(conversation.id);
-    return this.buildResponse(conversation, messages, evaluation, evaluationErrorCode);
+    return this.buildResponse(conversation, evaluation, evaluationErrorCode);
   }
 
   private async resolveExisting(
     userId: string,
     conversationId: string,
-    scenarioId: string,
   ): Promise<AiConversation> {
     const c = await this.convoRepo.findOne({ where: { id: conversationId } });
     if (!c) throw new NotFoundException('Conversation not found');
     if (c.userId !== userId) throw new ForbiddenException();
-    if (c.scenarioId !== scenarioId) throw new BadRequestException('scenarioId mismatch');
+    if (!c.scenarioId) throw new BadRequestException('Conversation is not linked to a scenario');
     return c;
   }
 
@@ -235,26 +235,8 @@ export class ScenarioCompleteService {
     };
   }
 
-  private async loadTranscript(conversationId: string): Promise<
-    Array<{ id: string; role: 'user' | 'assistant'; content: string; created_at: string }>
-  > {
-    const rows = await this.msgRepo.find({
-      where: { conversationId },
-      order: { createdAt: 'ASC' },
-    });
-    return rows
-      .filter((r) => r.role === MessageRole.USER || r.role === MessageRole.ASSISTANT)
-      .map((r) => ({
-        id: r.id,
-        role: r.role as 'user' | 'assistant',
-        content: r.content,
-        created_at: r.createdAt.toISOString(),
-      }));
-  }
-
   private buildResponse(
     conversation: AiConversation,
-    messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; created_at: string }>,
     evalRow: ScenarioEvaluation | null,
     errorCode: EvaluationErrorCode | undefined,
   ): ScenarioCompleteResponseDto {
@@ -266,22 +248,15 @@ export class ScenarioCompleteService {
         turn: Math.floor(conversation.messageCount / 2),
         status: conversation.status,
       },
-      messages,
       evaluation:
         evalRow && evalRow.overallScore !== null
           ? {
               overall_score: evalRow.overallScore,
               fluency_score: evalRow.fluencyScore ?? 0,
               accuracy_score: evalRow.accuracyScore ?? 0,
-              vocab_score: evalRow.vocabScore ?? 0,
               strengths: evalRow.strengths,
               improvements: evalRow.improvements,
               summary: evalRow.summary ?? '',
-              vocab_usage: (evalRow.vocabUsage ?? []) as Array<{
-                vocab_id: string;
-                word: string;
-                used: boolean;
-              }>,
             }
           : null,
     };
