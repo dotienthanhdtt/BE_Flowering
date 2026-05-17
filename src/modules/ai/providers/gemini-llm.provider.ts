@@ -19,7 +19,11 @@ export class GeminiLLMProvider implements LLMProvider {
     private langfuseService: LangfuseService,
   ) {}
 
-  private createModel(modelName: string, options?: LLMOptions): ChatGoogleGenerativeAI {
+  private createModel(
+    modelName: string,
+    options?: LLMOptions,
+    streaming = false,
+  ): ChatGoogleGenerativeAI {
     const apiKey = this.configService.get('ai.googleAiApiKey', { infer: true });
     if (!apiKey) {
       throw new ServiceUnavailableException('Google AI API key not configured');
@@ -30,7 +34,7 @@ export class GeminiLLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0,
       topP: options?.topP,
       maxOutputTokens: options?.maxTokens,
-      streaming: true,
+      streaming,
       callbacks: [this.langfuseService.getHandler(options?.metadata)],
       ...(options?.thinkingConfig && {
         thinkingConfig: options.thinkingConfig as Record<string, unknown>,
@@ -40,7 +44,7 @@ export class GeminiLLMProvider implements LLMProvider {
 
   async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, false);
       const response = await model.invoke(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -56,7 +60,7 @@ export class GeminiLLMProvider implements LLMProvider {
 
   async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, true);
       const stream = await model.stream(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,

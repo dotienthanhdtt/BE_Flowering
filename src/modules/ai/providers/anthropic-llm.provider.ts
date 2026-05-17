@@ -19,7 +19,7 @@ export class AnthropicLLMProvider implements LLMProvider {
     private langfuseService: LangfuseService,
   ) {}
 
-  private createModel(modelName: string, options?: LLMOptions): ChatAnthropic {
+  private createModel(modelName: string, options?: LLMOptions, streaming = false): ChatAnthropic {
     const apiKey = this.configService.get('ai.anthropicApiKey', { infer: true });
     if (!apiKey) {
       throw new ServiceUnavailableException('Anthropic API key not configured');
@@ -30,14 +30,14 @@ export class AnthropicLLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0,
       topP: options?.topP,
       maxTokens: options?.maxTokens ?? 4096,
-      streaming: true,
+      streaming,
       callbacks: [this.langfuseService.getHandler(options?.metadata)],
     });
   }
 
   async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, false);
       const response = await model.invoke(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -53,7 +53,7 @@ export class AnthropicLLMProvider implements LLMProvider {
 
   async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, true);
       const stream = await model.stream(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,

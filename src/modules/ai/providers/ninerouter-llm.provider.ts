@@ -23,7 +23,7 @@ export class NineRouterLLMProvider implements LLMProvider {
     private langfuseService: LangfuseService,
   ) {}
 
-  private createModel(modelName: string, options?: LLMOptions): ChatOpenAI {
+  private createModel(modelName: string, options?: LLMOptions, streaming = false): ChatOpenAI {
     const apiKey = this.configService.get('ai.nineRouterKey', { infer: true });
     const baseUrl = this.configService.get('ai.nineRouterUrl', { infer: true });
     if (!apiKey) {
@@ -36,14 +36,14 @@ export class NineRouterLLMProvider implements LLMProvider {
       temperature: options?.temperature ?? 0,
       topP: options?.topP,
       maxTokens: options?.maxTokens,
-      streaming: true,
+      streaming,
       callbacks: [this.langfuseService.getHandler(options?.metadata)],
     });
   }
 
   async chat(messages: BaseMessage[], options: LLMOptions): Promise<string> {
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, false);
       const response = await model.invoke(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
@@ -59,7 +59,7 @@ export class NineRouterLLMProvider implements LLMProvider {
 
   async *stream(messages: BaseMessage[], options: LLMOptions): AsyncIterable<string> {
     try {
-      const model = this.createModel(options.model, options);
+      const model = this.createModel(options.model, options, true);
       const stream = await model.stream(messages, {
         metadata: options.metadata,
         runName: (options.metadata?.feature as string) || undefined,
