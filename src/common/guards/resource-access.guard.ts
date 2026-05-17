@@ -42,7 +42,7 @@ export class ResourceAccessGuard implements CanActivate {
       (meta.paramKey ? request.params?.[meta.paramKey] : undefined) ??
       (meta.bodyKey ? request.body?.[meta.bodyKey] : undefined);
 
-    if (!resourceId || typeof resourceId !== 'string') {
+    if (!resourceId || typeof reso  urceId !== 'string') {
       throw new BadRequestException(`Resource ID missing on request (resource=${meta.resource})`);
     }
 

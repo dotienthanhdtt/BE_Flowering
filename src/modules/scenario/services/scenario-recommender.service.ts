@@ -58,7 +58,7 @@ export class ScenarioRecommenderService {
           SELECT 1 FROM ai_conversations conv
           WHERE conv.user_id = $1
             AND conv.scenario_id = s.id
-            AND conv.status = 'done'
+            AND conv.status = 'DONE'
         )
       ORDER BY
         (CASE
