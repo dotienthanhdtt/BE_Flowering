@@ -22,6 +22,7 @@ import { ScenarioAccessService } from './services/scenario-access.service';
 import { VocabularyInjectionService } from './services/vocabulary-injection.service';
 import { ScenarioCompleteService } from './services/scenario-complete.service';
 import { ScenarioEvaluatorService } from './services/scenario-evaluator.service';
+import { ScenarioRecommenderService } from './services/scenario-recommender.service';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { ScenarioEvaluatorService } from './services/scenario-evaluator.service'
     VocabularyInjectionService,
     ScenarioCompleteService,
     ScenarioEvaluatorService,
+    ScenarioRecommenderService,
     AccessTierCacheService,
     ResourceAccessGuard,
   ],

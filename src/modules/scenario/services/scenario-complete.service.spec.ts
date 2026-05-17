@@ -3,6 +3,7 @@ jest.mock('./scenario-evaluator.service');
 jest.mock('./vocabulary-injection.service');
 jest.mock('../../language/language.service');
 jest.mock('../../personalization/services/personalization-trigger.service');
+jest.mock('./scenario-recommender.service');
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -18,6 +19,7 @@ import { ScenarioEvaluatorService, EvaluatorError } from './scenario-evaluator.s
 import { VocabularyInjectionService } from './vocabulary-injection.service';
 import { LanguageService } from '../../language/language.service';
 import { PersonalizationTriggerService } from '../../personalization/services/personalization-trigger.service';
+import { ScenarioRecommenderService } from './scenario-recommender.service';
 import {
   AiConversation,
   AiConversationMessage,
@@ -90,6 +92,7 @@ describe('ScenarioCompleteService', () => {
   let vocabInjection: any;
   let languageService: any;
   let personalizationTrigger: any;
+  let recommender: any;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -110,6 +113,7 @@ describe('ScenarioCompleteService', () => {
           getNativeLanguage: jest.fn(),
         } },
         { provide: PersonalizationTriggerService, useValue: { maybeTrigger: jest.fn() } },
+        { provide: ScenarioRecommenderService, useValue: { recommendNext: jest.fn().mockResolvedValue([]) } },
       ],
     }).compile();
 
@@ -123,6 +127,7 @@ describe('ScenarioCompleteService', () => {
     vocabInjection = module.get(VocabularyInjectionService);
     languageService = module.get(LanguageService);
     personalizationTrigger = module.get(PersonalizationTriggerService);
+    recommender = module.get(ScenarioRecommenderService);
   });
 
   const mockUserId = 'user-1';
@@ -130,10 +135,16 @@ describe('ScenarioCompleteService', () => {
   const mockConversationId = 'convo-1';
   const mockLanguageId = 'lang-1';
 
+  const mockNextScenarios = [
+    { id: 'rec-1', title: 'Shopping', description: null, image_url: null, access_tier: 'free', category: null, is_locked: false },
+    { id: 'rec-2', title: 'Travel', description: null, image_url: null, access_tier: 'free', category: null, is_locked: false },
+  ];
+
   const mockScenario = {
     id: mockScenarioId,
     title: 'Restaurant Ordering',
     description: 'Learn to order at a restaurant',
+    categoryId: null,
   };
 
   const mockConversation: AiConversation = {
@@ -759,6 +770,80 @@ describe('ScenarioCompleteService', () => {
   });
 
   describe('complete - transcript loading', () => {
+  });
+
+  describe('complete - next_scenarios', () => {
+    const makeSuccessTx = () => ({
+      query: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue(mockMessages),
+      save: jest.fn().mockResolvedValue(mockConversation),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        insert: jest.fn().mockReturnThis(),
+        into: jest.fn().mockReturnThis(),
+        values: jest.fn().mockReturnThis(),
+        orIgnore: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ raw: [{ ...mockEvaluationResult, id: 'eval-1' }] }),
+      }),
+    });
+
+    it('attaches next_scenarios on fresh evaluation branch', async () => {
+      setupSuccess();
+      recommender.recommendNext.mockResolvedValue(mockNextScenarios);
+      dataSource.transaction.mockImplementation((cb: any) => cb(makeSuccessTx()));
+
+      const result = await service.complete(mockUserId, { conversationId: mockConversationId }, mockLanguageId);
+
+      expect(result.next_scenarios).toHaveLength(2);
+      expect(result.next_scenarios[0].id).toBe('rec-1');
+    });
+
+    it('attaches next_scenarios on cached evaluation (idempotent replay) branch', async () => {
+      setupSuccess();
+      recommender.recommendNext.mockResolvedValue(mockNextScenarios);
+      evalRepo.findOne.mockResolvedValue({
+        id: 'eval-1',
+        conversationId: mockConversationId,
+        overallScore: 90,
+        fluencyScore: 85,
+        accuracyScore: 95,
+        strengths: ['Excellent'],
+        improvements: [],
+        summary: 'Perfect',
+      } as any);
+
+      const result = await service.complete(mockUserId, { conversationId: mockConversationId }, mockLanguageId);
+
+      expect(result.next_scenarios).toHaveLength(2);
+      expect(result.next_scenarios[1].id).toBe('rec-2');
+    });
+
+    it('attaches next_scenarios on retry-cap-reached branch', async () => {
+      setupSuccess();
+      recommender.recommendNext.mockResolvedValue(mockNextScenarios);
+      evalRepo.findOne.mockResolvedValue({
+        id: 'eval-1',
+        conversationId: mockConversationId,
+        overallScore: null,
+        errorCount: 3,
+      } as any);
+
+      const result = await service.complete(mockUserId, { conversationId: mockConversationId }, mockLanguageId);
+
+      expect(result.evaluation_error).toBe('retry_cap_reached');
+      expect(result.next_scenarios).toHaveLength(2);
+    });
+
+    it('returns empty [] for next_scenarios when recommender returns none', async () => {
+      setupSuccess();
+      recommender.recommendNext.mockResolvedValue([]);
+      dataSource.transaction.mockImplementation((cb: any) => cb(makeSuccessTx()));
+
+      const result = await service.complete(mockUserId, { conversationId: mockConversationId }, mockLanguageId);
+
+      expect(result.next_scenarios).toEqual([]);
+    });
   });
 
   describe('complete - error handling details', () => {

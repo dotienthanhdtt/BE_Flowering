@@ -14,6 +14,7 @@ import {
 import { ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
 import { ScenarioEvaluation } from '@/database/entities/scenario-evaluation.entity';
 import { ScenarioCompleteRequestDto, ScenarioCompleteResponseDto, EvaluationErrorCode } from '../dto/scenario-complete.dto';
+import { ScenarioRecommenderService } from './scenario-recommender.service';
 import { ScenarioAccessService } from './scenario-access.service';
 import { ScenarioEvaluatorService, EvaluatorError, EvaluatorInput } from './scenario-evaluator.service';
 import { LanguageService } from '@/modules/language/language.service';
@@ -37,6 +38,7 @@ export class ScenarioCompleteService {
     private readonly evaluator: ScenarioEvaluatorService,
     private readonly languageService: LanguageService,
     private readonly personalizationTrigger: PersonalizationTriggerService,
+    private readonly recommender: ScenarioRecommenderService,
   ) {}
 
   async complete(
@@ -62,10 +64,16 @@ export class ScenarioCompleteService {
     // 3. Fast idempotency check outside the transaction — avoid unnecessary work
     const cached = await this.evalRepo.findOne({ where: { conversationId: conversation.id } });
     if (cached && cached.overallScore !== null) {
-      return this.buildResponse(conversation, cached, undefined);
+      return this.withRecommendations(
+        this.buildResponse(conversation, cached, undefined),
+        userId, scenario.id, scenario.categoryId ?? null, languageId,
+      );
     }
     if (cached && cached.errorCount >= MAX_EVAL_RETRIES) {
-      return this.buildResponse(conversation, null, 'retry_cap_reached');
+      return this.withRecommendations(
+        this.buildResponse(conversation, null, 'retry_cap_reached'),
+        userId, scenario.id, scenario.categoryId ?? null, languageId,
+      );
     }
 
     // 4. Load context outside the transaction to avoid holding a pool connection during I/O
@@ -201,7 +209,10 @@ export class ScenarioCompleteService {
     }
 
     // 8. Build response
-    return this.buildResponse(conversation, evaluation, evaluationErrorCode);
+    return this.withRecommendations(
+      this.buildResponse(conversation, evaluation, evaluationErrorCode),
+      userId, scenario.id, scenario.categoryId ?? null, languageId,
+    );
   }
 
   private async resolveExisting(
@@ -235,6 +246,22 @@ export class ScenarioCompleteService {
     };
   }
 
+  private async withRecommendations(
+    response: ScenarioCompleteResponseDto,
+    userId: string,
+    anchorScenarioId: string,
+    anchorCategoryId: string | null,
+    languageId: string,
+  ): Promise<ScenarioCompleteResponseDto> {
+    response.next_scenarios = await this.recommender.recommendNext({
+      userId,
+      anchorScenarioId,
+      anchorCategoryId,
+      languageId,
+    });
+    return response;
+  }
+
   private buildResponse(
     conversation: AiConversation,
     evalRow: ScenarioEvaluation | null,
@@ -248,6 +275,7 @@ export class ScenarioCompleteService {
         turn: Math.floor(conversation.messageCount / 2),
         status: conversation.status,
       },
+      next_scenarios: [],
       evaluation:
         evalRow && evalRow.overallScore !== null
           ? {
