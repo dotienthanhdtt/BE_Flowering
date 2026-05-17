@@ -4,13 +4,11 @@ import { UnifiedLLMService } from '@/modules/ai/services/unified-llm.service';
 import { PromptLoaderService } from '@/modules/ai/services/prompt-loader.service';
 import { LLMModel } from '@/modules/ai/providers/llm-models.enum';
 import { LangfuseFeature } from '@/modules/ai/langfuse-feature.enum';
-import { matchesWord } from './vocabulary-usage-matcher';
-import type { Vocabulary } from '@/database/entities/vocabulary.entity';
 import type { AiConversationMessage } from '@/database/entities/ai-conversation-message.entity';
 import { MessageRole } from '@/database/entities/ai-conversation-message.entity';
 
 const LLM_TIMEOUT_MS = 15_000;
-const PROMPT_VERSION = 1;
+const PROMPT_VERSION = 2;
 
 export class EvaluatorError extends Error {
   constructor(public readonly code: 'llm_unavailable' | 'parse_failed' | 'timeout' | 'invalid_response') {
@@ -22,8 +20,6 @@ export class EvaluatorError extends Error {
 export interface EvaluatorInput {
   scenario: { id: string; title: string; description: string | null };
   messages: AiConversationMessage[];
-  injectedVocab: Vocabulary[];
-  vocabUsageHits: Array<{ vocabId: string; wasUsed: boolean }>;
   langCtx: { targetLanguage: string; nativeLanguage: string; proficiencyLevel: string };
   userId: string;
   conversationId: string;
@@ -33,11 +29,9 @@ export interface ScenarioEvaluationResult {
   overallScore: number;
   fluencyScore: number;
   accuracyScore: number;
-  vocabScore: number;
   strengths: string[];
   improvements: string[];
   summary: string;
-  vocabUsage: Array<{ vocab_id: string; word: string; used: boolean }>;
   modelUsed: string;
   promptVersion: number;
 }
@@ -69,44 +63,18 @@ export class ScenarioEvaluatorService {
   }
 
   private buildPrompt(input: EvaluatorInput): string {
-    // Vocab-usage fallback: if no tracked events but vocab was injected, re-match from transcript
-    let usageHits = input.vocabUsageHits;
-    if (usageHits.length === 0 && input.injectedVocab.length > 0) {
-      const fullTranscript = input.messages
-        .filter((m) => m.role === MessageRole.USER)
-        .map((m) => m.content)
-        .join(' ');
-      usageHits = input.injectedVocab.map((v) => ({
-        vocabId: v.id,
-        wasUsed: matchesWord(fullTranscript, v.word),
-      }));
-    }
-
     const transcript = input.messages
       .filter((m) => m.role === MessageRole.USER || m.role === MessageRole.ASSISTANT)
       .map((m) => `${m.role === MessageRole.USER ? 'User' : 'Assistant'}: ${m.content}`)
       .join('\n');
 
-    const injectedVocabStr = input.injectedVocab.length
-      ? input.injectedVocab.map((v) => `- ${v.word} (${v.translation})`).join('\n')
-      : 'None';
-
-    const vocabHitMap = new Map(usageHits.map((h) => [h.vocabId, h.wasUsed]));
-    const vocabUsageHitsStr = input.injectedVocab.length
-      ? input.injectedVocab
-          .map((v) => `- ${v.word}: ${vocabHitMap.get(v.id) ? 'used' : 'not used'}`)
-          .join('\n')
-      : 'None';
-
-    return this.promptLoader.loadPrompt('scenario-evaluation-prompt.json', {
+    return this.promptLoader.loadPrompt('scenario-evaluation-prompt.md', {
       targetLanguage: input.langCtx.targetLanguage,
       nativeLanguage: input.langCtx.nativeLanguage,
       proficiencyLevel: input.langCtx.proficiencyLevel,
       scenarioTitle: input.scenario.title,
       scenarioDescription: input.scenario.description ?? '',
       transcript: transcript || '(no messages)',
-      injectedVocab: injectedVocabStr,
-      vocabUsageHits: vocabUsageHitsStr,
     });
   }
 
@@ -158,7 +126,7 @@ export class ScenarioEvaluatorService {
       throw new EvaluatorError('parse_failed');
     }
 
-    const requiredFields = ['overall_score', 'fluency_score', 'accuracy_score', 'vocab_score', 'summary'];
+    const requiredFields = ['overall_score', 'fluency_score', 'accuracy_score', 'summary'];
     for (const field of requiredFields) {
       if (parsed[field] === undefined || parsed[field] === null) {
         this.logger.warn(`ScenarioEvaluator: missing required field "${field}"`);
@@ -174,16 +142,9 @@ export class ScenarioEvaluatorService {
       overallScore: clamp(parsed['overall_score']),
       fluencyScore: clamp(parsed['fluency_score']),
       accuracyScore: clamp(parsed['accuracy_score']),
-      vocabScore: clamp(parsed['vocab_score']),
       strengths: toStringArray(parsed['strengths']),
       improvements: toStringArray(parsed['improvements']),
       summary: typeof parsed['summary'] === 'string' ? parsed['summary'] : '',
-      vocabUsage: Array.isArray(parsed['vocab_usage'])
-        ? (parsed['vocab_usage'] as Array<{ vocab_id: string; word: string; used: boolean }>).filter(
-            (item): item is { vocab_id: string; word: string; used: boolean } =>
-              typeof item === 'object' && item !== null && typeof item['vocab_id'] === 'string',
-          )
-        : [],
       modelUsed,
       promptVersion: PROMPT_VERSION,
     };

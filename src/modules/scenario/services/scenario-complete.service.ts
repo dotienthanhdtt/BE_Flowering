@@ -11,14 +11,12 @@ import {
   AiConversation,
   AiConversationMessage,
 } from '@/database/entities';
-import { VocabularyInjectionEvent } from '@/database/entities/vocabulary-injection-event.entity';
 import { ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
 import { MessageRole } from '@/database/entities/ai-conversation-message.entity';
 import { ScenarioEvaluation } from '@/database/entities/scenario-evaluation.entity';
 import { ScenarioCompleteRequestDto, ScenarioCompleteResponseDto, EvaluationErrorCode } from '../dto/scenario-complete.dto';
 import { ScenarioAccessService } from './scenario-access.service';
 import { ScenarioEvaluatorService, EvaluatorError, EvaluatorInput } from './scenario-evaluator.service';
-import { VocabularyInjectionService } from './vocabulary-injection.service';
 import { LanguageService } from '@/modules/language/language.service';
 import { PersonalizationTriggerService } from '@/modules/personalization/services/personalization-trigger.service';
 
@@ -38,7 +36,6 @@ export class ScenarioCompleteService {
     private readonly dataSource: DataSource,
     private readonly scenarioAccessService: ScenarioAccessService,
     private readonly evaluator: ScenarioEvaluatorService,
-    private readonly vocabInjection: VocabularyInjectionService,
     private readonly languageService: LanguageService,
     private readonly personalizationTrigger: PersonalizationTriggerService,
   ) {}
@@ -70,29 +67,18 @@ export class ScenarioCompleteService {
     }
 
     // 4. Load context outside the transaction to avoid holding a pool connection during I/O
-    const [msgRows, langCtx, vocabEvents] = await Promise.all([
+    const [msgRows, langCtx] = await Promise.all([
       this.msgRepo.find({
         where: { conversationId: conversation.id },
         order: { createdAt: 'ASC' },
       }),
       this.loadLanguageContext(userId, languageId),
-      this.dataSource.getRepository(VocabularyInjectionEvent).find({
-        where: { conversationId: conversation.id },
-      }),
     ]);
-
-    // Read-only vocab hydration — do NOT re-run injection (that's chat's job)
-    const injectedVocab = await this.vocabInjection.hydrateByIds(
-      conversation.injectedVocabIds ?? [],
-    );
-    const vocabUsageHits = vocabEvents.map((e) => ({ vocabId: e.vocabularyId, wasUsed: e.wasUsed }));
 
     // 5. LLM evaluation outside the transaction — prevents holding pool connection during 15s call
     const evalInput: EvaluatorInput = {
       scenario: { id: scenario.id, title: scenario.title, description: scenario.description ?? null },
       messages: msgRows,
-      injectedVocab,
-      vocabUsageHits,
       langCtx,
       userId,
       conversationId: conversation.id,
@@ -156,11 +142,11 @@ export class ScenarioCompleteService {
             overallScore: evalResult.overallScore,
             fluencyScore: evalResult.fluencyScore,
             accuracyScore: evalResult.accuracyScore,
-            vocabScore: evalResult.vocabScore,
+            vocabScore: null,
             strengths: evalResult.strengths,
             improvements: evalResult.improvements,
             summary: evalResult.summary,
-            vocabUsage: evalResult.vocabUsage,
+            vocabUsage: null,
             modelUsed: evalResult.modelUsed,
             promptVersion: evalResult.promptVersion,
             errorCount: 0,
