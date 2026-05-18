@@ -75,6 +75,29 @@ export class ScenarioChatMessageDto {
 
   @ApiProperty({ description: 'ISO timestamp' })
   created_at!: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Object-storage key (not a signed URL). Assistant rows: TTS mp3. User rows: STT recording. Null until populated by TTS/STT flows.',
+  })
+  audio_path?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Cached translation produced by POST /ai/translate (sentence mode).',
+  })
+  translated_content?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Grammar/vocabulary correction produced by POST /ai/chat/correct. Null = no errors or correction not yet run.',
+  })
+  corrected_content?: string | null;
 }
 
 export class ScenarioChatResponseDto {

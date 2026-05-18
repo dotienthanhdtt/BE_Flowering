@@ -91,7 +91,15 @@ export class IntakeChatEngine {
       isFirstTurn ? 1 : 2,
     );
 
-    return { reply, messageId, turnNumber: currentTurn, isLastTurn };
+    return {
+      reply,
+      messageId,
+      turnNumber: currentTurn,
+      isLastTurn,
+      audio_path: null,
+      translated_content: null,
+      corrected_content: null,
+    };
   }
 
   /**
@@ -190,7 +198,15 @@ export class IntakeChatEngine {
     turnNumber: number;
     maxTurns: number;
     isLastTurn: boolean;
-    messages: Array<{ id: string; role: MessageRole; content: string; createdAt: Date }>;
+    messages: Array<{
+      id: string;
+      role: MessageRole;
+      content: string;
+      createdAt: Date;
+      audio_path: string | null;
+      translated_content: string | null;
+      corrected_content: string | null;
+    }>;
   }> {
     const conversation = await this.findConversation(conversationId, conversationType);
     const rows = await this.messageRepo.find({
@@ -211,6 +227,9 @@ export class IntakeChatEngine {
         role: r.role,
         content: r.content,
         createdAt: r.createdAt,
+        audio_path: r.audioUrl ?? null,
+        translated_content: r.translatedContent ?? null,
+        corrected_content: r.correctedContent ?? null,
       })),
     };
   }

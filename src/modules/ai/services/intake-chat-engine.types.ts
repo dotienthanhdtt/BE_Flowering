@@ -21,6 +21,9 @@ export interface IntakeTurnResult {
   messageId: string;
   turnNumber: number;
   isLastTurn: boolean;
+  audio_path: string | null;
+  translated_content: string | null;
+  corrected_content: string | null;
 }
 
 export interface IntakeCompleteResult<T> {

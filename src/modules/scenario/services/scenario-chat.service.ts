@@ -267,6 +267,9 @@ export class ScenarioChatService {
         role: m.role as 'user' | 'assistant',
         content: m.content,
         created_at: m.createdAt.toISOString(),
+        audio_path: m.audioUrl ?? null,
+        translated_content: m.translatedContent ?? null,
+        corrected_content: m.correctedContent ?? null,
       }));
 
     return {
@@ -391,6 +394,9 @@ export class ScenarioChatService {
           role: r.role as 'user' | 'assistant',
           content: r.content,
           created_at: r.createdAt.toISOString(),
+          audio_path: r.audioUrl ?? null,
+          translated_content: r.translatedContent ?? null,
+          corrected_content: r.correctedContent ?? null,
         })),
     };
   }
