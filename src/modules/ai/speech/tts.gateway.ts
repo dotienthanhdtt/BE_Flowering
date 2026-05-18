@@ -74,12 +74,15 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }, MAX_DURATION_MS);
     if (session.timer.unref) session.timer.unref();
 
+    const language = this.tts.resolveLanguage(message.conversation);
+
     // Cache hit → fetch stored mp3, stream once, end
     if (message.ttsAudioPath) {
       this.tts.emitEvent(message.conversationId, 'tts.cache_hit', {
         message_id: message.id,
         provider: this.soniox.name,
         transport: 'ws',
+        language,
       });
       await this.streamFromStorage(client, session, message.ttsAudioPath);
       return;
@@ -89,6 +92,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const handle = this.soniox.openStream({
         traceId: message.conversationId,
+        language,
       });
       session.handle = handle;
 
@@ -122,9 +126,10 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         message_id: message.id,
         provider: this.soniox.name,
         char_count: message.content.length,
+        language,
       });
       this.logger.log(
-        `TTS WS session started messageId=${messageId} principalKind=${principal.kind} chars=${message.content.length}`,
+        `TTS WS session started messageId=${messageId} principalKind=${principal.kind} lang=${language} chars=${message.content.length}`,
       );
     } catch (err) {
       this.logger.error(`Failed to open Soniox TTS stream: ${String(err)}`);

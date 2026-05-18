@@ -56,7 +56,8 @@ export class TtsService {
       return { audioUrl, mimeType: this.soniox.defaultMimeType, cached: true };
     }
 
-    const { audio, mimeType } = await this.soniox.synthesize(message.content);
+    const language = this.resolveLanguage(message.conversation);
+    const { audio, mimeType } = await this.soniox.synthesize(message.content, { language });
     const namespace = this.principalNamespace(principal);
     const { path, signedUrl } = await this.storage.uploadAudio(
       audio,
@@ -69,6 +70,7 @@ export class TtsService {
     this.recordEvent(message.conversationId, 'tts.synthesize', {
       message_id: message.id,
       provider: this.soniox.name,
+      language,
       char_count: message.content.length,
       audio_bytes: audio.byteLength,
     });
@@ -86,7 +88,7 @@ export class TtsService {
   ): Promise<AiConversationMessage & { conversation: AiConversation }> {
     const message = await this.messageRepo.findOne({
       where: { id: messageId },
-      relations: ['conversation'],
+      relations: ['conversation', 'conversation.language'],
     });
     if (!message || !message.conversation) {
       throw new NotFoundException('Message not found');
@@ -142,6 +144,18 @@ export class TtsService {
       this.logger.warn(`Failed to persist streamed TTS audio: ${String(err)}`);
       return null;
     }
+  }
+
+  /**
+   * Resolve language code from conversation.language.code; fallback to 'en'.
+   * Onboarding conversations may not have a language assigned yet.
+   * Normalised to lowercase 2-letter code (Soniox expects e.g. 'en', 'vi').
+   */
+  resolveLanguage(conversation: AiConversation): string {
+    const raw = conversation.language?.code?.trim().toLowerCase();
+    if (!raw) return 'en';
+    // Soniox expects 2-letter ISO code; trim a region suffix if present (en-US → en).
+    return raw.split(/[-_]/)[0] || 'en';
   }
 
   principalNamespace(principal: TtsPrincipal): string {

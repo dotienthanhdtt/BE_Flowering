@@ -81,7 +81,7 @@ describe('TtsService', () => {
         mimeType: 'audio/mpeg',
         cached: false,
       });
-      expect(soniox.synthesize).toHaveBeenCalledWith('hello world');
+      expect(soniox.synthesize).toHaveBeenCalledWith('hello world', { language: 'en' });
       expect(repo.update).toHaveBeenCalledWith('msg-1', {
         ttsAudioPath: 'user-1/audio/123-tts/msg-1.mp3',
       });
