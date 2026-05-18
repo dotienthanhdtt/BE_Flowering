@@ -1,0 +1,35 @@
+{
+  "_capture_note": "NOTE: captured from RC sandbox — sanitize before committing real tokens. This fixture represents a purchase after Purchases.logIn(uuid) has been called — app_user_id is the authenticated UUID.",
+  "api_version": "1.0",
+  "event": {
+    "aliases": [
+      "$RCAnonymousID:abc123def456",
+      "00000000-0000-4000-8000-000000000123"
+    ],
+    "app_id": "app1234567890",
+    "app_user_id": "00000000-0000-4000-8000-000000000123",
+    "commission_percentage": 0.3,
+    "country_code": "US",
+    "currency": "USD",
+    "entitlement_id": "premium",
+    "entitlement_ids": ["premium"],
+    "environment": "SANDBOX",
+    "event_timestamp_ms": 1747526460000,
+    "expiration_at_ms": 1748131260000,
+    "id": "evt-uuid-initial-purchase-sandbox-001",
+    "is_family_share": false,
+    "offer_code": null,
+    "original_app_user_id": "$RCAnonymousID:abc123def456",
+    "period_type": "NORMAL",
+    "presented_offering_id": "default",
+    "price": 9.99,
+    "price_in_purchased_currency": 9.99,
+    "product_id": "com.flowering.monthly",
+    "purchased_at_ms": 1747526460000,
+    "store": "APP_STORE",
+    "subscriber_attributes": {},
+    "takehome_percentage": 0.7,
+    "transaction_id": "2000000123456790",
+    "type": "INITIAL_PURCHASE"
+  }
+}

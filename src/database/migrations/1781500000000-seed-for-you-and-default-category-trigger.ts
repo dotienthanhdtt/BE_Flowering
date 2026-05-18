@@ -68,9 +68,7 @@ export class SeedForYouAndDefaultCategoryTrigger1781500000000 implements Migrati
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP TRIGGER IF EXISTS trg_scenarios_default_category ON scenarios`,
-    );
+    await queryRunner.query(`DROP TRIGGER IF EXISTS trg_scenarios_default_category ON scenarios`);
     await queryRunner.query(`DROP FUNCTION IF EXISTS scenarios_default_category()`);
     await queryRunner.query(`DELETE FROM scenario_categories WHERE slug = 'for_you'`);
   }

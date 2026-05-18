@@ -29,5 +29,4 @@ export class VocabularyController {
   ): Promise<VocabularyListDto> {
     return this.service.list(req.user.id, q, activeLanguage.code);
   }
-
 }

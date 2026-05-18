@@ -11,7 +11,10 @@ import {
 import { ResourceAccessGuard } from '@common/guards/resource-access.guard';
 import { RequireResourceAccess } from '@common/decorators/require-resource-access.decorator';
 import { ScenarioChatRequestDto, ScenarioChatResponseDto } from './dto/scenario-chat.dto';
-import { ScenarioCompleteRequestDto, ScenarioCompleteResponseDto } from './dto/scenario-complete.dto';
+import {
+  ScenarioCompleteRequestDto,
+  ScenarioCompleteResponseDto,
+} from './dto/scenario-complete.dto';
 
 interface AuthenticatedRequest extends Request {
   user?: { id: string };

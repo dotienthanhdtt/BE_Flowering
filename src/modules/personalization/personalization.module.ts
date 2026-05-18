@@ -15,7 +15,13 @@ import { PersonalizationTriggerService } from './services/personalization-trigge
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AiConversation, AiConversationMessage, Scenario, ScenarioCategory, User]),
+    TypeOrmModule.forFeature([
+      AiConversation,
+      AiConversationMessage,
+      Scenario,
+      ScenarioCategory,
+      User,
+    ]),
     AiModule,
     LanguageModule,
     SubscriptionModule,

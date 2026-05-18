@@ -106,10 +106,10 @@ export class TranslateScenarioCategoryNames1781410000000 implements MigrationInt
       for_you: 'For you',
     };
     for (const [slug, name] of Object.entries(slugToEnglish)) {
-      await queryRunner.query(
-        `UPDATE scenario_categories SET name = $2 WHERE slug = $1`,
-        [slug, name],
-      );
+      await queryRunner.query(`UPDATE scenario_categories SET name = $2 WHERE slug = $1`, [
+        slug,
+        name,
+      ]);
     }
   }
 }

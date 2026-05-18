@@ -7,16 +7,21 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import {
-  AiConversation,
-  AiConversationMessage,
-} from '@/database/entities';
+import { AiConversation, AiConversationMessage } from '@/database/entities';
 import { ScenarioChatStatus } from '@/database/entities/ai-conversation.entity';
 import { ScenarioEvaluation } from '@/database/entities/scenario-evaluation.entity';
-import { ScenarioCompleteRequestDto, ScenarioCompleteResponseDto, EvaluationErrorCode } from '../dto/scenario-complete.dto';
+import {
+  ScenarioCompleteRequestDto,
+  ScenarioCompleteResponseDto,
+  EvaluationErrorCode,
+} from '../dto/scenario-complete.dto';
 import { ScenarioRecommenderService } from './scenario-recommender.service';
 import { ScenarioAccessService } from './scenario-access.service';
-import { ScenarioEvaluatorService, EvaluatorError, EvaluatorInput } from './scenario-evaluator.service';
+import {
+  ScenarioEvaluatorService,
+  EvaluatorError,
+  EvaluatorInput,
+} from './scenario-evaluator.service';
 import { LanguageService } from '@/modules/language/language.service';
 import { PersonalizationTriggerService } from '@/modules/personalization/services/personalization-trigger.service';
 
@@ -63,13 +68,19 @@ export class ScenarioCompleteService {
     if (cached && cached.overallScore !== null) {
       return this.withRecommendations(
         this.buildResponse(conversation, cached, undefined),
-        userId, scenario.id, scenario.categoryId ?? null, languageId,
+        userId,
+        scenario.id,
+        scenario.categoryId ?? null,
+        languageId,
       );
     }
     if (cached && cached.errorCount >= MAX_EVAL_RETRIES) {
       return this.withRecommendations(
         this.buildResponse(conversation, null, 'retry_cap_reached'),
-        userId, scenario.id, scenario.categoryId ?? null, languageId,
+        userId,
+        scenario.id,
+        scenario.categoryId ?? null,
+        languageId,
       );
     }
 
@@ -84,7 +95,11 @@ export class ScenarioCompleteService {
 
     // 5. LLM evaluation outside the transaction — prevents holding pool connection during 15s call
     const evalInput: EvaluatorInput = {
-      scenario: { id: scenario.id, title: scenario.title, description: scenario.description ?? null },
+      scenario: {
+        id: scenario.id,
+        title: scenario.title,
+        description: scenario.description ?? null,
+      },
       messages: msgRows,
       langCtx,
       userId,
@@ -111,9 +126,7 @@ export class ScenarioCompleteService {
     await this.dataSource.transaction(async (tx) => {
       // Advisory lock prevents concurrent inserts (not concurrent LLM calls — those are rare
       // and accepted as cheaper than holding a pool connection for 15s per lock holder).
-      await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
-        `complete:${conversation.id}`,
-      ]);
+      await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`complete:${conversation.id}`]);
 
       // Re-check inside lock — success OR retry cap (catches concurrent requests that both passed the fast check)
       const insideLock = await tx.findOne(ScenarioEvaluation, {
@@ -208,14 +221,14 @@ export class ScenarioCompleteService {
     // 8. Build response
     return this.withRecommendations(
       this.buildResponse(conversation, evaluation, evaluationErrorCode),
-      userId, scenario.id, scenario.categoryId ?? null, languageId,
+      userId,
+      scenario.id,
+      scenario.categoryId ?? null,
+      languageId,
     );
   }
 
-  private async resolveExisting(
-    userId: string,
-    conversationId: string,
-  ): Promise<AiConversation> {
+  private async resolveExisting(userId: string, conversationId: string): Promise<AiConversation> {
     const c = await this.convoRepo.findOne({ where: { id: conversationId } });
     if (!c) throw new NotFoundException('Conversation not found');
     if (c.userId !== userId) throw new ForbiddenException();

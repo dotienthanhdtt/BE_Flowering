@@ -20,9 +20,7 @@ export class AddSourceScenarioIdToAiConversations1781600000000 implements Migrat
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS idx_ai_conversations_source_scenario_id`,
-    );
+    await queryRunner.query(`DROP INDEX IF EXISTS idx_ai_conversations_source_scenario_id`);
     await queryRunner.query(
       `ALTER TABLE ai_conversations DROP COLUMN IF EXISTS source_scenario_id`,
     );

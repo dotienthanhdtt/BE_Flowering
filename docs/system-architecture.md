@@ -132,28 +132,51 @@ AI-powered language learning backend following Clean Architecture principles wit
 ```
 ┌──────────────────────────────────────────────────────┐
 │    Subscription Controller & Webhook Controller      │
-│  GET /subscriptions/me                              │
+│  GET /subscriptions/me  [advisory lock per user]    │
 │  POST /webhooks/revenuecat (public, bearer auth)   │
 └──────────────────────────────────────────────────────┘
                     ↓
 ┌──────────────────────────────────────────────────────┐
 │        Subscription Service                          │
 │  - getUserSubscription()                            │
+│  - getSubscriptionWithReconcile() [+ pending drain] │
 │  - processWebhook()                                 │
-│  - updateSubscriptionStatus()                       │
+│  - applyRcGroundTruth(source: fallback|cron)        │
 └──────────────────────────────────────────────────────┘
                     ↓
-┌──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
 │        Webhook Processing Flow (Idempotent):         │
 │  1. Validate Bearer token (timing-safe)             │
 │  2. Reject if NODE_ENV=production and sandbox event │
-│  3. Check WebhookEvent table for eventId            │
-│  4. Process synchronously (RC retries on failure)  │
-│  5. Insert into WebhookEvent (acts as lock)         │
-│  6. Update subscription status in DB                │
-│  7. Return 200 after processing; errors return 5xx  │
+│  3. Insert WebhookEvent row (ON CONFLICT=duplicate) │
+│  4. resolveUser: UUID lookup; anon → pending claim  │
+│  5. If user found: dispatch to event handler        │
+│  6. Return 200; errors return 5xx (RC retries)      │
 └──────────────────────────────────────────────────────┘
 ```
+
+#### Pending-Claims Path (C1 — Anonymous Purchase)
+
+When a webhook arrives for an anonymous RC user (`$RCAnonymousID:…`) with no
+matching `users` row, `PendingClaimsService.recordPending` writes a
+`pending_subscription_claims` row in the same transaction as the `WebhookEvent`
+idempotency insert. RC sees 200 and stops retrying.
+
+On `GET /subscriptions/me`, `getSubscriptionWithReconcile` acquires a per-user
+`pg_advisory_xact_lock` (serialises concurrent calls), then calls the RC REST
+API. If RC confirms an active entitlement, `claimVerifiedFor` drains any pending
+rows matching the user's known anonymous IDs and replays their handlers via
+`replayHandlers` — which applies the subscription update without re-inserting the
+`WebhookEvent` row (already committed on original receipt).
+
+#### Fallback No-Expire Annotation (C3)
+
+`applyRcGroundTruth(userId, payload, 'fallback')` is called from
+`getSubscriptionWithReconcile` on every non-cached `/subscriptions/me` response.
+When RC returns no active entitlement and the source is `'fallback'`, the service
+only writes `EXPIRED` if `currentPeriodEnd < now()`. This prevents RC drift (brief
+outage, stale payload) from revoking access mid-period. The `'cron'` source path
+retains the original always-expire behaviour for genuine cancellations.
 
 ### Email Module Flow
 ```

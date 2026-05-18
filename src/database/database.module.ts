@@ -24,6 +24,7 @@ import { KolBundleScenario } from './entities/kol-bundle-scenario.entity';
 import { VocabularyInjectionEvent } from './entities/vocabulary-injection-event.entity';
 import { FrameworkLevel } from './entities/framework-level.entity';
 import { ScenarioEvaluation } from './entities/scenario-evaluation.entity';
+import { PendingSubscriptionClaim } from './entities/pending-subscription-claim.entity';
 
 const entities = [
   Language,
@@ -49,6 +50,7 @@ const entities = [
   KolBundleScenario,
   VocabularyInjectionEvent,
   ScenarioEvaluation,
+  PendingSubscriptionClaim,
 ];
 
 @Module({

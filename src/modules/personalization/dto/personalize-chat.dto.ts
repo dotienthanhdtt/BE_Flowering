@@ -12,7 +12,10 @@ export class PersonalizeChatDto {
   @IsString()
   message?: string;
 
-  @ApiProperty({ required: false, description: 'Scenario that triggered this personalization offer' })
+  @ApiProperty({
+    required: false,
+    description: 'Scenario that triggered this personalization offer',
+  })
   @IsOptional()
   @IsUUID()
   sourceScenarioId?: string;

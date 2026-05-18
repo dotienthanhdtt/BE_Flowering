@@ -74,8 +74,10 @@ export class RevenuecatWebhookController implements OnModuleInit {
 
     const eventTimestamp = payload.event.event_timestamp_ms;
     if (eventTimestamp !== undefined && Math.abs(Date.now() - eventTimestamp) > REPLAY_WINDOW_MS) {
+      // direction=past when event is older than now; direction=future when event timestamp is ahead
+      const direction = Math.sign(Date.now() - eventTimestamp) >= 0 ? 'past' : 'future';
       this.logger.warn(
-        `event=${payload.event.type} outcome=stale_dropped id=${payload.event.id} timestamp=${eventTimestamp} userId=${payload.event.app_user_id ?? 'unknown'}`,
+        `event=${payload.event.type} outcome=stale_dropped id=${payload.event.id} timestamp=${eventTimestamp} direction=${direction} userId=${payload.event.app_user_id ?? 'unknown'}`,
       );
       return { status: 'stale_dropped', outcome: 'stale_dropped' };
     }

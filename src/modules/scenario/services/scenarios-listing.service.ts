@@ -64,8 +64,7 @@ export class ScenariosListingService {
         });
       }
 
-      const locked =
-        row.access_tier === AccessTier.PREMIUM && !userIsPremium ? true : undefined;
+      const locked = row.access_tier === AccessTier.PREMIUM && !userIsPremium ? true : undefined;
 
       const item: ScenarioListItemDto = {
         id: row.id,

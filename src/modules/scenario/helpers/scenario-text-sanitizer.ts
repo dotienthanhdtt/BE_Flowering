@@ -4,7 +4,11 @@ const HTML_TAGS = /<[^>]*>/g;
 const TITLE_MAX = 255;
 
 function stripHtml(raw: string): string {
-  return raw.replace(SCRIPT_STYLE_BLOCKS, '').replace(HTML_TAGS, '').replace(CONTROL_CHARS, '').trim();
+  return raw
+    .replace(SCRIPT_STYLE_BLOCKS, '')
+    .replace(HTML_TAGS, '')
+    .replace(CONTROL_CHARS, '')
+    .trim();
 }
 
 export function sanitizeTitle(raw: unknown): string {

@@ -1,0 +1,32 @@
+{
+  "_capture_note": "NOTE: captured from RC sandbox — sanitize before committing real tokens. NON_RENEWING_PURCHASE has no expiration_at_ms — this is the null-expiry hole that must result in isSubscriptionActive=false for UNKNOWN SKUs.",
+  "api_version": "1.0",
+  "event": {
+    "aliases": ["00000000-0000-4000-8000-000000000123"],
+    "app_id": "app1234567890",
+    "app_user_id": "00000000-0000-4000-8000-000000000123",
+    "commission_percentage": 0.3,
+    "country_code": "US",
+    "currency": "USD",
+    "entitlement_id": "premium",
+    "entitlement_ids": ["premium"],
+    "environment": "SANDBOX",
+    "event_timestamp_ms": 1747526580000,
+    "expiration_at_ms": null,
+    "id": "evt-non-renewing-no-expiry-sandbox-001",
+    "is_family_share": false,
+    "offer_code": null,
+    "original_app_user_id": "00000000-0000-4000-8000-000000000123",
+    "period_type": "NORMAL",
+    "presented_offering_id": "default",
+    "price": 49.99,
+    "price_in_purchased_currency": 49.99,
+    "product_id": "com.flowering.consumable_pack_unknown_sku",
+    "purchased_at_ms": 1747526580000,
+    "store": "APP_STORE",
+    "subscriber_attributes": {},
+    "takehome_percentage": 0.7,
+    "transaction_id": "2000000123456791",
+    "type": "NON_RENEWING_PURCHASE"
+  }
+}

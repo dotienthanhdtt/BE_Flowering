@@ -1,0 +1,20 @@
+{
+  "_capture_note": "NOTE: captured from RC sandbox — sanitize before committing real tokens. Triggered when Purchases.logIn(uuid) links an anonymous session that already had an active purchase.",
+  "api_version": "1.0",
+  "event": {
+    "aliases": [
+      "$RCAnonymousID:abc123def456"
+    ],
+    "app_id": "app1234567890",
+    "app_user_id": "00000000-0000-4000-8000-000000000123",
+    "environment": "SANDBOX",
+    "event_timestamp_ms": 1747526520000,
+    "id": "evt-transfer-anon-to-uuid-sandbox-001",
+    "original_app_user_id": "$RCAnonymousID:abc123def456",
+    "store": "APP_STORE",
+    "subscriber_attributes": {},
+    "transferred_from": ["$RCAnonymousID:abc123def456"],
+    "transferred_to": ["00000000-0000-4000-8000-000000000123"],
+    "type": "TRANSFER"
+  }
+}

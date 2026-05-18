@@ -64,8 +64,9 @@ export class FirebaseTokenStrategy {
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
-      const code = (error as { code?: string; errorInfo?: { code?: string } })?.errorInfo?.code
-        ?? (error as { code?: string })?.code;
+      const code =
+        (error as { code?: string; errorInfo?: { code?: string } })?.errorInfo?.code ??
+        (error as { code?: string })?.code;
       const message = (error as Error)?.message;
       this.logger.warn(
         `verifyIdToken failed: code=${code ?? 'unknown'} message=${message ?? 'unknown'}`,

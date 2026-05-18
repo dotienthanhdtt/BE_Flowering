@@ -30,7 +30,12 @@ export class ScenarioEvaluationDto {
   summary!: string;
 }
 
-export type EvaluationErrorCode = 'llm_unavailable' | 'parse_failed' | 'timeout' | 'invalid_response' | 'retry_cap_reached';
+export type EvaluationErrorCode =
+  | 'llm_unavailable'
+  | 'parse_failed'
+  | 'timeout'
+  | 'invalid_response'
+  | 'retry_cap_reached';
 
 export class NextScenarioCategoryDto {
   @ApiProperty({ format: 'uuid' }) id!: string;

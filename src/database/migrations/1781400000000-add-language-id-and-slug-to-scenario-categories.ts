@@ -89,9 +89,7 @@ export class AddLanguageIdAndSlugToScenarioCategories1781400000000 implements Mi
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS uniq_scenario_category_lang_slug`);
-    await queryRunner.query(
-      `ALTER TABLE scenario_categories ALTER COLUMN slug DROP NOT NULL`,
-    );
+    await queryRunner.query(`ALTER TABLE scenario_categories ALTER COLUMN slug DROP NOT NULL`);
     await queryRunner.query(
       `ALTER TABLE scenario_categories ALTER COLUMN language_id DROP NOT NULL`,
     );
@@ -103,9 +101,7 @@ export class AddLanguageIdAndSlugToScenarioCategories1781400000000 implements Mi
       WHERE language_id = (SELECT id FROM languages WHERE is_learning_available = true ORDER BY name LIMIT 1)
     `);
     await queryRunner.query(`DELETE FROM scenario_categories WHERE language_id IS NOT NULL`);
-    await queryRunner.query(
-      `ALTER TABLE scenario_categories DROP COLUMN IF EXISTS language_id`,
-    );
+    await queryRunner.query(`ALTER TABLE scenario_categories DROP COLUMN IF EXISTS language_id`);
     await queryRunner.query(`ALTER TABLE scenario_categories DROP COLUMN IF EXISTS slug`);
     // Restore CHECK constraint
     await queryRunner.query(`

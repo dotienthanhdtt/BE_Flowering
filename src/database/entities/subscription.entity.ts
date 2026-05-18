@@ -22,6 +22,8 @@ export enum SubscriptionPlan {
   MONTHLY = 'monthly',
   YEARLY = 'yearly',
   LIFETIME = 'lifetime',
+  /** Written when RC sends an unrecognised product ID. Capped at 7 days. See runbooks/iap-unknown-sku.md. */
+  UNKNOWN = 'unknown',
 }
 
 @Entity('subscriptions')

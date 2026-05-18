@@ -33,15 +33,11 @@ export class CreateScenarioEvaluations1781200000000 implements MigrationInterfac
       `CREATE INDEX "idx_scenario_eval_scenario" ON "scenario_evaluations" ("scenario_id")`,
     );
 
-    await queryRunner.query(
-      `ALTER TABLE "ai_conversations" ADD COLUMN "completed_at" timestamptz`,
-    );
+    await queryRunner.query(`ALTER TABLE "ai_conversations" ADD COLUMN "completed_at" timestamptz`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "ai_conversations" DROP COLUMN IF EXISTS "completed_at"`,
-    );
+    await queryRunner.query(`ALTER TABLE "ai_conversations" DROP COLUMN IF EXISTS "completed_at"`);
     // Rename instead of DROP to preserve paid LLM-generated evaluation data on rollback
     const timestamp = Date.now();
     await queryRunner.query(

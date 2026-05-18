@@ -10,8 +10,6 @@ export class AddCompletedAtToAiConversations1781300000000 implements MigrationIn
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "ai_conversations" DROP COLUMN IF EXISTS "completed_at"`,
-    );
+    await queryRunner.query(`ALTER TABLE "ai_conversations" DROP COLUMN IF EXISTS "completed_at"`);
   }
 }

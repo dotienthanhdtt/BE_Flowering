@@ -27,9 +27,7 @@ const EVENT = {
 export class OnboardingMaterializationService {
   private readonly logger = new Logger(OnboardingMaterializationService.name);
 
-  constructor(
-    @InjectRepository(Scenario) private readonly scenarioRepo: Repository<Scenario>,
-  ) {}
+  constructor(@InjectRepository(Scenario) private readonly scenarioRepo: Repository<Scenario>) {}
 
   async materializeFromConversation(userId: string, conversation: AiConversation): Promise<void> {
     try {
@@ -65,7 +63,11 @@ export class OnboardingMaterializationService {
         .map((input) => buildPersonalScenarioPartial(input));
 
       if (partials.length === 0) {
-        this.logger.warn({ event: EVENT.SKIP_ALL_INVALID, userId, conversationId: conversation.id });
+        this.logger.warn({
+          event: EVENT.SKIP_ALL_INVALID,
+          userId,
+          conversationId: conversation.id,
+        });
         return;
       }
 

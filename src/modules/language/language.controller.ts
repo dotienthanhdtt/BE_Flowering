@@ -54,5 +54,4 @@ export class LanguageController {
   ): Promise<LanguageDto> {
     return this.languageService.setNativeLanguage(user.id, dto);
   }
-
 }

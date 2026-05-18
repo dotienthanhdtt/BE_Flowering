@@ -225,5 +225,26 @@ describe('PremiumGuard', () => {
       expect(result).toBe(true);
       expect(rcClient.getSubscriber).toHaveBeenCalledWith(USER_ID);
     });
+
+    // T12: RC 404 cold-path → 403 ForbiddenException; no auto-expire of active row
+    it('T12: RC 404 (getSubscriber throws/returns null) → ForbiddenException; does NOT expire active subscription row', async () => {
+      (reflector.getAllAndOverride as jest.Mock).mockReturnValue(true);
+      // DB has no subscription (cold-path)
+      (subscriptionService.getUserSubscription as jest.Mock).mockResolvedValue(null);
+      // RC throws to simulate 404 / network error
+      (rcClient.getSubscriber as jest.Mock).mockRejectedValue(new Error('RC 404'));
+
+      const context = createMockContext();
+
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
+
+      // applyRcGroundTruth MUST NOT be called with an inactive RC payload on fallback path
+      // (no auto-expire should fire when RC is unreachable)
+      const applyRcCalls = (subscriptionService.applyRcGroundTruth as jest.Mock).mock.calls;
+      const expireAttempts = applyRcCalls.filter(
+        (args: any[]) => args[1]?.hasActiveEntitlement === false,
+      );
+      expect(expireAttempts.length).toBe(0);
+    });
   });
 });

@@ -1,0 +1,32 @@
+{
+  "_capture_note": "NOTE: captured from RC sandbox — sanitize before committing real tokens. Replace app_user_id with actual anon ID from sandbox session before using in e2e tests.",
+  "api_version": "1.0",
+  "event": {
+    "aliases": ["$RCAnonymousID:abc123def456"],
+    "app_id": "app1234567890",
+    "app_user_id": "$RCAnonymousID:abc123def456",
+    "commission_percentage": 0.3,
+    "country_code": "US",
+    "currency": "USD",
+    "entitlement_id": "premium",
+    "entitlement_ids": ["premium"],
+    "environment": "SANDBOX",
+    "event_timestamp_ms": 1747526400000,
+    "expiration_at_ms": 1748131200000,
+    "id": "evt-anon-initial-purchase-sandbox-001",
+    "is_family_share": false,
+    "offer_code": null,
+    "original_app_user_id": "$RCAnonymousID:abc123def456",
+    "period_type": "NORMAL",
+    "presented_offering_id": "default",
+    "price": 9.99,
+    "price_in_purchased_currency": 9.99,
+    "product_id": "com.flowering.monthly",
+    "purchased_at_ms": 1747526400000,
+    "store": "APP_STORE",
+    "subscriber_attributes": {},
+    "takehome_percentage": 0.7,
+    "transaction_id": "2000000123456789",
+    "type": "INITIAL_PURCHASE"
+  }
+}

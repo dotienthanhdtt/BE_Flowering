@@ -11,7 +11,9 @@ const LLM_TIMEOUT_MS = 15_000;
 const PROMPT_VERSION = 2;
 
 export class EvaluatorError extends Error {
-  constructor(public readonly code: 'llm_unavailable' | 'parse_failed' | 'timeout' | 'invalid_response') {
+  constructor(
+    public readonly code: 'llm_unavailable' | 'parse_failed' | 'timeout' | 'invalid_response',
+  ) {
     super(code);
     this.name = 'EvaluatorError';
   }
@@ -106,7 +108,9 @@ export class ScenarioEvaluatorService {
           return { raw, modelUsed: this.fallbackModel };
         } catch (fallbackErr) {
           if (fallbackErr instanceof EvaluatorError) throw fallbackErr;
-          this.logger.warn(`Gemini fallback also failed: ${String((fallbackErr as Error).message)}`);
+          this.logger.warn(
+            `Gemini fallback also failed: ${String((fallbackErr as Error).message)}`,
+          );
           throw new EvaluatorError('llm_unavailable');
         }
       }
@@ -116,7 +120,10 @@ export class ScenarioEvaluatorService {
 
   private parseAndValidate(raw: string, modelUsed: string): ScenarioEvaluationResult {
     // Strip markdown fences if LLM wraps output
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '')
+      .trim();
 
     let parsed: Record<string, unknown>;
     try {

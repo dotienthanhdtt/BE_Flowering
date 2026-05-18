@@ -1,9 +1,29 @@
 # Project Changelog
 
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-05-18
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## [2026-05-18] — IAP Flow Critical & Medium Fixes
+
+### Critical (revenue-leaking)
+- **C1**: Anonymous purchase loss — `pending_subscription_claims` table stores events for anonymous users; reconcile on `/subscriptions/me` drains claims only after live RC confirms entitlement. Advisory lock prevents race.
+- **C2**: Unknown SKU poison-pill — `mapProductToPlan` returns `UNKNOWN` (never throws); 7-day hard cap on `currentPeriodEnd`; null expiry → inactive.
+- **C3**: `applyRcGroundTruth('fallback')` no longer auto-expires active rows on RC 404; only expires when `currentPeriodEnd < now()`.
+
+### Medium
+- M1: Drift log noise silenced (`appUserId` uses `app_user_id ?? original_app_user_id`).
+- M2: `isOptimisticallyPremium` decays after 60s via injectable `Clock` abstraction.
+- M4: `RevenueCatService.logIn` retries with bounded backoff (4 attempts).
+- M5: TRANSFER conflict returns 200 to RC (never auto-merges); ops manual resolution via Railway logs.
+
+### Security hardening (red-team)
+- Pending claim grant requires live RC confirmation — forged events via leaked secret are stored but never granted.
+- Cross-user ownership rule: timestamp window (24h) + alias-collision check.
+- DTO compat shim: old clients receive `'monthly'` for UNKNOWN rows until shim removed post-rollout.
+
+---
 
 ## 2026-05-18 — Streaming STT via Soniox WebSocket Gateway
 
