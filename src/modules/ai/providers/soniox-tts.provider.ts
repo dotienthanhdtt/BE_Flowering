@@ -21,7 +21,7 @@ const AUDIO_FORMAT_TO_MIME: Record<string, string> = {
 /** Manages one Soniox TTS realtime WS session, emitting audio chunks. */
 class SonioxTtsStreamHandle implements TtsStreamHandle {
   private audioCb?: (chunk: Buffer) => void;
-  private endCb?: () => void;
+  private endCb?: (completed: boolean) => void;
   private errorCb?: (err: Error) => void;
   private openCb?: () => void;
   private ws!: WebSocket;
@@ -30,6 +30,10 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
   private pendingText: string | null = null;
   private audioChunksSeen = 0;
   private nonAudioMessagesSeen = 0;
+  // True only when Soniox emitted audio_end or terminated — i.e. the
+  // server affirmed full audio was delivered. Transport close alone does
+  // NOT set this flag, so partial streams remain marked incomplete.
+  private completedByProvider = false;
 
   constructor(
     private readonly apiKey: string,
@@ -108,11 +112,13 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
         this.nonAudioMessagesSeen++;
       }
       if (msg.audio_end) {
+        this.completedByProvider = true;
         this.logger.log(
           `Soniox TTS audio_end streamId=${this.streamId} chunks=${this.audioChunksSeen}`,
         );
       }
       if (msg.terminated) {
+        this.completedByProvider = true;
         this.logger.log(
           `Soniox TTS terminated streamId=${this.streamId} chunks=${this.audioChunksSeen} nonAudioMsgs=${this.nonAudioMessagesSeen}`,
         );
@@ -161,7 +167,7 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
   onAudio(cb: (chunk: Buffer) => void): void {
     this.audioCb = cb;
   }
-  onEnd(cb: () => void): void {
+  onEnd(cb: (completed: boolean) => void): void {
     this.endCb = cb;
   }
   onError(cb: (err: Error) => void): void {
@@ -174,7 +180,7 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
   private finish(): void {
     if (this.ended) return;
     this.ended = true;
-    this.endCb?.();
+    this.endCb?.(this.completedByProvider);
   }
 }
 

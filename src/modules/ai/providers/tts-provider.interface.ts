@@ -20,7 +20,13 @@ export interface TtsStreamHandle {
   /** Send the full text once. Provider will stream audio frames back via onAudio. */
   start(text: string): void;
   onAudio(cb: (chunk: Buffer) => void): void;
-  onEnd(cb: () => void): void;
+  /**
+   * Fires exactly once when the stream terminates.
+   * `completed=true` ⇒ provider signalled a real end-of-audio (audio_end / terminated).
+   * `completed=false` ⇒ transport closed before completion (error, forceClose, network drop).
+   * Only `completed=true` audio is safe to persist as a cache entry.
+   */
+  onEnd(cb: (completed: boolean) => void): void;
   onError(cb: (err: Error) => void): void;
   /** Optional: fires when provider's WS handshake completes (before any audio). */
   onOpen?(cb: () => void): void;

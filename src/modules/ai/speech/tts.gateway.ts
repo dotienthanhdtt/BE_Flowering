@@ -138,7 +138,10 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       handle.onAudio((chunk) => {
-        if (session.closed) return;
+        // Always buffer for cache persistence — even if the client is gone.
+        // The goal is to store the full audio of this message no matter
+        // what happens on the client side. Only forwarding to the WS client
+        // is gated on socket state.
         if (!session.firstChunkAt) {
           session.firstChunkAt = Date.now();
           const totalFirstChunkMs = session.firstChunkAt - tConnect;
@@ -155,12 +158,17 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
           });
         }
         session.chunks.push(chunk);
-        if (client.readyState === WebSocket.OPEN) {
+        if (!session.closed && client.readyState === WebSocket.OPEN) {
           client.send(chunk, { binary: true });
         }
       });
-      handle.onEnd(() => {
-        session.providerCompleted = true;
+      handle.onEnd((completed) => {
+        session.providerCompleted = completed;
+        if (!completed) {
+          this.logger.warn(
+            `TTS upstream ended without completion signal messageId=${messageId} chunks=${session.chunks.length} — discarding to avoid cache poison`,
+          );
+        }
         void this.finalizeStream(client, session, message, principal);
       });
       handle.onError((err) => {
@@ -197,34 +205,21 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleDisconnect(client: WebSocket): void {
     const session = clientSessions.get(client);
     if (!session) return;
+    // Mark socket gone so onAudio stops forwarding, but DO NOT touch the
+    // upstream Soniox handle. We want it to keep streaming so we capture
+    // and persist the full audio for this message. Persistence will happen
+    // when Soniox's `onEnd(completed=true)` fires; the max-duration timer
+    // remains as a hard upper bound and is the only path that aborts upstream.
     session.closed = true;
-    if (session.timer) clearTimeout(session.timer);
-    // Only persist when the upstream provider already finished synthesizing
-    // (Soniox `onEnd` fired). Persisting partial chunks on early client
-    // disconnect poisons the cache: the next replay hits storage and returns
-    // a truncated MP3, surfacing as "only first words play".
-    if (
-      session.providerCompleted &&
-      !session.persisted &&
-      session.chunks.length > 0 &&
-      session.message &&
-      session.principal
-    ) {
+    clientSessions.delete(client);
+    if (session.providerCompleted && !session.persisted && session.message && session.principal) {
+      // Provider finished before the disconnect drained through here.
       void this.persistIfBuffered(session, session.message, session.principal);
-    } else if (
-      !session.providerCompleted &&
-      session.chunks.length > 0
-    ) {
+    } else {
       this.logger.log(
-        `TTS WS disconnected mid-stream; discarding ${session.chunks.length} partial chunks to avoid cache poison messageId=${session.message?.id}`,
+        `TTS WS client disconnected; keeping upstream open to capture full audio messageId=${session.message?.id} bufferedChunks=${session.chunks.length}`,
       );
     }
-    try {
-      session.handle?.forceClose();
-    } catch {
-      // already closed
-    }
-    clientSessions.delete(client);
   }
 
   private async streamFromStorage(
@@ -281,7 +276,9 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Idempotent: uploads buffered audio and updates ai_conversation_messages.
-   * Also emits the corresponding Langfuse event (synthesize | empty_stream).
+   * Hard guard: only persists when the provider signalled real completion
+   * (`session.providerCompleted`). A partial buffer is never written to the
+   * cache — that's what causes "only first chunk plays" on replay.
    */
   private async persistIfBuffered(
     session: ActiveSession,
@@ -291,9 +288,20 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (session.persisted) return;
     session.persisted = true;
     const totalBytes = session.chunks.reduce((s, c) => s + c.length, 0);
-    const firstChunkMs = session.firstChunkAt
-      ? session.firstChunkAt - session.startedAt
-      : null;
+    const firstChunkMs = session.firstChunkAt ? session.firstChunkAt - session.startedAt : null;
+    if (!session.providerCompleted) {
+      this.logger.warn(
+        `TTS WS stream did not complete; refusing to persist messageId=${message.id} bufferedChunks=${session.chunks.length} bufferedBytes=${totalBytes}`,
+      );
+      this.tts.emitEvent(message.conversationId, 'tts.incomplete_stream', {
+        message_id: message.id,
+        provider: this.soniox.name,
+        transport: 'ws',
+        char_count: message.content.length,
+        buffered_bytes: totalBytes,
+      });
+      return;
+    }
     if (session.chunks.length === 0) {
       this.logger.warn(
         `TTS WS stream ended with 0 audio chunks messageId=${message.id} chars=${message.content.length}`,
