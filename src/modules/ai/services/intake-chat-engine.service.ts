@@ -39,6 +39,7 @@ export class IntakeChatEngine {
     message: string | undefined,
     promptVars: Record<string, string>,
     config: IntakeChatEngineConfig,
+    opts?: { traceId?: string },
   ): Promise<IntakeTurnResult> {
     const conversation = await this.findConversation(conversationId, config.conversationType);
     const msgCount = conversation.messageCount;
@@ -71,6 +72,7 @@ export class IntakeChatEngine {
       feature: config.chatFeature,
       conversationId,
       turn: currentTurn,
+      ...(opts?.traceId ? { traceId: opts.traceId } : {}),
     });
 
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn, config.maxTurns);

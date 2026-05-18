@@ -183,6 +183,7 @@ export class ScenarioChatService {
       conversationId: conversation.id,
       turn: currentTurn,
       scenarioId: scenario.id,
+      ...(dto.traceId ? { traceId: dto.traceId } : {}),
     });
 
     const { reply, isEnd } = parseScenarioReply(raw);

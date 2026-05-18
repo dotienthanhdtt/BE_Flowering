@@ -2,6 +2,7 @@ import { langfuseSdk } from './instrument';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { useContainer } from 'class-validator';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
@@ -11,6 +12,9 @@ import { ResponseTransformInterceptor, AllExceptionsFilter } from './common';
 async function bootstrap(): Promise<void> {
   // Disable NestJS built-in body parser (defaults to 100 KB) so we can enforce our own limit
   const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  // Enable raw ws adapter for binary-efficient WebSocket gateway (STT streaming)
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   // Cap request bodies at 256 KB — must be registered before NestJS route handlers
   app.use(json({ limit: '256kb' }));

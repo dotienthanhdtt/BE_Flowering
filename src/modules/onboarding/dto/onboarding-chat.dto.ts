@@ -52,4 +52,12 @@ export class OnboardingChatDto {
   @MinLength(1)
   @MaxLength(2000)
   message?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Langfuse traceId minted by client to link STT session with this LLM call.',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  traceId?: string;
 }

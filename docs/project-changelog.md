@@ -5,6 +5,26 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-05-18 — Streaming STT via Soniox WebSocket Gateway
+
+### Added
+- **`/ws/speech/stt` WebSocket gateway** — realtime STT: mobile streams raw PCM 16-bit 16 kHz mono frames; backend proxies to Soniox realtime WS and returns partial/final transcripts.
+- **`SonioxSttProvider`** — implements both sync REST (`transcribe`) and realtime WS (`openStream`) interfaces; registered in `AiModule`.
+- **`SttStreamingProvider` interface** — `SttStreamHandle` (pushPcm, end, onPartial, onFinal, onError, onClose, forceClose) + `SttStreamingProvider` extending `SttProvider`.
+- **`AudioPcmBuffer`** — in-memory PCM accumulator with WAV header serialization; 3-min / 5.76 MB cap enforced.
+- **Dual-mode WS auth** — JWT (scenario) or onboarding sessionId; reject with close code 4401/4429/4408/4413.
+- **Audio archival** — session WAV uploaded to Railway bucket (`audio/stt/<principalId>/<traceId>.wav`); 2-second upload timeout with best-effort background retry.
+- **Langfuse trace continuity** — client mints one UUID `traceId` per voice turn; passed to STT gateway + chat body; `LangfuseService.getHandler` uses it as Langfuse `sessionId` so STT events and LLM completion appear in one session.
+- **`traceId` in chat DTOs** — `OnboardingChatDto.traceId` and `ScenarioChatRequestDto.traceId` (optional UUID v4).
+- ENV: `SONIOX_API_KEY`, `SONIOX_MODEL` (default `stt-rt-preview`), `STT_STREAMING_PROVIDER=soniox`.
+
+### Changed
+- `LangfuseService.getHandler` — when `metadata.traceId` is present it overrides `conversationId` as Langfuse sessionId.
+- `IntakeChatEngine.runTurn` — added optional `opts?: { traceId? }` parameter to forward trace through to LLM metadata.
+- `main.ts` — `WsAdapter` enabled for binary-efficient WebSocket support.
+
+---
+
 ## 2026-05-16 — Scenarios Grouped by Category (Per-Language)
 
 ### Added

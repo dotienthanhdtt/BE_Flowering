@@ -15,6 +15,7 @@ import { GeminiLLMProvider } from './providers/gemini-llm.provider';
 import { NineRouterLLMProvider } from './providers/ninerouter-llm.provider';
 import { OpenAiSttProvider } from './providers/openai-stt.provider';
 import { GeminiSttProvider } from './providers/gemini-stt.provider';
+import { SonioxSttProvider } from './providers/soniox-stt.provider';
 
 // Services
 import { LangfuseService } from './services/langfuse-tracing.service';
@@ -25,6 +26,11 @@ import { TranslationService } from './services/translation.service';
 import { TranscriptionService } from './services/transcription.service';
 import { ObjectStorageService } from '../../database/object-storage.service';
 import { IntakeChatEngine } from './services/intake-chat-engine.service';
+
+// Speech
+import { SpeechGateway } from './speech/speech.gateway';
+import { SpeechService } from './speech/speech.service';
+import { WsAuthGuard } from './speech/ws-auth.guard';
 
 // Controller
 import { AiController } from './ai.controller';
@@ -63,6 +69,7 @@ import { AiController } from './ai.controller';
     // STT Providers
     OpenAiSttProvider,
     GeminiSttProvider,
+    SonioxSttProvider,
     // Services
     ObjectStorageService,
     PromptLoaderService,
@@ -71,6 +78,10 @@ import { AiController } from './ai.controller';
     TranslationService,
     TranscriptionService,
     IntakeChatEngine,
+    // Speech
+    SpeechGateway,
+    SpeechService,
+    WsAuthGuard,
   ],
   exports: [
     UnifiedLLMService,
@@ -78,6 +89,8 @@ import { AiController } from './ai.controller';
     PromptLoaderService,
     IntakeChatEngine,
     LangfuseService,
+    SonioxSttProvider,
+    ObjectStorageService,
   ],
 })
 export class AiModule {}

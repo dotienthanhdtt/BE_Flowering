@@ -93,6 +93,15 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Max file size: 10MB
 - Supported formats: M4A, MP4, MPEG, WAV
 
+**Speech Module** (`src/modules/ai/speech/`):
+- WebSocket gateway at `/ws/speech/stt` — realtime streaming STT via Soniox
+- Dual-mode auth: JWT (scenario) or onboarding sessionId
+- PCM 16-bit 16kHz mono frames → Soniox WS → partial/final transcripts back to client
+- Session hard cap: 3 min, buffer cap 5.76 MB; close codes 4401/4408/4413/4429
+- Audio archived to Railway bucket as WAV on session end (2s upload timeout, best-effort)
+- `traceId` (UUID) links Langfuse STT session events with downstream LLM call
+- Soniox provider: `SONIOX_API_KEY` + `SONIOX_MODEL` env vars required
+
 ### 3. Onboarding Module (13 files, ~1,350 LOC)
 
 **Purpose:** Anonymous session-based chat for new users

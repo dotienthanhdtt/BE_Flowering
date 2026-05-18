@@ -27,6 +27,14 @@ export class ScenarioChatRequestDto {
   @IsOptional()
   @IsUUID()
   conversationId?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Langfuse traceId minted by client to link STT session with this LLM call.',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  traceId?: string;
 }
 
 export class ScenarioInfoDto {
@@ -64,4 +72,3 @@ export class ScenarioChatResponseDto {
   @ApiProperty({ type: [ScenarioChatMessageDto] })
   messages!: ScenarioChatMessageDto[];
 }
-

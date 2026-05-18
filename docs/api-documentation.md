@@ -847,6 +847,91 @@ curl -X POST http://localhost:3000/scenario/chat \
 
 Access: `http://localhost:3000/api/docs`
 
+## WebSocket: /ws/speech/stt
+
+Realtime streaming speech-to-text. Mobile streams raw PCM 16-bit 16 kHz mono frames over WebSocket; backend proxies to Soniox and returns partial/final transcripts. Audio archived to Railway bucket.
+
+### Connection
+
+```
+ws://host/ws/speech/stt?context=<scenario|onboarding>&traceId=<uuid>&lang=<iso>&token=<jwt>
+```
+
+| Query Param | Required | Description |
+|-------------|----------|-------------|
+| `context` | yes | `scenario` (JWT auth) or `onboarding` (sessionId auth) |
+| `traceId` | recommended | UUID v4 minted by client — links STT span + downstream LLM call in Langfuse |
+| `lang` | no | ISO 639-1 language hint (e.g. `en`, `vi`) |
+| `token` | scenario only | JWT bearer token (alternatively in `Authorization: Bearer` header) |
+| `sessionId` | onboarding only | Onboarding session identifier |
+
+### Auth
+
+- **scenario**: JWT via `Authorization: Bearer <token>` header **or** `?token=<jwt>` query param.
+- **onboarding**: `?sessionId=<id>` query param (min 8 chars). No JWT required.
+- Failure → server sends `{type:"error",code:"auth"}` then closes with code **4401**.
+
+### Message Flow
+
+```
+Client → Server                     Server → Client
+──────────────────────────────────────────────────────
+[binary PCM frames]          →
+                             ←      {type:"partial", text:"..."}
+                             ←      {type:"final", text:"..."}
+{type:"end"}                 →
+                             ←      {type:"session_end", transcript:"...", audioUrl:"...", traceId:"..."}
+                                    [connection closes 1000]
+```
+
+### Server → Client Message Shapes
+
+```ts
+type ServerMsg =
+  | { type: "partial"; text: string }
+  | { type: "final"; text: string }
+  | { type: "session_end"; transcript: string; audioUrl: string | null; traceId: string }
+  | { type: "error"; code: "max_duration"|"overflow"|"provider"|"auth"|"concurrent"; message: string }
+```
+
+### WebSocket Close Codes
+
+| Code | Reason |
+|------|--------|
+| 1000 | Normal close after `session_end` |
+| 4401 | Unauthorized |
+| 4408 | Max duration (3 min) exceeded |
+| 4413 | Audio buffer overflow (> 5.76 MB) |
+| 4429 | Concurrent session already active for this principal |
+| 4500 | Provider (Soniox) error |
+
+### Audio Format
+
+Raw PCM frames: **16-bit signed, 16 kHz, mono**. No headers. Frame size is flexible (suggest 4 KB chunks).
+
+### Example (`wscat`)
+
+```bash
+# Connect (scenario)
+wscat -c "ws://localhost:3000/ws/speech/stt?context=scenario&traceId=<uuid>&token=<jwt>"
+
+# Send end signal
+> {"type":"end"}
+
+# Receive
+< {"type":"session_end","transcript":"Hello world","audioUrl":"https://...","traceId":"<uuid>"}
+```
+
+### Trace Continuity
+
+Mobile mints one `traceId` UUID per voice turn:
+1. Passes `?traceId=<uuid>` to WS — creates `stt.session` event in Langfuse under that session.
+2. Passes `traceId` in the subsequent `POST /onboarding/chat` or `POST /scenario/chat` body — LLM call shares the same Langfuse session.
+
+Result: a single Langfuse session shows both STT and LLM spans for one voice turn.
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -854,5 +939,7 @@ Access: `http://localhost:3000/api/docs`
 | 401 Unauthorized | Verify JWT token valid/not expired; check `Authorization: Bearer <token>` format |
 | 400 Bad Request | Verify body schema, required fields, data types |
 | 503 Service Unavailable | Check AI provider API keys; review Langfuse logs |
+| WS 4401 | Check `context` param and auth (JWT or sessionId) |
+| WS 4429 | Previous session still active — wait for `session_end` or reconnect after disconnect |
 
 **More:** Swagger at `/api/docs` for interactive testing.

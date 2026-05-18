@@ -44,11 +44,16 @@ export class LangfuseService implements OnModuleDestroy {
 
   /**
    * Create a CallbackHandler for a LangChain LLM call.
+   * When metadata.traceId is provided (client-minted UUID from STT session),
+   * it takes precedence as the Langfuse sessionId so the LLM span lands in the
+   * same Langfuse session as the upstream STT span.
    */
   getHandler(metadata?: Record<string, unknown>): CallbackHandler {
+    const sessionId =
+      (metadata?.traceId as string | undefined) ?? (metadata?.conversationId as string | undefined);
     return new CallbackHandler({
       userId: metadata?.userId as string | undefined,
-      sessionId: metadata?.conversationId as string | undefined,
+      sessionId,
       tags: metadata?.feature ? [metadata.feature as string] : undefined,
     });
   }

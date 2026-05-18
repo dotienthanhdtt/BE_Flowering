@@ -34,6 +34,8 @@ export interface AppConfiguration {
     langfuseSecretKey?: string;
     langfuseHost: string;
     sttProvider: string;
+    sonioxApiKey?: string;
+    sonioxModel: string;
   };
   revenuecat: {
     apiKey?: string;
@@ -84,6 +86,8 @@ export default (): AppConfiguration => ({
     langfuseSecretKey: process.env.LANGFUSE_SECRET_KEY,
     langfuseHost: process.env.LANGFUSE_HOST || 'https://cloud.langfuse.com',
     sttProvider: process.env.STT_PROVIDER || 'openai',
+    sonioxApiKey: process.env.SONIOX_API_KEY,
+    sonioxModel: process.env.SONIOX_MODEL || 'stt-rt-preview',
   },
   revenuecat: {
     apiKey: process.env.REVENUECAT_API_KEY,
