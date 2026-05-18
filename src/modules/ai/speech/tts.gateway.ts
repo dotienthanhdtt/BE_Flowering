@@ -20,6 +20,11 @@ interface ActiveSession {
   startedAt: number;
   closed: boolean;
   persisted: boolean;
+  // True only after Soniox emitted `onEnd` — i.e. the full TTS was
+  // synthesized. Required to gate cache persistence: persisting partial
+  // streams on early disconnect poisons the cache and replays only the
+  // first words on subsequent loads.
+  providerCompleted: boolean;
   message?: { id: string; conversationId: string; content: string };
   principal?: TtsPrincipal;
 }
@@ -78,6 +83,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       startedAt: Date.now(),
       closed: false,
       persisted: false,
+      providerCompleted: false,
       message: {
         id: message.id,
         conversationId: message.conversationId,
@@ -154,6 +160,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       });
       handle.onEnd(() => {
+        session.providerCompleted = true;
         void this.finalizeStream(client, session, message, principal);
       });
       handle.onError((err) => {
@@ -192,16 +199,25 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!session) return;
     session.closed = true;
     if (session.timer) clearTimeout(session.timer);
-    // Flush buffered audio to storage + DB before tearing down. Fire-and-forget
-    // because the WS is already gone; persistIfBuffered is idempotent so a
-    // concurrent finalizeStream is safe.
+    // Only persist when the upstream provider already finished synthesizing
+    // (Soniox `onEnd` fired). Persisting partial chunks on early client
+    // disconnect poisons the cache: the next replay hits storage and returns
+    // a truncated MP3, surfacing as "only first words play".
     if (
+      session.providerCompleted &&
       !session.persisted &&
       session.chunks.length > 0 &&
       session.message &&
       session.principal
     ) {
       void this.persistIfBuffered(session, session.message, session.principal);
+    } else if (
+      !session.providerCompleted &&
+      session.chunks.length > 0
+    ) {
+      this.logger.log(
+        `TTS WS disconnected mid-stream; discarding ${session.chunks.length} partial chunks to avoid cache poison messageId=${session.message?.id}`,
+      );
     }
     try {
       session.handle?.forceClose();
