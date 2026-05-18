@@ -27,6 +27,15 @@ export class CorrectionCheckRequestDto {
   @IsOptional()
   @IsUUID()
   conversationId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Message ID to persist correctedText to ai_conversation_messages.corrected_content. ' +
+      'When omitted, correction is computed and returned but not stored.',
+  })
+  @IsOptional()
+  @IsUUID()
+  messageId?: string;
 }
 
 /**

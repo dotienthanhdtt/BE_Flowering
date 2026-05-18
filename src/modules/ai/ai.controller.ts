@@ -60,6 +60,7 @@ export class AiController {
       dto.userMessage,
       dto.targetLanguage,
       dto.conversationId,
+      dto.messageId,
     );
   }
 

@@ -50,6 +50,11 @@ export class AiConversationMessage {
   @Column({ type: 'varchar', length: 10, name: 'translated_lang', nullable: true })
   translatedLang?: string;
 
+  // Grammar/vocabulary correction of this message produced by POST /ai/chat/correct.
+  // null = no errors found (or correction never run). Overwritten on each call.
+  @Column({ type: 'text', name: 'corrected_content', nullable: true })
+  correctedContent?: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }

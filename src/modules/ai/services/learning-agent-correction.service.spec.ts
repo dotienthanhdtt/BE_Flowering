@@ -12,13 +12,15 @@ describe('LearningAgentService - checkCorrection', () => {
   let service: LearningAgentService;
   let llmService: any;
   let promptLoader: any;
+  let messageRepo: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
     llmService = { chat: jest.fn() };
     promptLoader = { loadPrompt: jest.fn().mockReturnValue('formatted prompt') };
+    messageRepo = { update: jest.fn().mockResolvedValue({ affected: 0 }) };
 
-    service = new LearningAgentService(llmService, promptLoader);
+    service = new LearningAgentService(llmService, promptLoader, messageRepo);
   });
 
   it('should return null correctedText when LLM returns "null"', async () => {
