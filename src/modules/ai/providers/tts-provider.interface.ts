@@ -22,6 +22,8 @@ export interface TtsStreamHandle {
   onAudio(cb: (chunk: Buffer) => void): void;
   onEnd(cb: () => void): void;
   onError(cb: (err: Error) => void): void;
+  /** Optional: fires when provider's WS handshake completes (before any audio). */
+  onOpen?(cb: () => void): void;
   forceClose(): void;
 }
 

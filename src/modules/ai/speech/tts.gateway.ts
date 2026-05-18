@@ -37,6 +37,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   async handleConnection(client: WebSocket, req: IncomingMessage): Promise<void> {
+    const tConnect = Date.now();
     const authResult = this.auth.validate(req);
     if (!authResult) {
       this.closeWithError(client, 4401, 'auth', 'Unauthorized');
@@ -56,6 +57,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    const tAuthStart = Date.now();
     let message;
     try {
       message = await this.tts.loadAndAuthorize(messageId, principal);
@@ -63,6 +65,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.handleAuthError(client, err);
       return;
     }
+    const loadAuthMs = Date.now() - tAuthStart;
 
     const session: ActiveSession = {
       chunks: [],
@@ -93,12 +96,17 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         provider: this.soniox.name,
         transport: 'ws',
         language,
+        load_auth_ms: loadAuthMs,
       });
-      await this.streamFromStorage(client, session, message.ttsAudioPath);
+      this.logger.log(
+        `[tts-timing] cache_hit messageId=${messageId} loadAuthMs=${loadAuthMs}`,
+      );
+      await this.streamFromStorage(client, session, message.ttsAudioPath, tConnect);
       return;
     }
 
     // Cache miss → open Soniox stream
+    const tSonioxOpen = Date.now();
     try {
       const handle = this.soniox.openStream({
         traceId: message.conversationId,
@@ -106,9 +114,34 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
       session.handle = handle;
 
+      handle.onOpen?.(() => {
+        const sonioxConnectMs = Date.now() - tSonioxOpen;
+        this.logger.log(
+          `[tts-timing] soniox_ws_open messageId=${messageId} sonioxConnectMs=${sonioxConnectMs}`,
+        );
+        this.tts.emitEvent(message.conversationId, 'tts.stream_ws_open', {
+          message_id: message.id,
+          soniox_connect_ms: sonioxConnectMs,
+        });
+      });
+
       handle.onAudio((chunk) => {
         if (session.closed) return;
-        if (!session.firstChunkAt) session.firstChunkAt = Date.now();
+        if (!session.firstChunkAt) {
+          session.firstChunkAt = Date.now();
+          const totalFirstChunkMs = session.firstChunkAt - tConnect;
+          const sonioxFirstAudioMs = session.firstChunkAt - tSonioxOpen;
+          this.logger.log(
+            `[tts-timing] first_chunk messageId=${messageId} loadAuthMs=${loadAuthMs} sonioxFirstAudioMs=${sonioxFirstAudioMs} totalFirstChunkMs=${totalFirstChunkMs} chars=${message.content.length}`,
+          );
+          this.tts.emitEvent(message.conversationId, 'tts.first_chunk', {
+            message_id: message.id,
+            load_auth_ms: loadAuthMs,
+            soniox_first_audio_ms: sonioxFirstAudioMs,
+            total_first_chunk_ms: totalFirstChunkMs,
+            char_count: message.content.length,
+          });
+        }
         session.chunks.push(chunk);
         if (client.readyState === WebSocket.OPEN) {
           client.send(chunk, { binary: true });
@@ -176,10 +209,17 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client: WebSocket,
     session: ActiveSession,
     path: string,
+    tConnect: number,
   ): Promise<void> {
     try {
+      const tStorageStart = Date.now();
       const obj = await this.storage.getObject(path);
+      const storageGetMs = Date.now() - tStorageStart;
       session.firstChunkAt = Date.now();
+      const totalFirstChunkMs = session.firstChunkAt - tConnect;
+      this.logger.log(
+        `[tts-timing] cache_first_chunk path=${path} storageGetMs=${storageGetMs} totalFirstChunkMs=${totalFirstChunkMs}`,
+      );
       obj.body.on('data', (chunk: Buffer) => {
         if (session.closed || client.readyState !== WebSocket.OPEN) return;
         client.send(chunk, { binary: true });

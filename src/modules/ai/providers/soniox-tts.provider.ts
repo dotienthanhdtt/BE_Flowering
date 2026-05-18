@@ -23,6 +23,7 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
   private audioCb?: (chunk: Buffer) => void;
   private endCb?: () => void;
   private errorCb?: (err: Error) => void;
+  private openCb?: () => void;
   private ws!: WebSocket;
   private ended = false;
   private opened = false;
@@ -59,6 +60,7 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
       };
       this.ws.send(JSON.stringify(config));
       this.opened = true;
+      this.openCb?.();
       this.logger.log(
         `Soniox TTS WS opened streamId=${this.streamId} model=${this.model} voice=${this.voice} lang=${language} format=${this.audioFormat}@${this.sampleRate}`,
       );
@@ -106,7 +108,9 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
         this.nonAudioMessagesSeen++;
       }
       if (msg.audio_end) {
-        this.logger.log(`Soniox TTS audio_end streamId=${this.streamId} chunks=${this.audioChunksSeen}`);
+        this.logger.log(
+          `Soniox TTS audio_end streamId=${this.streamId} chunks=${this.audioChunksSeen}`,
+        );
       }
       if (msg.terminated) {
         this.logger.log(
@@ -162,6 +166,9 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
   }
   onError(cb: (err: Error) => void): void {
     this.errorCb = cb;
+  }
+  onOpen(cb: () => void): void {
+    this.openCb = cb;
   }
 
   private finish(): void {
