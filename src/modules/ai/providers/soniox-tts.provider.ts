@@ -45,19 +45,22 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
     this.ws = new WebSocket(SONIOX_TTS_WS_URL);
 
     this.ws.on('open', () => {
+      // Soniox WS requires: api_key, stream_id, model, language, voice, audio_format.
+      // Missing any required field → server TCP-drops with no error JSON (close 1006).
+      const language = this.language || 'en';
       const config: Record<string, unknown> = {
         api_key: this.apiKey,
         model: this.model,
+        language,
         voice: this.voice,
         audio_format: this.audioFormat,
         sample_rate: this.sampleRate,
         stream_id: this.streamId,
       };
-      if (this.language) config.language = this.language;
       this.ws.send(JSON.stringify(config));
       this.opened = true;
       this.logger.log(
-        `Soniox TTS WS opened streamId=${this.streamId} model=${this.model} voice=${this.voice} format=${this.audioFormat}@${this.sampleRate}`,
+        `Soniox TTS WS opened streamId=${this.streamId} model=${this.model} voice=${this.voice} lang=${language} format=${this.audioFormat}@${this.sampleRate}`,
       );
       if (this.pendingText !== null) {
         this.sendText(this.pendingText);
