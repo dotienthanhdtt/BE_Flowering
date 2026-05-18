@@ -101,6 +101,12 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Audio archived to Railway bucket as WAV on session end (2s upload timeout, best-effort)
 - `traceId` (UUID) links Langfuse STT session events with downstream LLM call
 - Soniox provider: `SONIOX_API_KEY` + `SONIOX_MODEL` env vars required
+- **TTS surfaces** (`tts.controller.ts`, `tts.gateway.ts`, `tts.service.ts`):
+  - REST: `POST /ai/speech/tts` (JWT), `POST /ai/speech/tts/onboarding` (@Public)
+  - WS: `/ws/speech/tts` — binary mp3 chunks from Soniox `tts-rt-v1`
+  - Mobile-triggered via `messageId` (assistant role only, 5000-char cap)
+  - DB cache via `ai_conversation_messages.tts_audio_path` (stores storage key; URL re-signed on read)
+  - ENV: `SONIOX_TTS_MODEL=tts-rt-v1`, `SONIOX_TTS_VOICE=Adrian`, `SONIOX_TTS_AUDIO_FORMAT=mp3`, `SONIOX_TTS_SAMPLE_RATE=24000`
 
 ### 3. Onboarding Module (13 files, ~1,350 LOC)
 

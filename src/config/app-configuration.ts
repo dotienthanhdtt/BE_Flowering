@@ -36,6 +36,10 @@ export interface AppConfiguration {
     sttProvider: string;
     sonioxApiKey?: string;
     sonioxModel: string;
+    sonioxTtsModel: string;
+    sonioxTtsVoice: string;
+    sonioxTtsAudioFormat: string;
+    sonioxTtsSampleRate: number;
   };
   revenuecat: {
     apiKey?: string;
@@ -88,6 +92,10 @@ export default (): AppConfiguration => ({
     sttProvider: process.env.STT_PROVIDER || 'openai',
     sonioxApiKey: process.env.SONIOX_API_KEY,
     sonioxModel: process.env.SONIOX_MODEL || 'stt-rt-preview',
+    sonioxTtsModel: process.env.SONIOX_TTS_MODEL || 'tts-rt-v1',
+    sonioxTtsVoice: process.env.SONIOX_TTS_VOICE || 'Adrian',
+    sonioxTtsAudioFormat: process.env.SONIOX_TTS_AUDIO_FORMAT || 'mp3',
+    sonioxTtsSampleRate: parseInt(process.env.SONIOX_TTS_SAMPLE_RATE || '24000', 10),
   },
   revenuecat: {
     apiKey: process.env.REVENUECAT_API_KEY,

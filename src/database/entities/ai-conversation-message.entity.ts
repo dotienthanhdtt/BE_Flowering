@@ -35,6 +35,11 @@ export class AiConversationMessage {
   @Column({ type: 'text', name: 'audio_url', nullable: true })
   audioUrl?: string;
 
+  // Storage object key for TTS-synthesized audio. URLs are minted on read via
+  // ObjectStorageService.getSignedUrl(path) so cached responses never expire.
+  @Column({ type: 'text', name: 'tts_audio_path', nullable: true })
+  ttsAudioPath?: string;
+
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, unknown>;
 

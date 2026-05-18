@@ -922,6 +922,96 @@ wscat -c "ws://localhost:3000/ws/speech/stt?context=scenario&traceId=<uuid>&toke
 < {"type":"session_end","transcript":"Hello world","audioUrl":"https://...","traceId":"<uuid>"}
 ```
 
+## POST /ai/speech/tts (scenario)
+
+Synthesize an assistant chat message to mp3. JWT-protected. Looks up the message by `messageId`, verifies ownership (`conversation.userId === jwt.sub`), and returns a presigned URL.
+
+### Auth
+JWT Bearer.
+
+### Request
+```json
+{ "messageId": "<uuid>" }
+```
+
+### Response
+```json
+{
+  "code": 1,
+  "message": "Success",
+  "data": {
+    "audioUrl": "https://...signed-mp3-url",
+    "mimeType": "audio/mpeg",
+    "cached": false
+  }
+}
+```
+
+`cached: true` indicates a DB hit — Soniox was not called; URL is freshly re-signed.
+
+### Errors
+| Status | Reason |
+|--------|--------|
+| 400 | Message exceeds 5000-char limit |
+| 403 | Message is not an assistant message OR conversation is not yours |
+| 404 | Message not found |
+| 502 | Soniox error |
+
+## POST /ai/speech/tts/onboarding (public)
+
+Same as above for anonymous onboarding chat. No JWT — verifies `(conversationId, sessionId)` and that the conversation is onboarding-type (`anonymous` / `personalize_intake`) with no linked user.
+
+### Request
+```json
+{
+  "messageId": "<uuid>",
+  "conversationId": "<uuid>",
+  "sessionId": "<uuid>"
+}
+```
+
+Response shape identical to the scenario endpoint.
+
+## WebSocket: /ws/speech/tts
+
+Realtime streaming TTS. Backend opens a Soniox TTS WebSocket and proxies audio chunks (mp3 by default) to the client as binary frames. Synthesized audio is persisted to storage on first run so subsequent calls hit the DB cache.
+
+### Connection
+```
+ws://host/ws/speech/tts?context=<scenario|onboarding>&messageId=<uuid>&token=<jwt>
+ws://host/ws/speech/tts?context=onboarding&messageId=<uuid>&conversationId=<uuid>&sessionId=<uuid>
+```
+
+| Query Param | Required | Description |
+|-------------|----------|-------------|
+| `context` | yes | `scenario` (JWT) or `onboarding` (sessionId) |
+| `messageId` | yes | Assistant message UUID to synthesize |
+| `conversationId` | onboarding only | Conversation the message belongs to |
+| `sessionId` | onboarding only | Onboarding session identifier |
+| `token` | scenario only | JWT bearer (alternatively `Authorization: Bearer`) |
+
+### Message Flow
+```
+Client → Server                     Server → Client
+──────────────────────────────────────────────────────
+[connect]                    →
+                             ←      [binary mp3 chunks ...]
+                             ←      {type:"session_end", first_chunk_ms: 240, total_bytes: 31480}
+                                    [connection closes 1000]
+```
+
+### Close Codes
+| Code | Reason |
+|------|--------|
+| 1000 | Normal close after `session_end` |
+| 4400 | Bad request (missing/invalid messageId or conversationId) |
+| 4401 | Unauthorized |
+| 4403 | Forbidden (not your message / wrong conversation / not an onboarding session) |
+| 4404 | Message not found |
+| 4408 | Max duration (60s) exceeded |
+| 4413 | Message exceeds 5000-char limit |
+| 4500 | Provider (Soniox) error |
+
 ### Trace Continuity
 
 Mobile mints one `traceId` UUID per voice turn:

@@ -16,6 +16,7 @@ import { NineRouterLLMProvider } from './providers/ninerouter-llm.provider';
 import { OpenAiSttProvider } from './providers/openai-stt.provider';
 import { GeminiSttProvider } from './providers/gemini-stt.provider';
 import { SonioxSttProvider } from './providers/soniox-stt.provider';
+import { SonioxTtsProvider } from './providers/soniox-tts.provider';
 
 // Services
 import { LangfuseService } from './services/langfuse-tracing.service';
@@ -31,6 +32,9 @@ import { IntakeChatEngine } from './services/intake-chat-engine.service';
 import { SpeechGateway } from './speech/speech.gateway';
 import { SpeechService } from './speech/speech.service';
 import { WsAuthGuard } from './speech/ws-auth.guard';
+import { TtsService } from './speech/tts.service';
+import { TtsController } from './speech/tts.controller';
+import { TtsGateway } from './speech/tts.gateway';
 
 // Controller
 import { AiController } from './ai.controller';
@@ -57,7 +61,7 @@ import { AiController } from './ai.controller';
       },
     ]),
   ],
-  controllers: [AiController],
+  controllers: [AiController, TtsController],
   providers: [
     // Langfuse first (dependency for providers)
     LangfuseService,
@@ -70,6 +74,8 @@ import { AiController } from './ai.controller';
     OpenAiSttProvider,
     GeminiSttProvider,
     SonioxSttProvider,
+    // TTS Providers
+    SonioxTtsProvider,
     // Services
     ObjectStorageService,
     PromptLoaderService,
@@ -82,6 +88,8 @@ import { AiController } from './ai.controller';
     SpeechGateway,
     SpeechService,
     WsAuthGuard,
+    TtsService,
+    TtsGateway,
   ],
   exports: [
     UnifiedLLMService,

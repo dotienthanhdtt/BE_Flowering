@@ -5,6 +5,21 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-05-18 — Streaming TTS via Soniox (REST + WebSocket)
+
+### Added
+- **`POST /ai/speech/tts`** (JWT) and **`POST /ai/speech/tts/onboarding`** (`@Public`) — synthesize an assistant message by `messageId`; returns presigned mp3 URL.
+- **`WS /ws/speech/tts`** — streaming surface; backend proxies Soniox TTS `tts-rt-v1` WS and forwards binary mp3 chunks to mobile. 60s session cap. Close codes mirror STT.
+- **`SonioxTtsProvider`** — implements `TtsProvider` (REST `synthesize`) + `TtsStreamingProvider` (`openStream`); env-driven model/voice/format.
+- **`TtsService`** — ownership/role/length guards, per-message DB cache, Langfuse `tts.synthesize` / `tts.cache_hit` events.
+- **`tts_audio_path` column** on `ai_conversation_messages` — stores storage object key so cache hits mint fresh signed URLs (no expiry).
+- ENV: `SONIOX_TTS_MODEL=tts-rt-v1`, `SONIOX_TTS_VOICE=Adrian`, `SONIOX_TTS_AUDIO_FORMAT=mp3`, `SONIOX_TTS_SAMPLE_RATE=24000`.
+
+### Migration
+`1782000000000-add-tts-audio-path-to-ai-conversation-messages.ts` — additive nullable text column.
+
+---
+
 ## [2026-05-18] — IAP Flow Critical & Medium Fixes
 
 ### Critical (revenue-leaking)
