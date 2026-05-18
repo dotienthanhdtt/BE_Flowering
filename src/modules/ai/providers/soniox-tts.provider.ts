@@ -27,6 +27,8 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
   private ended = false;
   private opened = false;
   private pendingText: string | null = null;
+  private audioChunksSeen = 0;
+  private nonAudioMessagesSeen = 0;
 
   constructor(
     private readonly apiKey: string,
@@ -36,6 +38,7 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
     private readonly sampleRate: number,
     private readonly language: string | undefined,
     private readonly streamId: string,
+    private readonly logger: Logger,
   ) {}
 
   connect(): this {
@@ -53,43 +56,73 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
       if (this.language) config.language = this.language;
       this.ws.send(JSON.stringify(config));
       this.opened = true;
+      this.logger.log(
+        `Soniox TTS WS opened streamId=${this.streamId} model=${this.model} voice=${this.voice} format=${this.audioFormat}@${this.sampleRate}`,
+      );
       if (this.pendingText !== null) {
         this.sendText(this.pendingText);
         this.pendingText = null;
       }
     });
 
-    this.ws.on('message', (data: Buffer | string) => {
+    this.ws.on('message', (data: Buffer | string, isBinary?: boolean) => {
+      // Binary frames not expected per Soniox docs (audio is base64 in JSON),
+      // but log if they ever appear so we can detect protocol drift.
+      if (isBinary && Buffer.isBuffer(data)) {
+        this.logger.warn(
+          `Soniox TTS unexpected binary frame streamId=${this.streamId} size=${data.length}`,
+        );
+        if (data.length > 0) {
+          this.audioChunksSeen++;
+          this.audioCb?.(data);
+        }
+        return;
+      }
+      const text = typeof data === 'string' ? data : data.toString();
+      let msg: { audio?: string; audio_end?: boolean; terminated?: boolean; error?: string };
       try {
-        const text = typeof data === 'string' ? data : data.toString();
-        const msg = JSON.parse(text) as {
-          audio?: string;
-          audio_end?: boolean;
-          terminated?: boolean;
-          error?: string;
-        };
-        if (msg.error) {
-          this.errorCb?.(new Error(`Soniox TTS error: ${msg.error}`));
-          return;
-        }
-        if (msg.audio) {
-          const buf = Buffer.from(msg.audio, 'base64');
-          if (buf.length > 0) this.audioCb?.(buf);
-        }
-        if (msg.terminated) {
-          this.finish();
-        }
+        msg = JSON.parse(text);
       } catch {
-        // malformed message — ignore
+        this.logger.warn(
+          `Soniox TTS unparseable message streamId=${this.streamId} preview=${text.slice(0, 120)}`,
+        );
+        return;
+      }
+      if (msg.error) {
+        this.logger.error(`Soniox TTS error streamId=${this.streamId}: ${msg.error}`);
+        this.errorCb?.(new Error(`Soniox TTS error: ${msg.error}`));
+        return;
+      }
+      if (msg.audio) {
+        const buf = Buffer.from(msg.audio, 'base64');
+        if (buf.length > 0) {
+          this.audioChunksSeen++;
+          this.audioCb?.(buf);
+        }
+      } else {
+        this.nonAudioMessagesSeen++;
+      }
+      if (msg.audio_end) {
+        this.logger.log(`Soniox TTS audio_end streamId=${this.streamId} chunks=${this.audioChunksSeen}`);
+      }
+      if (msg.terminated) {
+        this.logger.log(
+          `Soniox TTS terminated streamId=${this.streamId} chunks=${this.audioChunksSeen} nonAudioMsgs=${this.nonAudioMessagesSeen}`,
+        );
+        this.finish();
       }
     });
 
     this.ws.on('error', (err: Error) => {
+      this.logger.error(`Soniox TTS WS transport error streamId=${this.streamId}: ${err.message}`);
       this.errorCb?.(err);
       this.finish();
     });
 
-    this.ws.on('close', () => {
+    this.ws.on('close', (code: number, reason: Buffer) => {
+      this.logger.log(
+        `Soniox TTS WS closed streamId=${this.streamId} code=${code} reason=${reason?.toString().slice(0, 200) || ''} chunks=${this.audioChunksSeen}`,
+      );
       this.finish();
     });
 
@@ -211,6 +244,7 @@ export class SonioxTtsProvider implements TtsProvider, TtsStreamingProvider {
       this.sampleRate,
       opts.language,
       opts.traceId,
+      this.logger,
     ).connect();
   }
 }

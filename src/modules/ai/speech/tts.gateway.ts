@@ -76,6 +76,11 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Cache hit → fetch stored mp3, stream once, end
     if (message.ttsAudioPath) {
+      this.tts.emitEvent(message.conversationId, 'tts.cache_hit', {
+        message_id: message.id,
+        provider: this.soniox.name,
+        transport: 'ws',
+      });
       await this.streamFromStorage(client, session, message.ttsAudioPath);
       return;
     }
@@ -100,6 +105,12 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
       handle.onError((err) => {
         this.logger.error(`Soniox TTS WS error: ${err.message}`);
+        this.tts.emitEvent(message.conversationId, 'tts.error', {
+          message_id: message.id,
+          provider: this.soniox.name,
+          transport: 'ws',
+          error: err.message.slice(0, 200),
+        });
         if (!session.closed) {
           this.closeWithError(client, 4500, 'provider', err.message);
           this.cleanup(client);
@@ -107,8 +118,13 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       handle.start(message.content);
+      this.tts.emitEvent(message.conversationId, 'tts.stream_open', {
+        message_id: message.id,
+        provider: this.soniox.name,
+        char_count: message.content.length,
+      });
       this.logger.log(
-        `TTS WS session started messageId=${messageId} principalKind=${principal.kind}`,
+        `TTS WS session started messageId=${messageId} principalKind=${principal.kind} chars=${message.content.length}`,
       );
     } catch (err) {
       this.logger.error(`Failed to open Soniox TTS stream: ${String(err)}`);
@@ -160,14 +176,36 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private async finalizeStream(
     client: WebSocket,
     session: ActiveSession,
-    message: { id: string },
+    message: { id: string; conversationId: string; content: string },
     principal: TtsPrincipal,
   ): Promise<void> {
     if (session.closed) return;
+    const totalBytes = session.chunks.reduce((s, c) => s + c.length, 0);
+    const firstChunkMs = session.firstChunkAt
+      ? session.firstChunkAt - session.startedAt
+      : null;
     // Best-effort persist for next call
     if (session.chunks.length > 0) {
       const audio = Buffer.concat(session.chunks);
       void this.tts.persistStreamedAudio(message as never, principal, audio);
+      this.tts.emitEvent(message.conversationId, 'tts.synthesize', {
+        message_id: message.id,
+        provider: this.soniox.name,
+        transport: 'ws',
+        char_count: message.content.length,
+        audio_bytes: totalBytes,
+        first_chunk_ms: firstChunkMs ?? -1,
+      });
+    } else {
+      this.logger.warn(
+        `TTS WS stream ended with 0 audio chunks messageId=${message.id} chars=${message.content.length}`,
+      );
+      this.tts.emitEvent(message.conversationId, 'tts.empty_stream', {
+        message_id: message.id,
+        provider: this.soniox.name,
+        transport: 'ws',
+        char_count: message.content.length,
+      });
     }
     this.sendEndAndClose(client, session);
   }

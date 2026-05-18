@@ -150,6 +150,15 @@ export class TtsService {
       : `onboarding:${principal.sessionId}`;
   }
 
+  /** Public so WS gateway can emit cache_hit / synthesize / error events. */
+  emitEvent(
+    conversationId: string,
+    name: string,
+    attrs: Record<string, string | number | boolean>,
+  ): void {
+    this.recordEvent(conversationId, name, attrs);
+  }
+
   private recordEvent(
     conversationId: string,
     name: string,
