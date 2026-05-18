@@ -7,6 +7,7 @@ import { TtsService, TtsPrincipal } from './tts.service';
 import { SonioxTtsProvider } from '../providers/soniox-tts.provider';
 import { ObjectStorageService } from '../../../database/object-storage.service';
 import { TtsStreamHandle } from '../providers/tts-provider.interface';
+import { createChunkCoalescer } from './chunk-coalescer';
 
 const MAX_DURATION_MS = 60_000;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -28,6 +29,11 @@ const clientSessions = new WeakMap<WebSocket, ActiveSession>();
 @WebSocketGateway({ path: '/ws/speech/tts' })
 export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(TtsGateway.name);
+
+  // Coalesce R2 cache stream into larger WS frames. First chunk always
+  // passes through immediately to preserve cache first-byte latency.
+  private static readonly CACHE_COALESCE_MAX_BYTES = 64 * 1024;
+  private static readonly CACHE_COALESCE_MAX_MS = 20;
 
   constructor(
     private readonly auth: WsAuthGuard,
@@ -220,14 +226,20 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(
         `[tts-timing] cache_first_chunk path=${path} storageGetMs=${storageGetMs} totalFirstChunkMs=${totalFirstChunkMs}`,
       );
-      obj.body.on('data', (chunk: Buffer) => {
-        if (session.closed || client.readyState !== WebSocket.OPEN) return;
-        client.send(chunk, { binary: true });
+      const coalescer = createChunkCoalescer({
+        maxBytes: TtsGateway.CACHE_COALESCE_MAX_BYTES,
+        maxMs: TtsGateway.CACHE_COALESCE_MAX_MS,
+        shouldAccept: () =>
+          !session.closed && client.readyState === WebSocket.OPEN,
+        onFlush: (out) => client.send(out, { binary: true }),
       });
+      obj.body.on('data', (chunk: Buffer) => coalescer.onData(chunk));
       obj.body.on('end', () => {
+        coalescer.onEnd();
         this.sendEndAndClose(client, session);
       });
       obj.body.on('error', (err) => {
+        coalescer.onError();
         this.logger.error(`Cache-hit stream error: ${err.message}`);
         this.closeWithError(client, 4500, 'provider', err.message);
         this.cleanup(client);
