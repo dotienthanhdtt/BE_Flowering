@@ -21,6 +21,11 @@ export const AppDataSource = new DataSource({
   ssl: requiresSsl ? { rejectUnauthorized: false } : false,
   entities: [join(__dirname, `entities/*.entity.${ext}`)],
   migrations: [join(__dirname, `migrations/*.${ext}`)],
+  // 'each' wraps each migration in its own transaction AND honors per-migration
+  // `transaction = false` overrides (required for PG ALTER TYPE ADD VALUE which
+  // must run outside any transaction). Default 'all' rejects such overrides
+  // with ForbiddenTransactionModeOverrideError on startup.
+  migrationsTransactionMode: 'each',
   synchronize: false,
   logging: true,
 });
