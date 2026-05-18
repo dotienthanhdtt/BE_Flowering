@@ -50,8 +50,9 @@ export type RevenueCatExpirationReason = RevenueCatCancelReason | 'SUBSCRIPTION_
 
 /**
  * DTO for RevenueCat event payload.
- * Only fields the backend reads are declared; unknown RC fields are stripped by
- * whitelist:true in the global ValidationPipe (RC adds new fields periodically).
+ * Only fields the backend reads are declared; unknown RC fields are stripped
+ * by a controller-local ValidationPipe with forbidNonWhitelisted:false
+ * (the global pipe forbids unknown props, but RC adds new fields periodically).
  */
 export class RevenueCatEventDto {
   @ApiProperty({ description: 'Unique event ID for idempotency' })

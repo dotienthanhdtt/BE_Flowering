@@ -8,6 +8,7 @@ import {
   Logger,
   OnModuleInit,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
@@ -57,7 +58,15 @@ export class RevenuecatWebhookController implements OnModuleInit {
   @ApiExcludeEndpoint()
   async handleWebhook(
     @Headers('authorization') authHeader: string,
-    @Body() payload: RevenueCatWebhookDto,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: false,
+        transform: true,
+        validateCustomDecorators: true,
+      }),
+    )
+    payload: RevenueCatWebhookDto,
   ): Promise<{ status: string; outcome?: string }> {
     if (!this.webhookSecret) {
       this.logger.warn(

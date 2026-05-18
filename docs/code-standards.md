@@ -430,6 +430,41 @@ async checkCorrection(dto: CorrectionCheckRequestDto): Promise<string | null> {
 }
 ```
 
+## Third-Party Webhook Integration Patterns
+
+### RevenueCat Webhook Validation
+
+**Pattern:** Controller-local ValidationPipe override for third-party webhooks.
+
+**Rationale:** Global `ValidationPipe` uses `forbidNonWhitelisted: true` to catch unexpected request properties. Third-party providers (e.g., RevenueCat) periodically add optional fields to webhook payloads. A global strict pipe would reject these payloads prematurely.
+
+**Implementation:**
+
+```typescript
+@Controller('webhooks')
+export class WebhookController {
+  constructor(private service: WebhookService) {}
+
+  @Post('revenuecat')
+  @UsePipes(
+    new ValidationPipe({
+      forbidNonWhitelisted: false,  // Allow unknown RC fields
+      transform: true,              // Still transform DTOs
+    }),
+  )
+  async handleRevenueCat(@Body() dto: RevenueCatWebhookDto) {
+    // Process webhook
+  }
+}
+```
+
+**Key Points:**
+- Local pipe overrides global for this endpoint only
+- Still transforms incoming JSON to DTO (camelCase)
+- Ignores unknown properties from RC instead of rejecting
+- DTOs remain strict on their known fields (validation still applied)
+- All other endpoints continue using global strict validation
+
 ## Deprecated Patterns
 
 **Avoid:** `any` type, `var` keyword, empty catch blocks. **Always:** Type explicitly, use `const`, handle and log errors.

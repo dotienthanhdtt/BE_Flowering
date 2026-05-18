@@ -1,7 +1,7 @@
 # Codebase Summary
 
-**Last Updated:** 2026-05-13
-**Generated from:** repomix-output.xml (auto-generated 2026-04-21)
+**Last Updated:** 2026-05-18
+**Generated from:** repomix-output.xml (auto-generated 2026-05-18)
 
 ## Overview
 
@@ -11,7 +11,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 - **Total TypeScript Files:** ~190 files in src/
 - **Code Lines:** ~11,500+ LOC in src/
-- **Modules:** 13 feature modules (admin-content, ai, auth, email, kol-bundle, language, lesson, onboarding, progress, scenario, subscription, user, vocabulary)
+- **Modules:** 14 feature modules (admin-content, ai, auth, email, kol-bundle, language, lesson, onboarding, personalization, progress, scenario, subscription, user, vocabulary)
 - **Database Entities:** 21 TypeORM entities + 5 enums (AccessTier, ContentStatus, ScenarioType, UserRole, AiConversationType)
 - **Migrations:** 37 versioned migrations (1615238400000–1781100000000)
 - **API Endpoints:** 55+ REST endpoints + 1 SSE stream across all modules
@@ -253,7 +253,36 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Key Convention:** Content API routes decorated with `@ActiveLanguage()` receive language context automatically; opt-in with `@AutoEnrollLanguage()` for learning-first UX
 
-### 11. Admin Content Module (8 files, ~600 LOC)
+### 11. Personalization Module (18 files, ~1,200 LOC)
+
+**Purpose:** AI-powered personalized scenario generation with tier-gated quota system and deduplication
+
+**Endpoints:**
+- POST /personalization/generate (tier-gated, max quota per tier)
+
+**Services:**
+- PersonalizationService: Orchestrates quota check, dedup gate, LLM generation, pruning
+- PersonalizationQuotaService: Tier enforcement (Free blocked, Premium 1/month free trial then paywall, Premium Plus unlimited, 3/day hard ceiling)
+- PersonalizationDedupService: 24h rolling window + profile snapshot diff prevents duplicate intakes
+- PersonalizationTriggerService: Detects scenario-chat completion via `triggersPersonalization` flag, uses Postgres advisory lock
+- PersonalizationPruneService: Lazy soft-cap enforcement (auto-deletes oldest unused PERSONAL scenarios over 30 per user on insert)
+
+**Features:**
+- Tier-gated intake chat flow with mid-flow paywall
+- Dual-mode scenario generation: 5 scenarios per successful completion
+- Observability: `personalization.generated`, `personalization.dedup_skip`, `personalization.paywall`, `personalization.daily_ceiling` events in Langfuse
+- Persistent conversation resume: stores state for paywall mid-flow
+- IntakeChatEngine integration: reuses shared onboarding intake engine with optional model override
+
+**DTOs:** CompleteResult (discriminated union: `{status: "completed", scenarios}` | `{status: "paywall", message}` | `{status: "dedup_skip", message}`)
+
+**Key Features:**
+- Profile snapshot JSON diff for dedup precision
+- Advisory lock for race-safe completion trigger
+- Lazy pruning (on-insert, over-quota → delete oldest)
+- Scenario trigger flag: `triggersPersonalization` on Scenario entity
+
+### 12. Admin Content Module (8 files, ~600 LOC)
 
 **Purpose:** LLM-powered content generation and lifecycle management for scenarios/exercises/lessons
 
@@ -280,7 +309,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 
 **Security:** Requires isAdmin flag; ADMIN_EMAILS env var bootstraps initial admins
 
-### 12. Scenario Module (17 files, ~900 LOC)
+### 13. Scenario Module (17 files, ~900 LOC)
 
 **Purpose:** Default + personalized scenario listing and KOL gift code redemption with onboarding materialization
 
@@ -306,7 +335,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Auto-enrollment in language via @AutoEnrollLanguage()
 - Onboarding materialization: 5 anonymous scenarios → PERSONAL Scenario rows on linkOnboardingSession (idempotent)
 
-### 13. KOL Bundle Module (7 files, ~350 LOC)
+### 14. KOL Bundle Module (7 files, ~350 LOC)
 
 **Purpose:** Admin-only KOL bundle creation and scenario attachment for gift code distribution
 
@@ -327,7 +356,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Scenario attachment idempotent via unique constraint
 - Scenario count computed from KolBundleScenario join
 
-### 14. Progress Module (3 files, ~80 LOC)
+### 15. Progress Module (3 files, ~80 LOC)
 
 **Purpose:** Internal progress tracking (no HTTP endpoints; used by scenario/lesson completion flows)
 
@@ -336,7 +365,7 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - UserExerciseAttempt entity: records exercise answers
 - Completion tracking for lessons and scenarios (internal service calls)
 
-### 15. Vocabulary Module (16 files, ~800 LOC)
+### 16. Vocabulary Module (16 files, ~800 LOC)
 
 **Purpose:** User vocabulary management with Leitner 5-box spaced repetition system (SRS)
 

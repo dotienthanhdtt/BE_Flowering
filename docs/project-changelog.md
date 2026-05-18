@@ -5,6 +5,20 @@
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-05-18 — RevenueCat Webhook Validation Hardening
+
+### Changed
+
+- **`POST /webhooks/revenuecat` DTO validation:** Controller now uses a local `ValidationPipe` with `forbidNonWhitelisted: false` (global pipe forbids unknown props; RC adds new fields periodically). Prevents webhook rejections when RC adds optional fields to payloads.
+- **DTOs:** `RevenueCatWebhookDto` comment updated to note the validation pipe override.
+
+### Notes
+
+- Backward compatible; webhooks still process successfully.
+- Local pipe only affects RC webhook endpoint; all other endpoints use global validation (strict).
+
+---
+
 ## 2026-05-18 — Streaming TTS via Soniox (REST + WebSocket)
 
 ### Added

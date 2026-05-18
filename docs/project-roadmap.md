@@ -1,6 +1,6 @@
 # Project Roadmap
 
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-05-18
 **Project:** AI Language Learning Backend
 **Status:** Phase 1 Complete, Phase 2 Complete (100%)
 
@@ -43,7 +43,7 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 **Duration:** 10 weeks (extended for hardening scope)
 **Status:** ✅ 100% Complete
 **Completion Date:** 2026-04-21
-**Progress:** Vocabulary/SRS, scenario chat, signed URLs, graceful inits, email/password 410 Gone, first-turn detection, resume support, language-specific proficiency levels, security hardening all complete
+**Progress:** Vocabulary/SRS, scenario chat, signed URLs, graceful inits, email/password 410 Gone, first-turn detection, resume support, language-specific proficiency levels, Soniox STT streaming, Soniox TTS streaming, personalized scenario generation (tier-gated), 9router LLM routing, RC revenue-leak fixes, security hardening all complete
 
 **Completed:**
 - ✅ HTTP logger middleware (2026-03-07)
@@ -103,6 +103,12 @@ Build a scalable, production-ready backend infrastructure that powers AI-driven 
 - ✅ Swagger decorators updated on 4 DTOs with multi-framework examples (2026-04-21)
 - ✅ E2E test suite: 4 integration tests covering JLPT levels, validation, cross-language checks (2026-04-21)
 - ✅ Build green: 403 unit tests passing, 4 E2E tests passing, lint/build clean (2026-04-21)
+- ✅ Soniox STT streaming WebSocket gateway (real-time STT via Soniox WS) (2026-05-13)
+- ✅ Soniox TTS streaming (REST + WS, scenario chat synthesis, message-level cache) (2026-05-18)
+- ✅ Personalization module: tier-gated scenario generation, quota enforcement, dedup, pruning (2026-05-04)
+- ✅ 9router LLM provider integration with Gemini fallback (scenario chat, onboarding, translation) (2026-05-12)
+- ✅ RevenueCat revenue-leak fixes: C1 (anonymous pending claims), C2 (UNKNOWN SKU), C3 (no-expire fallback) (2026-05-18)
+- ✅ RevenueCat webhook validation hardening: controller-local ValidationPipe for third-party payload evolution (2026-05-18)
 
 **Success Metrics:**
 - Test coverage >80%

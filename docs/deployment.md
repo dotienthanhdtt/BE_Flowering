@@ -121,10 +121,12 @@ npm run start:dev          # hot-reload dev server on :3000
 
 ## Migrations on deploy
 
-Migrations run **automatically** on container start, before the app boots. The Dockerfile
-`CMD` (and `Procfile`) chains `typeorm migration:run` → `node dist/main`. If a migration
-fails, the container exits non-zero and Railway marks the deploy failed (no traffic is
-routed to a half-migrated app).
+Migrations run **automatically** on container start via Railway's CI/CD pipeline, before the app boots. The Dockerfile `CMD` (and `Procfile`) chains `typeorm migration:run` → `node dist/main`. If a migration fails, the container exits non-zero and Railway marks the deploy failed (no traffic is routed to a half-migrated app).
+
+**Key Behavior:**
+- **On every deploy:** pending migrations run automatically (no manual step)
+- **If migration fails:** app does not start; Railway rollback is automatic
+- **Idempotent:** TypeORM only runs migrations not yet in the `typeorm_migrations` table
 
 - **Adding a migration**: `npm run migration:generate -- src/database/migrations/<name>`,
   commit, push. Deploy runs it automatically.
