@@ -135,6 +135,14 @@ export class ScenarioChatService {
     // 5. Load history
     const history = await this.loadHistory(conversation.id);
 
+    // 5b. No-op short-circuit: when client sends no user message and the last
+    //     persisted message is already from the assistant, calling the LLM
+    //     would produce back-to-back assistant turns. Return current state.
+    const lastMsg = history[history.length - 1];
+    if (!dto.message?.trim() && lastMsg instanceof AIMessage) {
+      return this.buildCurrentStateResponse(conversation);
+    }
+
     // 6. Compute turn metadata
     const maxTurns = conversation.maxTurns ?? MAX_TURNS;
     const currentTurn = Math.floor(history.length / 2) + 1;
@@ -347,6 +355,12 @@ export class ScenarioChatService {
     if (c.userId !== userId) throw new ForbiddenException();
     if (c.scenarioId !== scenarioId) throw new BadRequestException('scenarioId mismatch');
     return c;
+  }
+
+  private async buildCurrentStateResponse(
+    conversation: AiConversation,
+  ): Promise<ScenarioChatResponseDto> {
+    return this.buildDoneResponse(conversation);
   }
 
   private async buildDoneResponse(conversation: AiConversation): Promise<ScenarioChatResponseDto> {
