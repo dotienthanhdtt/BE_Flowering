@@ -47,8 +47,8 @@ export class TtsService {
     const message = await this.loadAndAuthorize(messageId, principal);
 
     // Cache hit → re-sign stored path → no Soniox call
-    if (message.ttsAudioPath) {
-      const audioUrl = await this.storage.getSignedUrl(message.ttsAudioPath, 3600);
+    if (message.audioUrl) {
+      const audioUrl = await this.storage.getSignedUrl(message.audioUrl, 3600);
       this.recordEvent(message.conversationId, 'tts.cache_hit', {
         message_id: message.id,
         provider: this.soniox.name,
@@ -65,7 +65,7 @@ export class TtsService {
       `tts/${message.id}.mp3`,
     );
 
-    await this.messageRepo.update(message.id, { ttsAudioPath: path });
+    await this.messageRepo.update(message.id, { audioUrl: path });
 
     this.recordEvent(message.conversationId, 'tts.synthesize', {
       message_id: message.id,
@@ -138,7 +138,7 @@ export class TtsService {
         namespace,
         `tts/${message.id}.mp3`,
       );
-      const result = await this.messageRepo.update(message.id, { ttsAudioPath: path });
+      const result = await this.messageRepo.update(message.id, { audioUrl: path });
       if (!result.affected) {
         this.logger.warn(
           `TTS persist update affected 0 rows messageId=${message.id} path=${path}`,

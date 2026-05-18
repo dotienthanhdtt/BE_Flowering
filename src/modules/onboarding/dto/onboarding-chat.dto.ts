@@ -60,4 +60,16 @@ export class OnboardingChatDto {
   @IsOptional()
   @IsUUID('4')
   traceId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Storage object key returned by STT session_end (audioPath). When provided, ' +
+      'attached to the persisted user message for replay. Server validates the ' +
+      'key matches the onboarding namespace format before persisting.',
+    maxLength: 512,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  audioPath?: string;
 }

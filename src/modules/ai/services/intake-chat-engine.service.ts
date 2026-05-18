@@ -39,7 +39,7 @@ export class IntakeChatEngine {
     message: string | undefined,
     promptVars: Record<string, string>,
     config: IntakeChatEngineConfig,
-    opts?: { traceId?: string },
+    opts?: { traceId?: string; audioPath?: string },
   ): Promise<IntakeTurnResult> {
     const conversation = await this.findConversation(conversationId, config.conversationType);
     const msgCount = conversation.messageCount;
@@ -78,7 +78,11 @@ export class IntakeChatEngine {
     const { reply, isLastTurn } = this.parseChatReply(rawReply, currentTurn, config.maxTurns);
 
     if (!isFirstTurn) {
-      await this.saveMessage(conversationId, MessageRole.USER, turnMessage);
+      // Accept audioPath only when it matches the onboarding namespace shape
+      // (`onboarding:{uuid}/audio/...`). Anonymous flow has no strong identity
+      // so this is a format/shape guard, not an ownership proof.
+      const audioUrl = this.validateOnboardingAudioPath(opts?.audioPath);
+      await this.saveMessage(conversationId, MessageRole.USER, turnMessage, audioUrl);
     }
     const messageId = await this.saveMessage(conversationId, MessageRole.ASSISTANT, reply);
     await this.conversationRepo.increment(
@@ -239,9 +243,17 @@ export class IntakeChatEngine {
     conversationId: string,
     role: MessageRole,
     content: string,
+    audioUrl?: string,
   ): Promise<string> {
-    const saved = await this.messageRepo.save({ conversationId, role, content });
+    const saved = await this.messageRepo.save({ conversationId, role, content, audioUrl });
     return saved.id;
+  }
+
+  private validateOnboardingAudioPath(audioPath: string | undefined): string | undefined {
+    if (!audioPath) return undefined;
+    // Onboarding STT uploads under `onboarding:{sessionId}/audio/...`. Reject
+    // anything else so a stray path can't be attached to an onboarding row.
+    return /^onboarding:[0-9a-f-]{36}\/audio\/.+/i.test(audioPath) ? audioPath : undefined;
   }
 
   private parseChatReply(

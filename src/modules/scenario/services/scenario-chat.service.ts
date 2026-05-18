@@ -200,11 +200,19 @@ export class ScenarioChatService {
 
     // 10. Persist messages — never insert empty content.
     if (userContent) {
+      // Only persist audioPath if it belongs to the caller's namespace
+      // (prefix `${userId}/audio/`). Silently drop otherwise — bad value
+      // shouldn't 400 the chat turn.
+      const audioUrl =
+        dto.audioPath && dto.audioPath.startsWith(`${userId}/audio/`)
+          ? dto.audioPath
+          : undefined;
       await this.msgRepo.save(
         this.msgRepo.create({
           conversationId: conversation.id,
           role: MessageRole.USER,
           content: userContent,
+          audioUrl,
         }),
       );
     }

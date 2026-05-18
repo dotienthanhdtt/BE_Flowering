@@ -32,13 +32,14 @@ export class AiConversationMessage {
   @Column({ type: 'text' })
   content!: string;
 
+  // Object-storage key (NOT a URL) for the message's audio asset:
+  //   - user-role rows: STT recording uploaded after the WS session ends
+  //   - assistant-role rows: TTS-synthesized mp3
+  // Signed URLs are minted on read via ObjectStorageService.getSignedUrl(path)
+  // so cache hits never return expired signatures. Column name retained for
+  // backwards compat with existing schema.
   @Column({ type: 'text', name: 'audio_url', nullable: true })
   audioUrl?: string;
-
-  // Storage object key for TTS-synthesized audio. URLs are minted on read via
-  // ObjectStorageService.getSignedUrl(path) so cached responses never expire.
-  @Column({ type: 'text', name: 'tts_audio_path', nullable: true })
-  ttsAudioPath?: string;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, unknown>;

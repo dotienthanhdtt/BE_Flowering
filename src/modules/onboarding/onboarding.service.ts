@@ -65,7 +65,7 @@ export class OnboardingService {
       dto.message,
       { nativeLanguage, targetLanguage: targetLanguageCode },
       onboardingEngineConfig,
-      { traceId: dto.traceId },
+      { traceId: dto.traceId, audioPath: dto.audioPath },
     );
 
     return { conversationId, ...result };

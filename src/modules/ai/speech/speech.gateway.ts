@@ -142,11 +142,12 @@ export class SpeechGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (session.timer) clearTimeout(session.timer);
 
     try {
-      const { transcript, audioUrl } = await this.speech.endSession(session);
+      const { transcript, audioUrl, audioPath } = await this.speech.endSession(session);
       this.sendMsg(client, {
         type: 'session_end',
         transcript,
         audioUrl,
+        audioPath,
         traceId: session.traceId,
       });
     } catch (err) {

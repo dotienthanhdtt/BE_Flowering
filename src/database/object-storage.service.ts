@@ -56,13 +56,21 @@ export class ObjectStorageService {
     userId: string,
     fileName: string,
   ): Promise<{ path: string; signedUrl: string }> {
-    const { client, bucket } = this.ensureReady();
     const path = `${userId}/audio/${Date.now()}-${fileName}`;
+    return this.uploadAudioAtPath(file, path);
+  }
 
+  // Upload to a caller-chosen key so the key can be returned/stored before the
+  // upload promise resolves (e.g. when racing an upload against a timeout).
+  async uploadAudioAtPath(
+    file: Buffer,
+    path: string,
+    contentType = 'audio/mpeg',
+  ): Promise<{ path: string; signedUrl: string }> {
+    const { client, bucket } = this.ensureReady();
     await client.send(
-      new PutObjectCommand({ Bucket: bucket, Key: path, Body: file, ContentType: 'audio/mpeg' }),
+      new PutObjectCommand({ Bucket: bucket, Key: path, Body: file, ContentType: contentType }),
     );
-
     const signedUrl = await this.getSignedUrl(path, 3600);
     return { path, signedUrl };
   }

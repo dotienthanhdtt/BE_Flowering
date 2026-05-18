@@ -11,7 +11,7 @@ function makeMessage(overrides: Partial<{
   id: string;
   role: MessageRole;
   content: string;
-  ttsAudioPath?: string;
+  audioUrl?: string;
   conversationId: string;
   conversation: {
     id: string;
@@ -23,7 +23,7 @@ function makeMessage(overrides: Partial<{
     id: overrides.id ?? 'msg-1',
     role: overrides.role ?? MessageRole.ASSISTANT,
     content: overrides.content ?? 'hello world',
-    ttsAudioPath: overrides.ttsAudioPath,
+    audioUrl: overrides.audioUrl,
     conversationId: overrides.conversationId ?? 'conv-1',
     conversation: overrides.conversation ?? {
       id: overrides.conversationId ?? 'conv-1',
@@ -83,7 +83,7 @@ describe('TtsService', () => {
       });
       expect(soniox.synthesize).toHaveBeenCalledWith('hello world', { language: 'en' });
       expect(repo.update).toHaveBeenCalledWith('msg-1', {
-        ttsAudioPath: 'user-1/audio/123-tts/msg-1.mp3',
+        audioUrl: 'user-1/audio/123-tts/msg-1.mp3',
       });
       expect(langfuse.recordEvent).toHaveBeenCalledWith(
         'conv-1',
@@ -95,7 +95,7 @@ describe('TtsService', () => {
 
   describe('synthesizeMessage — cache hit', () => {
     it('re-signs stored path, skips Soniox', async () => {
-      repo.findOne.mockResolvedValue(makeMessage({ ttsAudioPath: 'user-1/audio/old.mp3' }));
+      repo.findOne.mockResolvedValue(makeMessage({ audioUrl: 'user-1/audio/old.mp3' }));
       storage.getSignedUrl.mockResolvedValue('https://fresh-signed');
 
       const result = await service.synthesizeMessage('msg-1', {

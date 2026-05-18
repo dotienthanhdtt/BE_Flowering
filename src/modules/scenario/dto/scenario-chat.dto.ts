@@ -35,6 +35,18 @@ export class ScenarioChatRequestDto {
   @IsOptional()
   @IsUUID('4')
   traceId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Storage object key returned by STT session_end (audioPath). When provided, ' +
+      "attached to the persisted user message so the recording can be replayed later. " +
+      'Server validates the key belongs to the caller before persisting.',
+    maxLength: 512,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  audioPath?: string;
 }
 
 export class ScenarioInfoDto {

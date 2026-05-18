@@ -81,7 +81,7 @@ export class SpeechService {
 
   async endSession(
     session: SpeechSession,
-  ): Promise<{ transcript: string; audioUrl: string | null }> {
+  ): Promise<{ transcript: string; audioPath: string; audioUrl: string | null }> {
     this.sessions.delete(session.principalId);
 
     try {
@@ -94,10 +94,14 @@ export class SpeechService {
     const wav = session.pcm.toWav();
     const durationMs = Date.now() - session.startedAt.getTime();
 
-    const audioUrl = await this.uploadAudioWithTimeout(session, wav);
+    // Compute path up-front so it can be returned to the client even if the
+    // upload itself hasn't completed yet (timeout path below).
+    const audioPath = `${session.principalId}/audio/${Date.now()}-${session.traceId}.wav`;
+    const audioUrl = await this.uploadAudioWithTimeout(audioPath, wav);
 
     this.closeLangfuseSpan(session, 'success', undefined, {
       transcript,
+      audio_path: audioPath,
       audio_url: audioUrl,
       partial_count: session.partialCount,
       duration_ms: durationMs,
@@ -105,10 +109,10 @@ export class SpeechService {
 
     // Fire-and-forget background update if upload timed out
     if (audioUrl === null) {
-      void this.backgroundUploadAndUpdateSpan(session, wav);
+      void this.backgroundUploadAndUpdateSpan(session, audioPath, wav);
     }
 
-    return { transcript, audioUrl };
+    return { transcript, audioPath, audioUrl };
   }
 
   abortSession(session: SpeechSession): void {
@@ -123,12 +127,11 @@ export class SpeechService {
   }
 
   private async uploadAudioWithTimeout(
-    session: SpeechSession,
+    audioPath: string,
     wav: Buffer,
   ): Promise<string | null> {
     try {
-      const key = `${session.traceId}.wav`;
-      const uploadP = this.storage.uploadAudio(wav, session.principalId, key);
+      const uploadP = this.storage.uploadAudioAtPath(wav, audioPath, 'audio/wav');
       const result = await Promise.race([
         uploadP.then((r) => r.signedUrl),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), UPLOAD_TIMEOUT_MS)),
@@ -140,10 +143,13 @@ export class SpeechService {
     }
   }
 
-  private async backgroundUploadAndUpdateSpan(session: SpeechSession, wav: Buffer): Promise<void> {
+  private async backgroundUploadAndUpdateSpan(
+    session: SpeechSession,
+    audioPath: string,
+    wav: Buffer,
+  ): Promise<void> {
     try {
-      const key = `${session.traceId}.wav`;
-      const { signedUrl } = await this.storage.uploadAudio(wav, session.principalId, key);
+      const { signedUrl } = await this.storage.uploadAudioAtPath(wav, audioPath, 'audio/wav');
       // Re-record audio_url on span (best-effort, Langfuse event)
       if (session.langfuseSpanId) {
         this.langfuse.recordEvent(session.langfuseSpanId, 'audio_url_updated', {

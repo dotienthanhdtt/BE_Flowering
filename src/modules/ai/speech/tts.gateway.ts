@@ -90,7 +90,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const language = this.tts.resolveLanguage(message.conversation);
 
     // Cache hit → fetch stored mp3, stream once, end
-    if (message.ttsAudioPath) {
+    if (message.audioUrl) {
       this.tts.emitEvent(message.conversationId, 'tts.cache_hit', {
         message_id: message.id,
         provider: this.soniox.name,
@@ -101,7 +101,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(
         `[tts-timing] cache_hit messageId=${messageId} loadAuthMs=${loadAuthMs}`,
       );
-      await this.streamFromStorage(client, session, message.ttsAudioPath, tConnect);
+      await this.streamFromStorage(client, session, message.audioUrl, tConnect);
       return;
     }
 

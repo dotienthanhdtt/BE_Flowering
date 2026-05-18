@@ -22,7 +22,13 @@ export interface SpeechSession {
 export type ServerMsg =
   | { type: 'partial'; text: string }
   | { type: 'final'; text: string }
-  | { type: 'session_end'; transcript: string; audioUrl: string | null; traceId: string }
+  | {
+      type: 'session_end';
+      transcript: string;
+      audioUrl: string | null;
+      audioPath: string;
+      traceId: string;
+    }
   | {
       type: 'error';
       code: 'max_duration' | 'overflow' | 'provider' | 'auth' | 'concurrent';
