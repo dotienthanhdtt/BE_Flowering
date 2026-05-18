@@ -138,10 +138,21 @@ export class TtsService {
         namespace,
         `tts/${message.id}.mp3`,
       );
-      await this.messageRepo.update(message.id, { ttsAudioPath: path });
+      const result = await this.messageRepo.update(message.id, { ttsAudioPath: path });
+      if (!result.affected) {
+        this.logger.warn(
+          `TTS persist update affected 0 rows messageId=${message.id} path=${path}`,
+        );
+      } else {
+        this.logger.log(
+          `TTS persisted messageId=${message.id} bytes=${audio.byteLength} path=${path}`,
+        );
+      }
       return path;
     } catch (err) {
-      this.logger.warn(`Failed to persist streamed TTS audio: ${String(err)}`);
+      this.logger.warn(
+        `Failed to persist streamed TTS audio messageId=${message.id}: ${String(err)}`,
+      );
       return null;
     }
   }

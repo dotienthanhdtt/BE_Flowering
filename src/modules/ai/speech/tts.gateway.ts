@@ -18,6 +18,9 @@ interface ActiveSession {
   firstChunkAt?: number;
   startedAt: number;
   closed: boolean;
+  persisted: boolean;
+  message?: { id: string; conversationId: string; content: string };
+  principal?: TtsPrincipal;
 }
 
 const clientSessions = new WeakMap<WebSocket, ActiveSession>();
@@ -65,6 +68,13 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       chunks: [],
       startedAt: Date.now(),
       closed: false,
+      persisted: false,
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        content: message.content,
+      },
+      principal,
     };
     clientSessions.set(client, session);
 
@@ -143,6 +153,17 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!session) return;
     session.closed = true;
     if (session.timer) clearTimeout(session.timer);
+    // Flush buffered audio to storage + DB before tearing down. Fire-and-forget
+    // because the WS is already gone; persistIfBuffered is idempotent so a
+    // concurrent finalizeStream is safe.
+    if (
+      !session.persisted &&
+      session.chunks.length > 0 &&
+      session.message &&
+      session.principal
+    ) {
+      void this.persistIfBuffered(session, session.message, session.principal);
+    }
     try {
       session.handle?.forceClose();
     } catch {
@@ -184,24 +205,28 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     message: { id: string; conversationId: string; content: string },
     principal: TtsPrincipal,
   ): Promise<void> {
-    if (session.closed) return;
+    // Persist regardless of client-side close state — we may have buffered
+    // chunks from Soniox that must be linked to this message before exit.
+    await this.persistIfBuffered(session, message, principal);
+    if (!session.closed) this.sendEndAndClose(client, session);
+  }
+
+  /**
+   * Idempotent: uploads buffered audio and updates ai_conversation_messages.
+   * Also emits the corresponding Langfuse event (synthesize | empty_stream).
+   */
+  private async persistIfBuffered(
+    session: ActiveSession,
+    message: { id: string; conversationId: string; content: string },
+    principal: TtsPrincipal,
+  ): Promise<void> {
+    if (session.persisted) return;
+    session.persisted = true;
     const totalBytes = session.chunks.reduce((s, c) => s + c.length, 0);
     const firstChunkMs = session.firstChunkAt
       ? session.firstChunkAt - session.startedAt
       : null;
-    // Best-effort persist for next call
-    if (session.chunks.length > 0) {
-      const audio = Buffer.concat(session.chunks);
-      void this.tts.persistStreamedAudio(message as never, principal, audio);
-      this.tts.emitEvent(message.conversationId, 'tts.synthesize', {
-        message_id: message.id,
-        provider: this.soniox.name,
-        transport: 'ws',
-        char_count: message.content.length,
-        audio_bytes: totalBytes,
-        first_chunk_ms: firstChunkMs ?? -1,
-      });
-    } else {
+    if (session.chunks.length === 0) {
       this.logger.warn(
         `TTS WS stream ended with 0 audio chunks messageId=${message.id} chars=${message.content.length}`,
       );
@@ -211,8 +236,20 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         transport: 'ws',
         char_count: message.content.length,
       });
+      return;
     }
-    this.sendEndAndClose(client, session);
+    const audio = Buffer.concat(session.chunks);
+    // Await so we surface upload/DB errors via the service's logger before
+    // the WS session is torn down.
+    await this.tts.persistStreamedAudio(message as never, principal, audio);
+    this.tts.emitEvent(message.conversationId, 'tts.synthesize', {
+      message_id: message.id,
+      provider: this.soniox.name,
+      transport: 'ws',
+      char_count: message.content.length,
+      audio_bytes: totalBytes,
+      first_chunk_ms: firstChunkMs ?? -1,
+    });
   }
 
   private sendEndAndClose(client: WebSocket, session: ActiveSession): void {
