@@ -166,6 +166,10 @@ class SonioxTtsStreamHandle implements TtsStreamHandle {
   }
 
   forceClose(): void {
+    // Idempotent: avoid re-terminating an already-closed socket whose 'close'
+    // event already ran finish(); a redundant terminate can synthesize an
+    // 'error' event on some node-ws versions and poison metrics.
+    if (this.ended) return;
     try {
       this.ws.terminate();
     } catch {
@@ -250,6 +254,7 @@ export class SonioxTtsProvider implements TtsProvider, TtsStreamingProvider {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: opts?.signal,
     });
 
     if (!response.ok) {

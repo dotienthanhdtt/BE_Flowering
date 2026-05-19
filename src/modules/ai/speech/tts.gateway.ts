@@ -247,7 +247,10 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
           error: err.message.slice(0, 200),
         });
         if (!session.closed) {
-          this.closeWithError(client, 4500, 'provider', err.message);
+          // Client-visible reason is generic; full sanitized provider message
+          // stays in server log + Langfuse event. Avoids leaking upstream
+          // identifiers (DashScope hostnames, internal model names, etc).
+          this.closeWithError(client, 4500, 'provider', 'TTS provider unavailable');
           this.cleanup(client);
         }
       });

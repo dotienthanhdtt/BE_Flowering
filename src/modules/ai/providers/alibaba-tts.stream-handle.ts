@@ -171,6 +171,11 @@ export class AlibabaTtsStreamHandle implements TtsStreamHandle {
   }
 
   forceClose(): void {
+    // Idempotent: if provider already self-cleaned via task-finished/task-failed,
+    // avoid re-terminating an in-flight close handshake — node-ws can synthesize
+    // a spurious 'error' event that the gateway forwards as a post-completion
+    // tts.error, poisoning metrics for a successful stream.
+    if (this.ended) return;
     try {
       this.ws?.terminate();
     } catch {

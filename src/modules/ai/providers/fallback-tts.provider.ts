@@ -95,10 +95,14 @@ export class FallbackTtsProvider implements TtsProvider, TtsStreamingProvider {
     // [RT-F] withTimeout wraps the primary call; if it stalls past the
     // synth budget, we promote to Alibaba. Inner Alibaba synth has its own
     // inactivity timer in AlibabaTtsStreamHandle.
+    // AbortController is forwarded to primary.synthesize so the in-flight
+    // fetch is cancelled on timeout (release socket + avoid double-billing).
+    const controller = new AbortController();
     try {
       const result = await this.withTimeout(
-        this.primary.synthesize(text, opts),
+        this.primary.synthesize(text, { ...opts, signal: controller.signal }),
         this.synthTimeoutMs,
+        controller,
       );
       return this.tag(result, this.primary.name);
     } catch (err) {
@@ -154,9 +158,12 @@ export class FallbackTtsProvider implements TtsProvider, TtsStreamingProvider {
     return { ...result, provider };
   }
 
-  private withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  private withTimeout<T>(p: Promise<T>, ms: number, controller?: AbortController): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`Primary synth timeout after ${ms}ms`)), ms);
+      const timer = setTimeout(() => {
+        controller?.abort();
+        reject(new Error(`Primary synth timeout after ${ms}ms`));
+      }, ms);
       timer.unref?.();
       p.then(
         (v) => {

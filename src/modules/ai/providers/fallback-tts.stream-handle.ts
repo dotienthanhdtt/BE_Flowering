@@ -105,6 +105,9 @@ export class FallbackTtsStreamHandle implements TtsStreamHandle {
   }
 
   forceClose(): void {
+    // Idempotent: if already forced or naturally ended, skip — prevents
+    // double-terminate of inner handles that may already have self-closed.
+    if (this.forced || this.ended) return;
     // [RT-E] Hard-set forced FIRST so any in-flight deadline / micro-task
     // that hits `promoteToSecondary` after this call exits early.
     this.forced = true;

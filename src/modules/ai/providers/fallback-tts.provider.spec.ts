@@ -919,4 +919,143 @@ describe('FallbackTtsProvider', () => {
       handle.forceClose();
     });
   });
+
+  describe('setEventListener Langfuse emission', () => {
+    it('timeout deadline → listener invoked with tts.fallback_fired reason=timeout', () => {
+      const mockPrimaryHandle: Partial<TtsStreamHandle> = {
+        start: jest.fn(),
+        forceClose: jest.fn(),
+        onAudio: jest.fn(),
+        onEnd: jest.fn(),
+        onError: jest.fn(),
+        onOpen: jest.fn(),
+      };
+      mockPrimary.openStream.mockReturnValue(mockPrimaryHandle as TtsStreamHandle);
+
+      const mockSecondaryHandle: Partial<TtsStreamHandle> = {
+        start: jest.fn(),
+        forceClose: jest.fn(),
+        onAudio: jest.fn(),
+        onEnd: jest.fn(),
+        onError: jest.fn(),
+        onOpen: jest.fn(),
+      };
+      mockSecondary.openStream.mockReturnValue(mockSecondaryHandle as TtsStreamHandle);
+
+      const handle = provider.openStream({
+        traceId: 'trace-1',
+        audioFormat: 'mp3',
+        sampleRate: 24000,
+      });
+
+      const listener = jest.fn();
+      (handle as any).setEventListener(listener);
+
+      // Trigger deadline (3000ms)
+      jest.advanceTimersByTime(3001);
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'tts.fallback_fired',
+          reason: 'timeout',
+          primary: 'soniox',
+          secondary: 'alibaba-cosyvoice',
+        }),
+      );
+
+      handle.forceClose();
+    });
+
+    it('primary error → listener invoked with tts.fallback_fired reason=error', () => {
+      const mockPrimaryHandle: Partial<TtsStreamHandle> = {
+        start: jest.fn(),
+        forceClose: jest.fn(),
+        onAudio: jest.fn(),
+        onEnd: jest.fn(),
+        onError: jest.fn(),
+        onOpen: jest.fn(),
+      };
+      mockPrimary.openStream.mockReturnValue(mockPrimaryHandle as TtsStreamHandle);
+
+      const mockSecondaryHandle: Partial<TtsStreamHandle> = {
+        start: jest.fn(),
+        forceClose: jest.fn(),
+        onAudio: jest.fn(),
+        onEnd: jest.fn(),
+        onError: jest.fn(),
+        onOpen: jest.fn(),
+      };
+      mockSecondary.openStream.mockReturnValue(mockSecondaryHandle as TtsStreamHandle);
+
+      const handle = provider.openStream({
+        traceId: 'trace-1',
+        audioFormat: 'mp3',
+        sampleRate: 24000,
+      });
+
+      const listener = jest.fn();
+      (handle as any).setEventListener(listener);
+
+      // Trigger primary error pre-audio
+      const onErrorCallback = (mockPrimaryHandle.onError as jest.Mock).mock.calls[0]?.[0];
+      onErrorCallback(new Error('Primary failed'));
+      jest.runAllTicks();
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'tts.fallback_fired',
+          reason: 'error',
+          primary: 'soniox',
+          secondary: 'alibaba-cosyvoice',
+        }),
+      );
+
+      handle.forceClose();
+    });
+
+    it('secondary lacks requested format at promotion time → listener invoked with tts.fallback_aborted', () => {
+      const mockPrimaryHandle: Partial<TtsStreamHandle> = {
+        start: jest.fn(),
+        forceClose: jest.fn(),
+        onAudio: jest.fn(),
+        onEnd: jest.fn(),
+        onError: jest.fn(),
+        onOpen: jest.fn(),
+      };
+      mockPrimary.openStream.mockReturnValue(mockPrimaryHandle as TtsStreamHandle);
+
+      // Build the wrapper: secondary.supportsFormat returns true during the
+      // provider.openStream guard, then false when promoteToSecondary
+      // re-checks (simulates a config drift / capability change between checks).
+      (mockSecondary.supportsFormat as jest.Mock)
+        .mockReturnValueOnce(true)
+        .mockReturnValue(false);
+
+      const handle = provider.openStream({
+        traceId: 'trace-1',
+        audioFormat: 'pcm_s16le',
+        sampleRate: 24000,
+      });
+
+      const listener = jest.fn();
+      const errorCb = jest.fn();
+      (handle as any).setEventListener(listener);
+      handle.onError(errorCb);
+
+      // Trigger deadline → promoteToSecondary → format check fails → abort
+      jest.advanceTimersByTime(3001);
+      jest.runAllTicks();
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'tts.fallback_aborted',
+          reason: 'format_unsupported',
+          requestedFormat: 'pcm_s16le',
+        }),
+      );
+      expect(mockSecondary.openStream).not.toHaveBeenCalled();
+
+      handle.forceClose();
+    });
+  });
 });

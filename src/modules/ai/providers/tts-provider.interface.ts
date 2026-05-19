@@ -3,6 +3,9 @@ export interface TtsOptions {
   language?: string;
   audioFormat?: 'mp3' | 'wav' | 'pcm_s16le';
   sampleRate?: number;
+  // Cancels in-flight upstream request (e.g. on fallback timeout) to release
+  // sockets and avoid double-billing under sustained primary slowness.
+  signal?: AbortSignal;
 }
 
 export interface TtsResult {
