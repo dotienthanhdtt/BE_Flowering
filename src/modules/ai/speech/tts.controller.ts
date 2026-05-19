@@ -29,6 +29,7 @@ export class TtsController {
     return this.tts.synthesizeMessage(dto.messageId, {
       kind: 'scenario',
       userId: user.id,
+      traceId: dto.traceId,
     });
   }
 
@@ -52,6 +53,7 @@ export class TtsController {
       kind: 'onboarding',
       sessionId: dto.sessionId,
       conversationId: dto.conversationId,
+      traceId: dto.traceId,
     });
   }
 }

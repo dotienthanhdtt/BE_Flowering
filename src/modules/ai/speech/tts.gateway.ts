@@ -86,7 +86,12 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     const outputFormat: OutputFormat = url.searchParams.get('format') === 'wav' ? 'wav' : 'mp3';
 
-    const principal = this.buildPrincipal(authResult, url);
+    const traceId = url.searchParams.get('traceId') ?? undefined;
+    if (traceId && !UUID_V4.test(traceId)) {
+      this.closeWithError(client, 4400, 'bad_request', 'traceId must be a UUID');
+      return;
+    }
+    const principal = this.buildPrincipal(authResult, url, traceId);
     if (!principal) {
       this.closeWithError(client, 4400, 'bad_request', 'conversationId required for onboarding');
       return;
@@ -130,7 +135,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Cache hit → fetch stored mp3, stream once, end. [RT-C] cache provider
     // is unknowable post-hoc; emit 'cache' rather than guessing a name.
     if (message.audioUrl) {
-      this.tts.emitEvent(message.conversationId, 'tts.cache_hit', {
+      this.tts.emitEvent(message.conversationId, principal, 'tts.cache_hit', {
         message_id: message.id,
         provider: 'cache',
         transport: 'ws',
@@ -162,7 +167,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // alert on fallback rate (fired) and refused-fallback errors (aborted).
       if (handle instanceof FallbackTtsStreamHandle) {
         handle.setEventListener((event) => {
-          this.tts.emitEvent(message.conversationId, event.type, {
+          this.tts.emitEvent(message.conversationId, principal, event.type, {
             message_id: message.id,
             reason: event.reason,
             primary: event.primary,
@@ -183,7 +188,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
         // [RT-Assumption-6] Dual-emit during dashboard migration window: keep
         // legacy soniox_connect_ms AND new tts_connect_ms with same value.
-        this.tts.emitEvent(message.conversationId, 'tts.stream_ws_open', {
+        this.tts.emitEvent(message.conversationId, principal, 'tts.stream_ws_open', {
           message_id: message.id,
           provider,
           soniox_connect_ms: ttsConnectMs,
@@ -205,7 +210,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
             `[tts-timing] first_chunk messageId=${messageId} provider=${provider} loadAuthMs=${loadAuthMs} ttsFirstAudioMs=${ttsFirstAudioMs} totalFirstChunkMs=${totalFirstChunkMs} chars=${message.content.length}`,
           );
           // [RT-Assumption-6] Dual-emit legacy + new key names during dashboard migration.
-          this.tts.emitEvent(message.conversationId, 'tts.first_chunk', {
+          this.tts.emitEvent(message.conversationId, principal, 'tts.first_chunk', {
             message_id: message.id,
             provider,
             load_auth_ms: loadAuthMs,
@@ -240,7 +245,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       handle.onError((err) => {
         const provider = this.resolveProvider(handle);
         this.logger.error(`TTS WS error provider=${provider}: ${err.message}`);
-        this.tts.emitEvent(message.conversationId, 'tts.error', {
+        this.tts.emitEvent(message.conversationId, principal, 'tts.error', {
           message_id: message.id,
           provider,
           transport: 'ws',
@@ -257,7 +262,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       handle.start(message.content);
       // [RT-C] Race not yet settled at stream_open time → provider is 'pending'.
-      this.tts.emitEvent(message.conversationId, 'tts.stream_open', {
+      this.tts.emitEvent(message.conversationId, principal, 'tts.stream_open', {
         message_id: message.id,
         provider: 'pending',
         char_count: message.content.length,
@@ -373,7 +378,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.warn(
         `TTS WS stream did not complete; refusing to persist messageId=${message.id} provider=${winningProvider} bufferedChunks=${session.chunks.length} bufferedBytes=${totalBytes}`,
       );
-      this.tts.emitEvent(message.conversationId, 'tts.incomplete_stream', {
+      this.tts.emitEvent(message.conversationId, principal, 'tts.incomplete_stream', {
         message_id: message.id,
         provider: winningProvider,
         transport: 'ws',
@@ -386,7 +391,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.warn(
         `TTS WS stream ended with 0 audio chunks messageId=${message.id} chars=${message.content.length}`,
       );
-      this.tts.emitEvent(message.conversationId, 'tts.empty_stream', {
+      this.tts.emitEvent(message.conversationId, principal, 'tts.empty_stream', {
         message_id: message.id,
         provider: winningProvider,
         transport: 'ws',
@@ -407,7 +412,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Await so we surface upload/DB errors via the service's logger before
     // the WS session is torn down.
     await this.tts.persistStreamedAudio(message as never, principal, audio, persistFormat);
-    this.tts.emitEvent(message.conversationId, 'tts.synthesize', {
+    this.tts.emitEvent(message.conversationId, principal, 'tts.synthesize', {
       message_id: message.id,
       provider: winningProvider,
       transport: 'ws',
@@ -438,14 +443,15 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private buildPrincipal(
     auth: { principalId: string; context: 'onboarding' | 'scenario' },
     url: URL,
+    traceId?: string,
   ): TtsPrincipal | null {
     if (auth.context === 'scenario') {
-      return { kind: 'scenario', userId: auth.principalId };
+      return { kind: 'scenario', userId: auth.principalId, traceId };
     }
     const sessionId = auth.principalId.replace(/^onboarding:/, '');
     const conversationId = url.searchParams.get('conversationId');
     if (!conversationId || !UUID_V4.test(conversationId)) return null;
-    return { kind: 'onboarding', sessionId, conversationId };
+    return { kind: 'onboarding', sessionId, conversationId, traceId };
   }
 
   private handleAuthError(client: WebSocket, err: unknown): void {

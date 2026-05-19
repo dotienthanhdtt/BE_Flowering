@@ -26,10 +26,15 @@ const MAX_CACHED_CONVERSATIONS = 5_000;
  *   conversation (parent span)
  *   ├── chat #1 (LangChain trace → generation)
  *   ├── chat-stream #2 (LangChain trace → generation)
- *   └── correction-check #3 (LangChain trace → generation)
+ *   ├── correction-check #3 (LangChain trace → generation)
+ *   └── tts.synthesize (OTel span, langfuse.session.id = traceId)
  *
  * Calls without a conversationId (e.g. standalone translation) get a flat trace.
  */
+/** Langfuse OTel attribute keys recognised by `@langfuse/otel` exporter. */
+const LF_SESSION_ID = 'langfuse.session.id';
+const LF_USER_ID = 'langfuse.user.id';
+const LF_TAGS = 'langfuse.tags';
 @Injectable()
 export class LangfuseService implements OnModuleDestroy {
   private readonly tracer = trace.getTracer('langfuse-sdk');
@@ -96,6 +101,41 @@ export class LangfuseService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Emit a short-lived OTel child span nested under the conversation's parent
+   * span. Used by non-LangChain features (e.g. TTS) so their observations
+   * appear as discrete spans in the same Langfuse trace/session as the chat
+   * LLM calls — instead of inline events on the parent.
+   *
+   * `metadata.traceId` is propagated as `langfuse.session.id`, matching the
+   * sessionId chat LLM calls use via the LangChain CallbackHandler. This is
+   * what groups TTS + chat + STT under a single Langfuse session.
+   */
+  recordObservation(
+    name: string,
+    metadata: {
+      conversationId?: string;
+      traceId?: string;
+      userId?: string;
+      feature?: string;
+    },
+    attributes?: Record<string, string | number | boolean>,
+  ): void {
+    try {
+      const ctx = this.getConversationContext(metadata);
+      const sessionId = metadata.traceId ?? metadata.conversationId;
+      const spanAttributes: Record<string, string | number | boolean> = { ...(attributes ?? {}) };
+      if (sessionId) spanAttributes[LF_SESSION_ID] = sessionId;
+      if (metadata.userId) spanAttributes[LF_USER_ID] = metadata.userId;
+      if (metadata.feature) spanAttributes[LF_TAGS] = metadata.feature;
+      const span = this.tracer.startSpan(name, { attributes: spanAttributes }, ctx);
+      span.setStatus({ code: SpanStatusCode.OK });
+      span.end();
+    } catch {
+      // OTel SDK error — tracing is best-effort
+    }
+  }
+
   /** End all active conversation spans on shutdown. */
   onModuleDestroy(): void {
     clearInterval(this.evictionTimer);
@@ -118,12 +158,15 @@ export class LangfuseService implements OnModuleDestroy {
       this.evictOldest();
     }
 
-    const span = this.tracer.startSpan('conversation', {
-      attributes: {
-        'conversation.id': conversationId,
-        'user.id': (metadata?.userId as string) || '',
-      },
-    });
+    const traceId = metadata?.traceId as string | undefined;
+    const userId = (metadata?.userId as string) || '';
+    const spanAttributes: Record<string, string | number | boolean> = {
+      'conversation.id': conversationId,
+      'user.id': userId,
+      [LF_SESSION_ID]: traceId ?? conversationId,
+    };
+    if (userId) spanAttributes[LF_USER_ID] = userId;
+    const span = this.tracer.startSpan('conversation', { attributes: spanAttributes });
 
     const entry: ConversationSpanEntry = { span, lastAccess: Date.now() };
     this.conversations.set(conversationId, entry);

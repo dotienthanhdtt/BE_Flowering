@@ -22,8 +22,10 @@ import {
 export const TTS_MAX_CHARS = 5000;
 
 export type TtsPrincipal =
-  | { kind: 'scenario'; userId: string }
-  | { kind: 'onboarding'; sessionId: string; conversationId: string };
+  | { kind: 'scenario'; userId: string; traceId?: string }
+  | { kind: 'onboarding'; sessionId: string; conversationId: string; traceId?: string };
+
+const LANGFUSE_TTS_FEATURE = 'tts';
 
 export interface TtsSynthesisResult {
   audioUrl: string;
@@ -51,7 +53,7 @@ export class TtsService {
     // bytes is unknowable post-hoc without a persisted column.
     if (message.audioUrl) {
       const audioUrl = await this.storage.getSignedUrl(message.audioUrl, 3600);
-      this.recordEvent(message.conversationId, 'tts.cache_hit', {
+      this.recordEvent(message.conversationId, principal, 'tts.cache_hit', {
         message_id: message.id,
         provider: 'cache',
       });
@@ -70,7 +72,7 @@ export class TtsService {
 
     await this.messageRepo.update(message.id, { audioUrl: path });
 
-    this.recordEvent(message.conversationId, 'tts.synthesize', {
+    this.recordEvent(message.conversationId, principal, 'tts.synthesize', {
       message_id: message.id,
       provider: result.provider ?? 'unknown',
       language,
@@ -177,21 +179,33 @@ export class TtsService {
   /** Public so WS gateway can emit cache_hit / synthesize / error events. */
   emitEvent(
     conversationId: string,
+    principal: TtsPrincipal | undefined,
     name: string,
     attrs: Record<string, string | number | boolean>,
   ): void {
-    this.recordEvent(conversationId, name, attrs);
+    this.recordEvent(conversationId, principal, name, attrs);
   }
 
   private recordEvent(
     conversationId: string,
+    principal: TtsPrincipal | undefined,
     name: string,
     attrs: Record<string, string | number | boolean>,
   ): void {
     try {
-      // Ensure the conversation span exists so recordEvent can attach
-      this.langfuse.getConversationContext({ conversationId });
+      const meta = {
+        conversationId,
+        traceId: principal?.traceId,
+        userId: principal?.kind === 'scenario' ? principal.userId : undefined,
+        feature: LANGFUSE_TTS_FEATURE,
+      };
+      // Ensure the conversation parent span exists (so child observation
+      // nests under the same Langfuse trace as scenario-chat / translate /
+      // correction-check) and emit a real child span carrying the same
+      // langfuse.session.id the chat LLM calls use.
+      this.langfuse.getConversationContext(meta);
       this.langfuse.recordEvent(conversationId, name, attrs);
+      this.langfuse.recordObservation(name, meta, attrs);
     } catch {
       // tracing is best-effort
     }
