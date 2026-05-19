@@ -17,6 +17,8 @@ import { OpenAiSttProvider } from './providers/openai-stt.provider';
 import { GeminiSttProvider } from './providers/gemini-stt.provider';
 import { SonioxSttProvider } from './providers/soniox-stt.provider';
 import { SonioxTtsProvider } from './providers/soniox-tts.provider';
+import { AlibabaTtsProvider } from './providers/alibaba-tts.provider';
+import { FallbackTtsProvider } from './providers/fallback-tts.provider';
 
 // Services
 import { LangfuseService } from './services/langfuse-tracing.service';
@@ -74,8 +76,10 @@ import { AiController } from './ai.controller';
     OpenAiSttProvider,
     GeminiSttProvider,
     SonioxSttProvider,
-    // TTS Providers
+    // TTS Providers (Soniox primary, Alibaba fallback, wrapped by FallbackTtsProvider)
     SonioxTtsProvider,
+    AlibabaTtsProvider,
+    FallbackTtsProvider,
     // Services
     ObjectStorageService,
     PromptLoaderService,

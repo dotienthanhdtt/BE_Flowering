@@ -27,9 +27,7 @@ export interface ChunkCoalescer {
   isActive: () => boolean;
 }
 
-export function createChunkCoalescer(
-  opts: ChunkCoalescerOptions,
-): ChunkCoalescer {
+export function createChunkCoalescer(opts: ChunkCoalescerOptions): ChunkCoalescer {
   let buf: Buffer[] = [];
   let bytes = 0;
   let timer: NodeJS.Timeout | null = null;

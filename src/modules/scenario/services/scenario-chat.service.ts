@@ -204,9 +204,7 @@ export class ScenarioChatService {
       // (prefix `${userId}/audio/`). Silently drop otherwise — bad value
       // shouldn't 400 the chat turn.
       const audioUrl =
-        dto.audioPath && dto.audioPath.startsWith(`${userId}/audio/`)
-          ? dto.audioPath
-          : undefined;
+        dto.audioPath && dto.audioPath.startsWith(`${userId}/audio/`) ? dto.audioPath : undefined;
       await this.msgRepo.save(
         this.msgRepo.create({
           conversationId: conversation.id,

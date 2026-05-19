@@ -4,15 +4,12 @@ import { IncomingMessage } from 'http';
 import WebSocket from 'ws';
 import { WsAuthGuard } from './ws-auth.guard';
 import { TtsService, TtsPrincipal } from './tts.service';
-import { SonioxTtsProvider } from '../providers/soniox-tts.provider';
+import { FallbackTtsProvider } from '../providers/fallback-tts.provider';
+import { FallbackTtsStreamHandle } from '../providers/fallback-tts.stream-handle';
 import { ObjectStorageService } from '../../../database/object-storage.service';
 import { TtsStreamHandle } from '../providers/tts-provider.interface';
 import { createChunkCoalescer } from './chunk-coalescer';
-import {
-  buildFinalizedWavHeader,
-  buildStreamingWavHeader,
-  WavPcmFormat,
-} from './wav-header';
+import { buildFinalizedWavHeader, buildStreamingWavHeader, WavPcmFormat } from './wav-header';
 
 // Client opt-in: `?format=wav` switches the live path from MP3 to streaming
 // PCM-in-WAV. MP3 stays the default so older clients still work.
@@ -58,9 +55,20 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly auth: WsAuthGuard,
     private readonly tts: TtsService,
-    private readonly soniox: SonioxTtsProvider,
+    private readonly ttsProvider: FallbackTtsProvider,
     private readonly storage: ObjectStorageService,
   ) {}
+
+  // [RT-C] Resolve the provider that produced (or will produce) this stream's
+  // audio. Returns 'pending' until the race settles, then the winner's name.
+  // [RT-Review M1] For direct-passthrough handles (fallback disabled / only
+  // one provider configured / format-unsupported skip), return the primary's
+  // real name — not the wrapper's 'tts-fallback' label.
+  private resolveProvider(handle: TtsStreamHandle | undefined): string {
+    if (!handle) return 'pending';
+    if (handle instanceof FallbackTtsStreamHandle) return handle.getWinnerProvider();
+    return this.ttsProvider.primaryName;
+  }
 
   async handleConnection(client: WebSocket, req: IncomingMessage): Promise<void> {
     const tConnect = Date.now();
@@ -76,8 +84,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.closeWithError(client, 4400, 'bad_request', 'messageId required');
       return;
     }
-    const outputFormat: OutputFormat =
-      url.searchParams.get('format') === 'wav' ? 'wav' : 'mp3';
+    const outputFormat: OutputFormat = url.searchParams.get('format') === 'wav' ? 'wav' : 'mp3';
 
     const principal = this.buildPrincipal(authResult, url);
     if (!principal) {
@@ -120,29 +127,30 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const language = this.tts.resolveLanguage(message.conversation);
 
-    // Cache hit → fetch stored mp3, stream once, end
+    // Cache hit → fetch stored mp3, stream once, end. [RT-C] cache provider
+    // is unknowable post-hoc; emit 'cache' rather than guessing a name.
     if (message.audioUrl) {
       this.tts.emitEvent(message.conversationId, 'tts.cache_hit', {
         message_id: message.id,
-        provider: this.soniox.name,
+        provider: 'cache',
         transport: 'ws',
         language,
         load_auth_ms: loadAuthMs,
       });
-      this.logger.log(
-        `[tts-timing] cache_hit messageId=${messageId} loadAuthMs=${loadAuthMs}`,
-      );
+      this.logger.log(`[tts-timing] cache_hit messageId=${messageId} loadAuthMs=${loadAuthMs}`);
       await this.streamFromStorage(client, session, message.audioUrl, tConnect);
       return;
     }
 
-    // Cache miss → open Soniox stream. For `wav` we ask Soniox for raw
-    // PCM_S16LE and wrap it ourselves; the player gets a known format from
-    // the RIFF header in the first WS frame and avoids MP3's two-phase
-    // codec init (the "plays twice" bug on Android).
-    const tSonioxOpen = Date.now();
+    // Cache miss → open TTS stream via fallback wrapper (Soniox primary +
+    // Alibaba secondary). For `wav` we ask for raw PCM_S16LE and wrap it
+    // ourselves; the player gets a known format from the RIFF header in the
+    // first WS frame and avoids MP3's two-phase codec init (the "plays twice"
+    // bug on Android). [RT-A] If the wrapper cannot serve pcm_s16le from
+    // secondary, it stays on primary — no corrupt cross-format audio.
+    const tTtsOpen = Date.now();
     try {
-      const handle = this.soniox.openStream({
+      const handle = this.ttsProvider.openStream({
         traceId: message.conversationId,
         language,
         audioFormat: outputFormat === 'wav' ? 'pcm_s16le' : undefined,
@@ -150,14 +158,36 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
       session.handle = handle;
 
+      // [RT-Review H1+H2] Route fallback signals to Langfuse so dashboards can
+      // alert on fallback rate (fired) and refused-fallback errors (aborted).
+      if (handle instanceof FallbackTtsStreamHandle) {
+        handle.setEventListener((event) => {
+          this.tts.emitEvent(message.conversationId, event.type, {
+            message_id: message.id,
+            reason: event.reason,
+            primary: event.primary,
+            secondary: event.secondary,
+            ...(event.requestedFormat ? { requested_format: event.requestedFormat } : {}),
+          });
+        });
+      }
+
+      // [RT-D] For FallbackTtsStreamHandle, onOpen fires once on winner
+      // settlement; for direct providers, it fires on WS handshake. Either
+      // way, this metric reflects connect-time to the actual producer.
       handle.onOpen?.(() => {
-        const sonioxConnectMs = Date.now() - tSonioxOpen;
+        const ttsConnectMs = Date.now() - tTtsOpen;
+        const provider = this.resolveProvider(handle);
         this.logger.log(
-          `[tts-timing] soniox_ws_open messageId=${messageId} sonioxConnectMs=${sonioxConnectMs}`,
+          `[tts-timing] tts_ws_open messageId=${messageId} ttsConnectMs=${ttsConnectMs} provider=${provider}`,
         );
+        // [RT-Assumption-6] Dual-emit during dashboard migration window: keep
+        // legacy soniox_connect_ms AND new tts_connect_ms with same value.
         this.tts.emitEvent(message.conversationId, 'tts.stream_ws_open', {
           message_id: message.id,
-          soniox_connect_ms: sonioxConnectMs,
+          provider,
+          soniox_connect_ms: ttsConnectMs,
+          tts_connect_ms: ttsConnectMs,
         });
       });
 
@@ -169,14 +199,18 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (!session.firstChunkAt) {
           session.firstChunkAt = Date.now();
           const totalFirstChunkMs = session.firstChunkAt - tConnect;
-          const sonioxFirstAudioMs = session.firstChunkAt - tSonioxOpen;
+          const ttsFirstAudioMs = session.firstChunkAt - tTtsOpen;
+          const provider = this.resolveProvider(handle);
           this.logger.log(
-            `[tts-timing] first_chunk messageId=${messageId} loadAuthMs=${loadAuthMs} sonioxFirstAudioMs=${sonioxFirstAudioMs} totalFirstChunkMs=${totalFirstChunkMs} chars=${message.content.length}`,
+            `[tts-timing] first_chunk messageId=${messageId} provider=${provider} loadAuthMs=${loadAuthMs} ttsFirstAudioMs=${ttsFirstAudioMs} totalFirstChunkMs=${totalFirstChunkMs} chars=${message.content.length}`,
           );
+          // [RT-Assumption-6] Dual-emit legacy + new key names during dashboard migration.
           this.tts.emitEvent(message.conversationId, 'tts.first_chunk', {
             message_id: message.id,
+            provider,
             load_auth_ms: loadAuthMs,
-            soniox_first_audio_ms: sonioxFirstAudioMs,
+            soniox_first_audio_ms: ttsFirstAudioMs,
+            tts_first_audio_ms: ttsFirstAudioMs,
             total_first_chunk_ms: totalFirstChunkMs,
             char_count: message.content.length,
           });
@@ -204,10 +238,11 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         void this.finalizeStream(client, session, message, principal);
       });
       handle.onError((err) => {
-        this.logger.error(`Soniox TTS WS error: ${err.message}`);
+        const provider = this.resolveProvider(handle);
+        this.logger.error(`TTS WS error provider=${provider}: ${err.message}`);
         this.tts.emitEvent(message.conversationId, 'tts.error', {
           message_id: message.id,
-          provider: this.soniox.name,
+          provider,
           transport: 'ws',
           error: err.message.slice(0, 200),
         });
@@ -218,9 +253,10 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       handle.start(message.content);
+      // [RT-C] Race not yet settled at stream_open time → provider is 'pending'.
       this.tts.emitEvent(message.conversationId, 'tts.stream_open', {
         message_id: message.id,
-        provider: this.soniox.name,
+        provider: 'pending',
         char_count: message.content.length,
         language,
       });
@@ -228,7 +264,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         `TTS WS session started messageId=${messageId} principalKind=${principal.kind} lang=${language} chars=${message.content.length}`,
       );
     } catch (err) {
-      this.logger.error(`Failed to open Soniox TTS stream: ${String(err)}`);
+      this.logger.error(`Failed to open TTS stream: ${String(err)}`);
       this.closeWithError(client, 4500, 'provider', String(err));
       this.cleanup(client);
     }
@@ -272,8 +308,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const coalescer = createChunkCoalescer({
         maxBytes: TtsGateway.CACHE_COALESCE_MAX_BYTES,
         maxMs: TtsGateway.CACHE_COALESCE_MAX_MS,
-        shouldAccept: () =>
-          !session.closed && client.readyState === WebSocket.OPEN,
+        shouldAccept: () => !session.closed && client.readyState === WebSocket.OPEN,
         onFlush: (out) => client.send(out, { binary: true }),
       });
       obj.body.on('data', (chunk: Buffer) => coalescer.onData(chunk));
@@ -321,13 +356,14 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     session.persisted = true;
     const totalBytes = session.chunks.reduce((s, c) => s + c.length, 0);
     const firstChunkMs = session.firstChunkAt ? session.firstChunkAt - session.startedAt : null;
+    const winningProvider = this.resolveProvider(session.handle);
     if (!session.providerCompleted) {
       this.logger.warn(
-        `TTS WS stream did not complete; refusing to persist messageId=${message.id} bufferedChunks=${session.chunks.length} bufferedBytes=${totalBytes}`,
+        `TTS WS stream did not complete; refusing to persist messageId=${message.id} provider=${winningProvider} bufferedChunks=${session.chunks.length} bufferedBytes=${totalBytes}`,
       );
       this.tts.emitEvent(message.conversationId, 'tts.incomplete_stream', {
         message_id: message.id,
-        provider: this.soniox.name,
+        provider: winningProvider,
         transport: 'ws',
         char_count: message.content.length,
         buffered_bytes: totalBytes,
@@ -340,14 +376,14 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       this.tts.emitEvent(message.conversationId, 'tts.empty_stream', {
         message_id: message.id,
-        provider: this.soniox.name,
+        provider: winningProvider,
         transport: 'ws',
         char_count: message.content.length,
       });
       return;
     }
     let audio = Buffer.concat(session.chunks);
-    let persistFormat: OutputFormat = session.outputFormat;
+    const persistFormat: OutputFormat = session.outputFormat;
     if (persistFormat === 'wav') {
       // PCM buffer is just raw samples — wrap with a finalized RIFF header
       // (real data size, not 0xFFFFFFFF) so the cached object plays via any
@@ -360,7 +396,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.tts.persistStreamedAudio(message as never, principal, audio, persistFormat);
     this.tts.emitEvent(message.conversationId, 'tts.synthesize', {
       message_id: message.id,
-      provider: this.soniox.name,
+      provider: winningProvider,
       transport: 'ws',
       char_count: message.content.length,
       audio_bytes: totalBytes,
@@ -413,12 +449,7 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  private closeWithError(
-    client: WebSocket,
-    code: number,
-    errCode: string,
-    message: string,
-  ): void {
+  private closeWithError(client: WebSocket, code: number, errCode: string, message: string): void {
     if (client.readyState === WebSocket.OPEN || client.readyState === WebSocket.CONNECTING) {
       try {
         client.send(JSON.stringify({ type: 'error', code: errCode, message }));

@@ -35,14 +35,17 @@ function makeMessage(overrides: Partial<{
 
 describe('TtsService', () => {
   let service: TtsService;
-  let soniox: { name: string; defaultMimeType: string; synthesize: jest.Mock };
+  let tts: { name: string; defaultMimeType: string; synthesize: jest.Mock };
   let storage: { uploadAudio: jest.Mock; getSignedUrl: jest.Mock };
   let langfuse: { getConversationContext: jest.Mock; recordEvent: jest.Mock };
   let repo: { findOne: jest.Mock; update: jest.Mock };
 
   beforeEach(() => {
-    soniox = {
-      name: 'soniox',
+    // FallbackTtsProvider mock. Same shape as the wrapper exposes
+    // (name, defaultMimeType, synthesize). `synthesize` returns a result
+    // tagged with `provider` so callers can attribute Langfuse events.
+    tts = {
+      name: 'tts-fallback',
       defaultMimeType: 'audio/mpeg',
       synthesize: jest.fn(),
     };
@@ -56,15 +59,16 @@ describe('TtsService', () => {
     };
     repo = { findOne: jest.fn(), update: jest.fn() };
 
-    service = new TtsService(soniox as never, storage as never, langfuse as never, repo as never);
+    service = new TtsService(tts as never, storage as never, langfuse as never, repo as never);
   });
 
   describe('synthesizeMessage — cache miss (scenario)', () => {
     it('synthesizes, uploads, persists path, returns signed URL', async () => {
       repo.findOne.mockResolvedValue(makeMessage());
-      soniox.synthesize.mockResolvedValue({
+      tts.synthesize.mockResolvedValue({
         audio: Buffer.from([1, 2, 3]),
         mimeType: 'audio/mpeg',
+        provider: 'soniox',
       });
       storage.uploadAudio.mockResolvedValue({
         path: 'user-1/audio/123-tts/msg-1.mp3',
@@ -81,7 +85,7 @@ describe('TtsService', () => {
         mimeType: 'audio/mpeg',
         cached: false,
       });
-      expect(soniox.synthesize).toHaveBeenCalledWith('hello world', { language: 'en' });
+      expect(tts.synthesize).toHaveBeenCalledWith('hello world', { language: 'en' });
       expect(repo.update).toHaveBeenCalledWith('msg-1', {
         audioUrl: 'user-1/audio/123-tts/msg-1.mp3',
       });
@@ -94,7 +98,7 @@ describe('TtsService', () => {
   });
 
   describe('synthesizeMessage — cache hit', () => {
-    it('re-signs stored path, skips Soniox', async () => {
+    it('re-signs stored path, skips TTS provider, emits cache provider attribute', async () => {
       repo.findOne.mockResolvedValue(makeMessage({ audioUrl: 'user-1/audio/old.mp3' }));
       storage.getSignedUrl.mockResolvedValue('https://fresh-signed');
 
@@ -108,13 +112,15 @@ describe('TtsService', () => {
         mimeType: 'audio/mpeg',
         cached: true,
       });
-      expect(soniox.synthesize).not.toHaveBeenCalled();
+      expect(tts.synthesize).not.toHaveBeenCalled();
       expect(storage.uploadAudio).not.toHaveBeenCalled();
       expect(storage.getSignedUrl).toHaveBeenCalledWith('user-1/audio/old.mp3', 3600);
+      // [RT-C] cache_hit must report provider='cache', not a provider name —
+      // the actual producer of the bytes is unknowable post-hoc.
       expect(langfuse.recordEvent).toHaveBeenCalledWith(
         'conv-1',
         'tts.cache_hit',
-        expect.any(Object),
+        expect.objectContaining({ provider: 'cache' }),
       );
     });
   });
@@ -204,7 +210,7 @@ describe('TtsService', () => {
           conversation: { id: 'conv-1', userId: null, type: AiConversationType.ANONYMOUS },
         }),
       );
-      soniox.synthesize.mockResolvedValue({ audio: Buffer.from([1]), mimeType: 'audio/mpeg' });
+      tts.synthesize.mockResolvedValue({ audio: Buffer.from([1]), mimeType: 'audio/mpeg', provider: 'soniox' });
       storage.uploadAudio.mockResolvedValue({ path: 'p', signedUrl: 'u' });
 
       await expect(

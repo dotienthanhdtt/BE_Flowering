@@ -39,7 +39,7 @@ export class ScenarioChatRequestDto {
   @ApiPropertyOptional({
     description:
       'Storage object key returned by STT session_end (audioPath). When provided, ' +
-      "attached to the persisted user message so the recording can be replayed later. " +
+      'attached to the persisted user message so the recording can be replayed later. ' +
       'Server validates the key belongs to the caller before persisting.',
     maxLength: 512,
   })

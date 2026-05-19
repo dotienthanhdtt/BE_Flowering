@@ -7,10 +7,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SonioxTtsProvider } from '../providers/soniox-tts.provider';
+import { FallbackTtsProvider } from '../providers/fallback-tts.provider';
 import { ObjectStorageService } from '../../../database/object-storage.service';
 import { LangfuseService } from '../services/langfuse-tracing.service';
-import { AiConversationMessage, MessageRole } from '../../../database/entities/ai-conversation-message.entity';
+import {
+  AiConversationMessage,
+  MessageRole,
+} from '../../../database/entities/ai-conversation-message.entity';
 import {
   AiConversation,
   AiConversationType,
@@ -33,31 +36,31 @@ export class TtsService {
   private readonly logger = new Logger(TtsService.name);
 
   constructor(
-    private readonly soniox: SonioxTtsProvider,
+    private readonly tts: FallbackTtsProvider,
     private readonly storage: ObjectStorageService,
     private readonly langfuse: LangfuseService,
     @InjectRepository(AiConversationMessage)
     private readonly messageRepo: Repository<AiConversationMessage>,
   ) {}
 
-  async synthesizeMessage(
-    messageId: string,
-    principal: TtsPrincipal,
-  ): Promise<TtsSynthesisResult> {
+  async synthesizeMessage(messageId: string, principal: TtsPrincipal): Promise<TtsSynthesisResult> {
     const message = await this.loadAndAuthorize(messageId, principal);
 
-    // Cache hit → re-sign stored path → no Soniox call
+    // Cache hit → re-sign stored path → no TTS call. [RT-C] Provider is
+    // 'cache' (not a real provider name) — the actual producer of the
+    // bytes is unknowable post-hoc without a persisted column.
     if (message.audioUrl) {
       const audioUrl = await this.storage.getSignedUrl(message.audioUrl, 3600);
       this.recordEvent(message.conversationId, 'tts.cache_hit', {
         message_id: message.id,
-        provider: this.soniox.name,
+        provider: 'cache',
       });
-      return { audioUrl, mimeType: this.soniox.defaultMimeType, cached: true };
+      return { audioUrl, mimeType: this.tts.defaultMimeType, cached: true };
     }
 
     const language = this.resolveLanguage(message.conversation);
-    const { audio, mimeType } = await this.soniox.synthesize(message.content, { language });
+    const result = await this.tts.synthesize(message.content, { language });
+    const { audio, mimeType } = result;
     const namespace = this.principalNamespace(principal);
     const { path, signedUrl } = await this.storage.uploadAudio(
       audio,
@@ -69,7 +72,7 @@ export class TtsService {
 
     this.recordEvent(message.conversationId, 'tts.synthesize', {
       message_id: message.id,
-      provider: this.soniox.name,
+      provider: result.provider ?? 'unknown',
       language,
       char_count: message.content.length,
       audio_bytes: audio.byteLength,
@@ -140,9 +143,7 @@ export class TtsService {
       await this.storage.uploadAudioAtPath(audio, path, contentType);
       const result = await this.messageRepo.update(message.id, { audioUrl: path });
       if (!result.affected) {
-        this.logger.warn(
-          `TTS persist update affected 0 rows messageId=${message.id} path=${path}`,
-        );
+        this.logger.warn(`TTS persist update affected 0 rows messageId=${message.id} path=${path}`);
       } else {
         this.logger.log(
           `TTS persisted messageId=${message.id} bytes=${audio.byteLength} path=${path}`,
@@ -160,19 +161,17 @@ export class TtsService {
   /**
    * Resolve language code from conversation.language.code; fallback to 'en'.
    * Onboarding conversations may not have a language assigned yet.
-   * Normalised to lowercase 2-letter code (Soniox expects e.g. 'en', 'vi').
+   * Normalised to lowercase 2-letter code (both Soniox and Alibaba expect e.g. 'en', 'vi').
    */
   resolveLanguage(conversation: AiConversation): string {
     const raw = conversation.language?.code?.trim().toLowerCase();
     if (!raw) return 'en';
-    // Soniox expects 2-letter ISO code; trim a region suffix if present (en-US → en).
+    // Providers expect 2-letter ISO code; trim a region suffix if present (en-US → en).
     return raw.split(/[-_]/)[0] || 'en';
   }
 
   principalNamespace(principal: TtsPrincipal): string {
-    return principal.kind === 'scenario'
-      ? principal.userId
-      : `onboarding:${principal.sessionId}`;
+    return principal.kind === 'scenario' ? principal.userId : `onboarding:${principal.sessionId}`;
   }
 
   /** Public so WS gateway can emit cache_hit / synthesize / error events. */

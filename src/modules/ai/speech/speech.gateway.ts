@@ -43,7 +43,8 @@ export class SpeechGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const url = new URL(req.url || '', 'ws://localhost');
     const rawTraceId = url.searchParams.get('traceId');
     const traceId =
-      rawTraceId && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawTraceId)
+      rawTraceId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawTraceId)
         ? rawTraceId
         : crypto.randomUUID();
     const lang = url.searchParams.get('lang') || undefined;
@@ -115,10 +116,18 @@ export class SpeechGateway implements OnGatewayConnection, OnGatewayDisconnect {
       } catch (err) {
         const isOverflow = err instanceof Error && err.message.includes('overflow');
         if (isOverflow) {
-          this.sendMsg(client, { type: 'error', code: 'overflow', message: 'Audio buffer overflow' });
+          this.sendMsg(client, {
+            type: 'error',
+            code: 'overflow',
+            message: 'Audio buffer overflow',
+          });
           client.close(4413, 'Audio buffer overflow');
         } else {
-          this.sendMsg(client, { type: 'error', code: 'provider', message: 'Provider write error' });
+          this.sendMsg(client, {
+            type: 'error',
+            code: 'provider',
+            message: 'Provider write error',
+          });
           client.close(4500, 'Provider write error');
         }
       }

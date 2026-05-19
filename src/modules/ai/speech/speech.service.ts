@@ -126,10 +126,7 @@ export class SpeechService {
     this.closeLangfuseSpan(session, 'error', 'client_disconnect', { duration_ms: durationMs });
   }
 
-  private async uploadAudioWithTimeout(
-    audioPath: string,
-    wav: Buffer,
-  ): Promise<string | null> {
+  private async uploadAudioWithTimeout(audioPath: string, wav: Buffer): Promise<string | null> {
     try {
       const uploadP = this.storage.uploadAudioAtPath(wav, audioPath, 'audio/wav');
       const result = await Promise.race([
