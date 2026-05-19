@@ -1,18 +1,31 @@
 import {
   Controller,
   Post,
+  Put,
   Body,
+  Param,
   BadRequestException,
+  HttpCode,
+  HttpStatus,
+  ParseUUIDPipe,
   UseGuards,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiParam,
+} from '@nestjs/swagger';
 import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
 import { TranscriptionService } from './services/transcription.service';
+import { MessageCorrectionService } from './services/message-correction.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { OptionalAuth } from '../../common/decorators/optional-auth.decorator';
 import { RequirePremium } from '../../common/decorators/require-premium.decorator';
@@ -26,6 +39,7 @@ import {
   TranslateType,
   TranscribeResponseDto,
   TranslateChunkRequestDto,
+  PutCorrectedContentRequestDto,
 } from './dto';
 
 /**
@@ -43,6 +57,7 @@ export class AiController {
     private learningAgent: LearningAgentService,
     private translationService: TranslationService,
     private transcriptionService: TranscriptionService,
+    private messageCorrection: MessageCorrectionService,
   ) {}
 
   @OptionalAuth()
@@ -114,6 +129,30 @@ export class AiController {
       dto.tapTo,
       user.id,
     );
+  }
+
+  @SkipLanguageContext()
+  @RequirePremium(false)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Put('messages/:messageId/corrected-content')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Persist grammar/vocabulary correction on a user message',
+    description:
+      'Client orchestration: after parallel /scenario/chat + /ai/chat/correct resolve, ' +
+      'call this with the real messageId from the chat response and correctedText from ' +
+      'the correct response. Pass null to clear an existing correction.',
+  })
+  @ApiParam({ name: 'messageId', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Correction persisted' })
+  @ApiResponse({ status: 403, description: 'Caller does not own the message' })
+  @ApiResponse({ status: 404, description: 'Message not found' })
+  async putCorrectedContent(
+    @CurrentUser() user: User,
+    @Param('messageId', new ParseUUIDPipe()) messageId: string,
+    @Body() dto: PutCorrectedContentRequestDto,
+  ): Promise<void> {
+    await this.messageCorrection.persistCorrection(user.id, messageId, dto.correctedText);
   }
 
   @Post('transcribe')

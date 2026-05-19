@@ -27,6 +27,7 @@ import { UnifiedLLMService } from './services/unified-llm.service';
 import { LearningAgentService } from './services/learning-agent.service';
 import { TranslationService } from './services/translation.service';
 import { TranscriptionService } from './services/transcription.service';
+import { MessageCorrectionService } from './services/message-correction.service';
 import { ObjectStorageService } from '../../database/object-storage.service';
 import { IntakeChatEngine } from './services/intake-chat-engine.service';
 
@@ -87,6 +88,7 @@ import { AiController } from './ai.controller';
     LearningAgentService,
     TranslationService,
     TranscriptionService,
+    MessageCorrectionService,
     IntakeChatEngine,
     // Speech
     SpeechGateway,
