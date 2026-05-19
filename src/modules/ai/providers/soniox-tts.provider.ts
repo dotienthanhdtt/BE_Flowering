@@ -1,4 +1,9 @@
-import { BadGatewayException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import WebSocket from 'ws';
 import {
@@ -17,6 +22,11 @@ const AUDIO_FORMAT_TO_MIME: Record<string, string> = {
   wav: 'audio/wav',
   pcm_s16le: 'audio/L16',
 };
+
+// [RT-Review M2] Mirrors the formats listed in TtsOptions and the gateway's
+// outputFormat→audioFormat mapping. Kept module-level to match Alibaba's
+// SUPPORTED_FORMATS pattern.
+const SONIOX_SUPPORTED_FORMATS = new Set(['mp3', 'wav', 'pcm_s16le']);
 
 /** Manages one Soniox TTS realtime WS session, emitting audio chunks. */
 class SonioxTtsStreamHandle implements TtsStreamHandle {
@@ -205,6 +215,13 @@ export class SonioxTtsProvider implements TtsProvider, TtsStreamingProvider {
 
   isAvailable(): boolean {
     return Boolean(this.apiKey);
+  }
+
+  // [RT-Review M2] Symmetric format-capability probe — used by FallbackTtsProvider
+  // to gate `primaryUsable` (same shape as Alibaba's check) so a future Soniox
+  // format drop can't silently send unsupported requests upstream.
+  supportsFormat(fmt: string): boolean {
+    return SONIOX_SUPPORTED_FORMATS.has(fmt);
   }
 
   get defaultMimeType(): string {

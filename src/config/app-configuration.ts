@@ -40,6 +40,19 @@ export interface AppConfiguration {
     sonioxTtsVoice: string;
     sonioxTtsAudioFormat: string;
     sonioxTtsSampleRate: number;
+    // Alibaba DashScope CosyVoice — TTS fallback provider (Singapore region only)
+    dashscopeApiKey?: string;
+    alibabaTtsModel: string;
+    alibabaTtsVoice: string;
+    alibabaTtsFormat: string;
+    alibabaTtsSampleRate: number;
+    // Content-moderation opt-in (privacy / GDPR sub-processor concern). Default off.
+    alibabaDataInspectionEnabled: boolean;
+    // Hard ceiling per Alibaba WS session — prevents hung-WS FD leak.
+    alibabaInactivityTimeoutMs: number;
+    // Fallback wrapper config
+    ttsFallbackEnabled: boolean;
+    ttsFallbackTimeoutMs: number;
   };
   revenuecat: {
     apiKey?: string;
@@ -96,6 +109,15 @@ export default (): AppConfiguration => ({
     sonioxTtsVoice: process.env.SONIOX_TTS_VOICE || 'Adrian',
     sonioxTtsAudioFormat: process.env.SONIOX_TTS_AUDIO_FORMAT || 'mp3',
     sonioxTtsSampleRate: parseInt(process.env.SONIOX_TTS_SAMPLE_RATE || '24000', 10),
+    dashscopeApiKey: process.env.DASHSCOPE_API_KEY,
+    alibabaTtsModel: process.env.ALIBABA_TTS_MODEL || 'cosyvoice-v3-flash',
+    alibabaTtsVoice: process.env.ALIBABA_TTS_VOICE || 'longanyang',
+    alibabaTtsFormat: process.env.ALIBABA_TTS_FORMAT || 'mp3',
+    alibabaTtsSampleRate: parseInt(process.env.ALIBABA_TTS_SAMPLE_RATE || '24000', 10),
+    alibabaDataInspectionEnabled: process.env.ALIBABA_DATA_INSPECTION_ENABLED === 'true',
+    alibabaInactivityTimeoutMs: parseInt(process.env.ALIBABA_INACTIVITY_TIMEOUT_MS || '15000', 10),
+    ttsFallbackEnabled: process.env.TTS_FALLBACK_ENABLED !== 'false',
+    ttsFallbackTimeoutMs: parseInt(process.env.TTS_FALLBACK_TIMEOUT_MS || '3000', 10),
   },
   revenuecat: {
     apiKey: process.env.REVENUECAT_API_KEY,
