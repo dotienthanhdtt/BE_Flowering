@@ -130,14 +130,14 @@ export class TtsService {
     message: AiConversationMessage,
     principal: TtsPrincipal,
     audio: Buffer,
+    format: 'mp3' | 'wav' = 'mp3',
   ): Promise<string | null> {
     try {
       const namespace = this.principalNamespace(principal);
-      const { path } = await this.storage.uploadAudio(
-        audio,
-        namespace,
-        `tts/${message.id}.mp3`,
-      );
+      const ext = format === 'wav' ? 'wav' : 'mp3';
+      const contentType = format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+      const path = `${namespace}/audio/${Date.now()}-tts/${message.id}.${ext}`;
+      await this.storage.uploadAudioAtPath(audio, path, contentType);
       const result = await this.messageRepo.update(message.id, { audioUrl: path });
       if (!result.affected) {
         this.logger.warn(

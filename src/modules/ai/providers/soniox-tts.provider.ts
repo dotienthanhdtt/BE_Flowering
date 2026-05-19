@@ -247,20 +247,36 @@ export class SonioxTtsProvider implements TtsProvider, TtsStreamingProvider {
     return { audio, mimeType: AUDIO_FORMAT_TO_MIME[audioFormat] || 'application/octet-stream' };
   }
 
-  openStream(opts: { language?: string; voice?: string; traceId: string }): TtsStreamHandle {
+  openStream(opts: {
+    language?: string;
+    voice?: string;
+    traceId: string;
+    audioFormat?: string;
+    sampleRate?: number;
+  }): TtsStreamHandle {
     if (!this.isAvailable()) {
       throw new ServiceUnavailableException('Soniox API key not configured');
     }
-    this.logger.log(`Opening Soniox TTS stream traceId=${opts.traceId}`);
+    const audioFormat = opts.audioFormat || this.audioFormat;
+    const sampleRate = opts.sampleRate || this.sampleRate;
+    this.logger.log(
+      `Opening Soniox TTS stream traceId=${opts.traceId} format=${audioFormat}@${sampleRate}`,
+    );
     return new SonioxTtsStreamHandle(
       this.apiKey,
       this.model,
       opts.voice || this.voice,
-      this.audioFormat,
-      this.sampleRate,
+      audioFormat,
+      sampleRate,
       opts.language,
       opts.traceId,
       this.logger,
     ).connect();
+  }
+
+  // Public so the gateway can compute the WAV header without duplicating the
+  // sample rate default. Mono 16-bit PCM is what we request from Soniox.
+  get configuredSampleRate(): number {
+    return this.sampleRate;
   }
 }

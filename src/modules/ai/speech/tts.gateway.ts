@@ -8,6 +8,16 @@ import { SonioxTtsProvider } from '../providers/soniox-tts.provider';
 import { ObjectStorageService } from '../../../database/object-storage.service';
 import { TtsStreamHandle } from '../providers/tts-provider.interface';
 import { createChunkCoalescer } from './chunk-coalescer';
+import {
+  buildFinalizedWavHeader,
+  buildStreamingWavHeader,
+  WavPcmFormat,
+} from './wav-header';
+
+// Client opt-in: `?format=wav` switches the live path from MP3 to streaming
+// PCM-in-WAV. MP3 stays the default so older clients still work.
+type OutputFormat = 'mp3' | 'wav';
+const PCM_FORMAT: WavPcmFormat = { sampleRate: 24000, channels: 1, bitsPerSample: 16 };
 
 const MAX_DURATION_MS = 60_000;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -25,6 +35,11 @@ interface ActiveSession {
   // streams on early disconnect poisons the cache and replays only the
   // first words on subsequent loads.
   providerCompleted: boolean;
+  // Output format negotiated with the client. `wav` streams PCM with a
+  // synthetic RIFF header prepended to chunk #1 so the player can start
+  // immediately; `mp3` keeps the legacy passthrough path.
+  outputFormat: OutputFormat;
+  headerSent: boolean;
   message?: { id: string; conversationId: string; content: string };
   principal?: TtsPrincipal;
 }
@@ -61,6 +76,8 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.closeWithError(client, 4400, 'bad_request', 'messageId required');
       return;
     }
+    const outputFormat: OutputFormat =
+      url.searchParams.get('format') === 'wav' ? 'wav' : 'mp3';
 
     const principal = this.buildPrincipal(authResult, url);
     if (!principal) {
@@ -84,6 +101,8 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       closed: false,
       persisted: false,
       providerCompleted: false,
+      outputFormat,
+      headerSent: false,
       message: {
         id: message.id,
         conversationId: message.conversationId,
@@ -117,12 +136,17 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    // Cache miss → open Soniox stream
+    // Cache miss → open Soniox stream. For `wav` we ask Soniox for raw
+    // PCM_S16LE and wrap it ourselves; the player gets a known format from
+    // the RIFF header in the first WS frame and avoids MP3's two-phase
+    // codec init (the "plays twice" bug on Android).
     const tSonioxOpen = Date.now();
     try {
       const handle = this.soniox.openStream({
         traceId: message.conversationId,
         language,
+        audioFormat: outputFormat === 'wav' ? 'pcm_s16le' : undefined,
+        sampleRate: outputFormat === 'wav' ? PCM_FORMAT.sampleRate : undefined,
       });
       session.handle = handle;
 
@@ -157,8 +181,16 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
             char_count: message.content.length,
           });
         }
+        // Persist the *raw provider bytes* (MP3 or PCM) — the RIFF header
+        // for WAV is added at upload time so the cached object is a single
+        // valid WAV file. Mixing the streaming-mode 0xFFFFFFFF header into
+        // the cache would break players that strict-parse the size field.
         session.chunks.push(chunk);
         if (!session.closed && client.readyState === WebSocket.OPEN) {
+          if (session.outputFormat === 'wav' && !session.headerSent) {
+            session.headerSent = true;
+            client.send(buildStreamingWavHeader(PCM_FORMAT), { binary: true });
+          }
           client.send(chunk, { binary: true });
         }
       });
@@ -314,10 +346,18 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
       return;
     }
-    const audio = Buffer.concat(session.chunks);
+    let audio = Buffer.concat(session.chunks);
+    let persistFormat: OutputFormat = session.outputFormat;
+    if (persistFormat === 'wav') {
+      // PCM buffer is just raw samples — wrap with a finalized RIFF header
+      // (real data size, not 0xFFFFFFFF) so the cached object plays via any
+      // standard WAV decoder, including a later cache-hit playback.
+      const header = buildFinalizedWavHeader(PCM_FORMAT, audio.byteLength);
+      audio = Buffer.concat([header, audio]);
+    }
     // Await so we surface upload/DB errors via the service's logger before
     // the WS session is torn down.
-    await this.tts.persistStreamedAudio(message as never, principal, audio);
+    await this.tts.persistStreamedAudio(message as never, principal, audio, persistFormat);
     this.tts.emitEvent(message.conversationId, 'tts.synthesize', {
       message_id: message.id,
       provider: this.soniox.name,
