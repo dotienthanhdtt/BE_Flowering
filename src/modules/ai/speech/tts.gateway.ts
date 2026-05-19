@@ -217,8 +217,8 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
         // Persist the *raw provider bytes* (MP3 or PCM) — the RIFF header
         // for WAV is added at upload time so the cached object is a single
-        // valid WAV file. Mixing the streaming-mode 0xFFFFFFFF header into
-        // the cache would break players that strict-parse the size field.
+        // valid WAV file. Mixing the streaming-mode placeholder-sized header
+        // into the cache would break players that strict-parse the size field.
         session.chunks.push(chunk);
         if (!session.closed && client.readyState === WebSocket.OPEN) {
           if (session.outputFormat === 'wav' && !session.headerSent) {
@@ -395,8 +395,9 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const persistFormat: OutputFormat = session.outputFormat;
     if (persistFormat === 'wav') {
       // PCM buffer is just raw samples — wrap with a finalized RIFF header
-      // (real data size, not 0xFFFFFFFF) so the cached object plays via any
-      // standard WAV decoder, including a later cache-hit playback.
+      // (real data size, not the streaming placeholder) so the cached object
+      // plays via any standard WAV decoder, including a later cache-hit
+      // playback.
       const header = buildFinalizedWavHeader(PCM_FORMAT, audio.byteLength);
       audio = Buffer.concat([header, audio]);
     }
