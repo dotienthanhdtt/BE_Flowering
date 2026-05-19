@@ -120,6 +120,16 @@ export class AlibabaTtsStreamHandle implements TtsStreamHandle {
         case 'task-finished':
           this.completedByProvider = true;
           this.logger.log(`Alibaba TTS task-finished taskId=${this.taskId}`);
+          // Close the upstream WS now that the provider is done. Without this,
+          // the socket sits idle until our 15s inactivity timer terminates it
+          // and synthesizes an error (which the wrapper forwards as a spurious
+          // post-completion `errorCb`). Closing immediately keeps the lifecycle
+          // symmetric with Soniox, which closes on `terminated`.
+          try {
+            this.ws?.close(1000);
+          } catch {
+            /* already closed */
+          }
           this.finish();
           break;
         case 'task-failed': {

@@ -339,6 +339,15 @@ export class TtsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // chunks from Soniox that must be linked to this message before exit.
     await this.persistIfBuffered(session, message, principal);
     if (!session.closed) this.sendEndAndClose(client, session);
+    // Release the upstream provider WS now that we've drained + persisted.
+    // For Alibaba this avoids leaking the WS until the 15s inactivity timer
+    // fires (and the spurious error it emits). Idempotent for Soniox, whose
+    // WS the provider already closes on `terminated`.
+    try {
+      session.handle?.forceClose();
+    } catch {
+      /* idempotent */
+    }
   }
 
   /**
