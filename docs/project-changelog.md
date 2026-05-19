@@ -1,9 +1,31 @@
 # Project Changelog
 
-**Last Updated:** 2026-05-18
+**Last Updated:** 2026-05-19
 **Project:** AI Language Learning Backend
 
 All notable changes documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-05-19 — TTS Fallback via Alibaba CosyVoice
+
+### Added
+- **Fallback architecture:** Decorator-pattern `FallbackTtsProvider` wraps Soniox (primary) + Alibaba CosyVoice (secondary). Fails over on Soniox handshake error OR no audio within 3s deadline.
+- **Alibaba CosyVoice integration:** WebSocket streaming at `wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference`. Model: `cosyvoice-v3-flash`, voice: `longanyang`, format: mp3 @ 24kHz (matches Soniox).
+- **New providers:** `alibaba-tts.provider.ts`, `alibaba-tts.stream-handle.ts`, `fallback-tts.provider.ts`, `fallback-tts.stream-handle.ts` (6 files + specs).
+- **Per-stream provider attribution:** `TtsResult.provider?` field tracks winner (Soniox/Alibaba/cache). Langfuse emits `tts.fallback_fired` and `tts.fallback_aborted` events.
+- **Environment variables:** `DASHSCOPE_API_KEY` (required for fallback), `ALIBABA_TTS_MODEL/VOICE/FORMAT/SAMPLE_RATE`, `ALIBABA_DATA_INSPECTION_ENABLED` (default false, opt-in for content moderation), `ALIBABA_INACTIVITY_TIMEOUT_MS` (default 15000), `TTS_FALLBACK_ENABLED` (default true), `TTS_FALLBACK_TIMEOUT_MS` (default 3000).
+- **Observability:** Dual-emit `soniox_*` + `tts_*` Langfuse event keys during 2-week deprecation window. Cache hits report `provider: 'cache'`.
+
+### Changed
+- **`TtsStreamingProvider.openStream` interface:** Added optional `audioFormat?` and `sampleRate?` options; new `supportsFormat?(fmt)` capability probe.
+- **`TtsResult` interface:** Added optional `provider?` field for winner attribution.
+
+### Behavior
+- Soniox happy path: No extra latency, no Alibaba calls.
+- Soniox failure: Seamless audio stream from Alibaba to client within 3s; no user-visible delay.
+- Both streaming (openStream) and non-streaming (synthesize) paths fall back.
+- Cache uses first-writer-wins: original provider unknown post-hoc for cached bytes.
+
+---
 
 ## 2026-05-18 — RevenueCat Webhook Validation Hardening
 

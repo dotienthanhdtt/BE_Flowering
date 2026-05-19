@@ -947,7 +947,7 @@ JWT Bearer.
 }
 ```
 
-`cached: true` indicates a DB hit — Soniox was not called; URL is freshly re-signed.
+`cached: true` indicates a DB hit — TTS provider was not called; URL is freshly re-signed.
 
 ### Errors
 | Status | Reason |
@@ -955,7 +955,7 @@ JWT Bearer.
 | 400 | Message exceeds 5000-char limit |
 | 403 | Message is not an assistant message OR conversation is not yours |
 | 404 | Message not found |
-| 502 | Soniox error |
+| 502 | TTS provider error (primary or fallback) |
 
 ## POST /ai/speech/tts/onboarding (public)
 
@@ -974,7 +974,7 @@ Response shape identical to the scenario endpoint.
 
 ## WebSocket: /ws/speech/tts
 
-Realtime streaming TTS. Backend opens a Soniox TTS WebSocket and proxies audio chunks (mp3 by default) to the client as binary frames. Synthesized audio is persisted to storage on first run so subsequent calls hit the DB cache.
+Realtime streaming TTS. Backend opens a TTS WebSocket connection (Soniox primary, Alibaba fallback) and proxies audio chunks (mp3 or pcm_s16le by default) to the client as binary frames. Synthesized audio is persisted to storage on first run so subsequent calls hit the DB cache.
 
 ### Connection
 ```
@@ -1010,7 +1010,7 @@ Client → Server                     Server → Client
 | 4404 | Message not found |
 | 4408 | Max duration (60s) exceeded |
 | 4413 | Message exceeds 5000-char limit |
-| 4500 | Provider (Soniox) error |
+| 4500 | TTS provider error (primary or fallback) |
 
 ### Trace Continuity
 

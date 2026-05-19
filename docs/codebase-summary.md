@@ -103,10 +103,16 @@ AI-powered language learning backend built with NestJS 11.x, TypeScript 5.x, and
 - Soniox provider: `SONIOX_API_KEY` + `SONIOX_MODEL` env vars required
 - **TTS surfaces** (`tts.controller.ts`, `tts.gateway.ts`, `tts.service.ts`):
   - REST: `POST /ai/speech/tts` (JWT), `POST /ai/speech/tts/onboarding` (@Public)
-  - WS: `/ws/speech/tts` — binary mp3 chunks from Soniox `tts-rt-v1`
+  - WS: `/ws/speech/tts` — binary audio chunks from TTS provider
   - Mobile-triggered via `messageId` (assistant role only, 5000-char cap)
   - DB cache via `ai_conversation_messages.tts_audio_path` (stores storage key; URL re-signed on read)
-  - ENV: `SONIOX_TTS_MODEL=tts-rt-v1`, `SONIOX_TTS_VOICE=Adrian`, `SONIOX_TTS_AUDIO_FORMAT=mp3`, `SONIOX_TTS_SAMPLE_RATE=24000`
+  - **Provider architecture:** Fallback decorator wraps Soniox (primary) + Alibaba CosyVoice (secondary); fails over on handshake loss or 3s no-audio deadline
+  - **Providers:**
+    - `soniox-tts.provider.ts` — Soniox `tts-rt-v1` (primary)
+    - `alibaba-tts.provider.ts` + `alibaba-tts.stream-handle.ts` — Alibaba DashScope CosyVoice `cosyvoice-v3-flash` (fallback)
+    - `fallback-tts.provider.ts` + `fallback-tts.stream-handle.ts` — Decorator pattern wrapper with provider attribution
+  - **ENV:** `SONIOX_TTS_MODEL=tts-rt-v1`, `SONIOX_TTS_VOICE=Adrian`; `DASHSCOPE_API_KEY`, `ALIBABA_TTS_MODEL/VOICE/FORMAT/SAMPLE_RATE`, `ALIBABA_DATA_INSPECTION_ENABLED` (default false), `ALIBABA_INACTIVITY_TIMEOUT_MS` (default 15000); `TTS_FALLBACK_ENABLED` (default true), `TTS_FALLBACK_TIMEOUT_MS` (default 3000)
+  - **Observability:** `tts.fallback_fired` and `tts.fallback_aborted` Langfuse events; per-stream provider attribution via `TtsResult.provider?` field
 
 ### 3. Onboarding Module (13 files, ~1,350 LOC)
 

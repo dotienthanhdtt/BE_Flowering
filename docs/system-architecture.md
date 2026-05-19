@@ -128,6 +128,8 @@ AI-powered language learning backend following Clean Architecture principles wit
 
 **STT:** POST /ai/transcribe (premium). Input: M4A/MP4/MPEG/WAV (max 10MB). Providers: OpenAI Whisper → Gemini (fallback). Config: STT_PROVIDER env var.
 
+**TTS (Speech Synthesis):** Realtime audio synthesis for tutor responses via WebSocket streaming (openStream). Implemented via decorator pattern: `FallbackTtsProvider` wraps `SonioxTtsProvider` (primary, low-latency) with `AlibabaTtsProvider` (secondary, fallback on handshake loss or 3s no-audio timeout). Single cache key (first-writer-wins; voice mismatch acceptable Adrian → longanyang). Format: mp3 @ 24kHz or pcm_s16le @ 24kHz. Per-stream winner attribution via `TtsResult.provider?` field; Langfuse emits `tts.fallback_fired` / `tts.fallback_aborted` events. Dual-logs `soniox_*` + `tts_*` event keys during 2-week deprecation window.
+
 ### Subscription Module Flow
 ```
 ┌──────────────────────────────────────────────────────┐
