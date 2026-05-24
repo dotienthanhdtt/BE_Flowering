@@ -53,10 +53,10 @@ describe('NineRouterLLMProvider', () => {
 
     expect(ChatOpenAI).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelName: 'flowering_chat',
-        openAIApiKey: 'router-key-123',
+        model: 'flowering_chat',
+        apiKey: 'router-key-123',
         configuration: { baseURL: 'https://9router-dev.up.railway.app/v1' },
-        streaming: true,
+        streaming: false,
       }),
     );
   });

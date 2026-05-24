@@ -30,8 +30,8 @@ export class NineRouterLLMProvider implements LLMProvider {
       throw new ServiceUnavailableException('9router API key not configured');
     }
     return new ChatOpenAI({
-      modelName,
-      openAIApiKey: apiKey,
+      model: modelName,
+      apiKey: apiKey,
       configuration: { baseURL: `${baseUrl}/v1` },
       temperature: options?.temperature ?? 0,
       topP: options?.topP,
